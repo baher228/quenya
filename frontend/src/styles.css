@@ -36,6 +36,7 @@ img{display:block}
   .phone .tabs{padding-bottom:max(10px,env(safe-area-inset-bottom))}
 }
 html.standalone .phone{position:fixed;top:0;left:0;right:0;width:auto;height:var(--app-h,100dvh);border-radius:0;box-shadow:none}
+html.short-view .phone .tabs{padding-bottom:8px}
 input,textarea,select{font-size:16px!important}
 .screen.swipe{height:100%}
 .swipe-main{display:flex;flex-direction:column;height:100%;min-height:440px}
