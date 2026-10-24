@@ -9,7 +9,7 @@ from app import db, phase2_api, routing, taste
 from app.config import CONTEXT_SOURCES
 from app.core import shared_core
 from app.outfits import build_pool, stylist_user_content, validate_outfits
-from app.rank import make_deck
+from app.rank import add_exploration, make_deck
 from app.schemas import (
     BoardBriefRequest,
     ProfileBrief,
@@ -509,6 +509,51 @@ def test_swipes_and_deck_exclusions_are_board_local(monkeypatch, tmp_path):
     assert [entry["id"] for entry in phase2_api.deck(1)] == ["item-1"]
 
 
+def test_tag_evidence_counts_consumed_and_unconsumed_swipes_for_one_board(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    db.create_profile("board-a", _brief(), active=True)
+    db.create_profile("board-b", _brief(), active=False)
+    kept = _item("kept", "top", ["workwear", "heritage"])
+    kept["tags"].update(colours=["olive"], materials=["cotton"], fit="relaxed", era="90s")
+    passed = _item("passed", "bottom", ["workwear"])
+    other = _item("other", "top", ["other-board"])
+    items = [kept, passed, other]
+    db.insert_items(
+        [
+            {
+                "id": item["id"],
+                "source": "vinted",
+                "source_url": f"https://vinted.test/{item['id']}",
+                "title": item["id"],
+                "price_gbp": item["price_gbp"],
+                "image_url": f"https://image.test/{item['id']}.jpg",
+                "raw_json": {},
+            }
+            for item in items
+        ]
+    )
+    for item in items:
+        db.save_tags(item["id"], item["tags"], "mreq-tag")
+    db.insert_swipe("board-a", "kept", True)
+    db.insert_swipe("board-a", "passed", False)
+    db.insert_swipe("board-b", "other", True)
+    with db.db_connection() as connection:
+        connection.execute(
+            "UPDATE swipes SET consumed_version=1 WHERE profile_id='board-a' AND item_id='kept'"
+        )
+
+    evidence = db.tag_evidence("board-a")
+
+    assert evidence["workwear"] == {"kept": 1, "passed": 1}
+    assert evidence["heritage"] == {"kept": 1, "passed": 0}
+    assert evidence["shirt"] == {"kept": 1, "passed": 0}
+    assert evidence["trousers"] == {"kept": 0, "passed": 1}
+    assert evidence["cotton"] == {"kept": 1, "passed": 0}
+    assert "other-board" not in evidence
+
+
 def test_swipe_history_counts_all_board_swipes_and_sorts_tags(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     db.create_profile("board-a", _brief(), active=True)
@@ -742,6 +787,111 @@ def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
     assert all(
         item["tags"]["slot"] != "shoes"
         for item in build_pool(pool, brief, _profile(), [], [])
+    )
+
+
+def test_add_exploration_is_deterministic_and_uses_swipe_rate():
+    slots = ["top", "bottom", "outerwear"]
+    ranked = [
+        _item(
+            f"ranked-{index:02}",
+            "shoes" if index in {9, 20} else slots[index % len(slots)],
+        )
+        for index in range(40)
+    ]
+    deck = ranked[:10]
+
+    first = add_exploration(deck, ranked, 10, _profile(), swipes=0, seed="board:0")
+    repeated = add_exploration(deck, ranked, 10, _profile(), swipes=0, seed="board:0")
+    later = add_exploration(deck, ranked, 10, _profile(), swipes=100, seed="board:100")
+
+    explored = [item for item in first if item["explore"]]
+    assert len(first) == len(deck) == 10
+    assert [item["id"] for item in first] == [item["id"] for item in repeated]
+    assert len(explored) == 4
+    assert sum(item["explore"] for item in later) == 2
+    assert first[9]["id"] == "ranked-09"
+    assert all(item["id"] not in {entry["id"] for entry in deck} for item in explored)
+    assert all(
+        item["id"] in {entry["id"] for entry in ranked[20:]}
+        and item["tags"]["slot"] != "shoes"
+        for item in explored
+    )
+    assert all(not item["explore"] for item in first if item not in explored)
+
+
+def test_add_exploration_samples_neutral_items_more_often_but_keeps_avoids_possible():
+    ranked = [_item(f"base-{index:02}", "top") for index in range(20)]
+    neutral = _item("neutral", "top", ["neutral"])
+    avoided = _item("avoided", "top", ["logo"])
+    fillers = [_item(f"filler-{index:02}", "top", ["filler"]) for index in range(18)]
+    candidates = [neutral, avoided, *fillers]
+    for item in [*candidates]:
+        item["tags"]["niche"] = 0.5
+    ranked.extend(candidates)
+    profile = {
+        "likes": {},
+        "avoids": {"logo": 1.0},
+        "niche_level": 0.5,
+        "rules": [],
+    }
+    neutral_picks = 0
+    avoided_picks = 0
+    for seed in range(300):
+        result = add_exploration(
+            ranked[:10], ranked, 10, profile, swipes=0, seed=f"board:{seed}"
+        )
+        explored_ids = {
+            item["id"] for item in result if item["explore"]
+        }
+        neutral_picks += "neutral" in explored_ids
+        avoided_picks += "avoided" in explored_ids
+
+    assert neutral_picks > avoided_picks > 0
+
+
+def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    brief = _brief(budget_gbp=100)
+    db.create_profile("board", brief, active=True)
+    profile = _profile(
+        likes={},
+        avoids={},
+        price_ceiling_gbp=100,
+        niche_level=0.4,
+    )
+    slots = ["top", "bottom", "outerwear"]
+    items = []
+    for index in range(40):
+        item = _item(f"deck-item-{index:02}", slots[index % len(slots)])
+        item["price_gbp"] = 20
+        item["tags"]["niche"] = 0.4
+        items.append(item)
+    over_budget = _item("budget-excluded", "top")
+    over_budget["price_gbp"] = 61
+    over_budget["tags"]["niche"] = 0.4
+    items.append(over_budget)
+    monkeypatch.setattr(
+        phase2_api, "_user_profile", lambda: {"id": "board", "brief": brief}
+    )
+    monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
+    monkeypatch.setattr(phase2_api, "shared_core", lambda: {})
+    monkeypatch.setattr(phase2_api, "as_profile", lambda _core: {})
+    monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: items)
+
+    result = phase2_api.deck(10)
+
+    assert len(result) == 10
+    assert sum(item["explore"] for item in result) == 4
+    assert len({item["id"] for item in result}) == len(result)
+    assert "budget-excluded" not in {item["id"] for item in result}
+    assert all(item["price_gbp"] <= 60 for item in result)
+    assert all(
+        int(item["id"].rsplit("-", maxsplit=1)[-1]) >= 20
+        for item in result
+        if item["explore"]
     )
 
 
