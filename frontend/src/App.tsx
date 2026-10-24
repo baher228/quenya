@@ -22,7 +22,7 @@ interface Toast { id: number; title: string; lines: string[]; pill?: boolean }
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("brief");
-  const [brief, setBrief] = useState<Brief>(DEFAULT_BRIEF);
+  const [brief, setBrief] = useState<Brief>({ ...DEFAULT_BRIEF, text: "" });
   const [briefMode, setBriefMode] = useState<"new" | "edit">("new");
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<unknown>(null);
@@ -41,6 +41,7 @@ export default function App() {
   const [picking, setPicking] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
+  const writingNew = tab === "brief" && briefMode === "new";
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
   }, [tab, picking, activeBoard?.id]);
@@ -195,12 +196,12 @@ export default function App() {
         </header>
         {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
+            <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>
             {boards.map(b => (
-              <button key={b.id} role="tab" aria-selected={b.active} className={"board" + (b.active ? " on" : "")} onClick={() => switchBoard(b)}>
+              <button key={b.id} role="tab" aria-selected={b.active && !writingNew} className={"board" + (b.active && !writingNew ? " on" : "")} onClick={() => switchBoard(b)}>
                 {b.label}{b.version ? <em>v{b.version}</em> : null}
               </button>
             ))}
-            <button className="board add" onClick={newBoard} aria-label="New brief">+</button>
           </div>
         )}
         {routeNote && (

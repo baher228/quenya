@@ -62,7 +62,8 @@ export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew }
 
       <label className="field">
         <span className="lbl">In your words</span>
-        <textarea rows={3} value={b.text} onChange={e => set("text", e.target.value)} maxLength={600} />
+        <textarea rows={3} value={b.text} onChange={e => set("text", e.target.value)} maxLength={600}
+          placeholder="e.g. Autumn in London. Workwear but cleaner, Japanese labels, no big logos." />
       </label>
 
       <div className="group"><span className="lbl">Dressing</span>
