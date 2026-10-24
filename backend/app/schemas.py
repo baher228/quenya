@@ -33,6 +33,10 @@ class ProfileBrief(StrictModel):
     sizes: SizeProfile = Field(default_factory=SizeProfile)
 
 
+class ProfileCreateRequest(StrictModel):
+    brief: ProfileBrief
+
+
 class ItemTags(StrictModel):
     slot: Slot
     category: str

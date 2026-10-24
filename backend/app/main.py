@@ -2,9 +2,11 @@ import json
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.requests import Request
 
 from app import db
 from app.config import (
@@ -12,11 +14,13 @@ from app.config import (
     PROMPT_VERSION,
     TAVILY_API_KEY,
 )
-from app.images import cached_image_path, image_key
+from app.images import cached_image_path
 from app.mubit import TaskError
+from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
 from app.prompts import READER_MODEL, STYLIST_MODEL, TAGGER_MODEL, TASTE_MODEL
 from app.tagging import tag_item
+from app.taste import update_taste
 
 app = FastAPI(title="Quenya API")
 app.add_middleware(
@@ -26,6 +30,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_error_handler(_request: Request, exc: HTTPException) -> JSONResponse:
+    detail = exc.detail
+    if not isinstance(detail, dict) or "error" not in detail:
+        detail = {"error": str(detail), "request_ids": []}
+    else:
+        detail = {
+            "error": detail["error"],
+            "request_ids": detail.get("request_ids", []),
+        }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(
+    _request: Request, _exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"error": "Invalid request", "request_ids": []}},
+    )
 
 
 class CorrectionRequest(BaseModel):
@@ -69,8 +100,7 @@ def items(
     for item in db.list_items(
         slot=slot, gender=gender, condition=condition, source=source, limit=limit
     ):
-        item["image_url"] = f"/img/{image_key(item['image_url'])}.jpg"
-        result.append(item)
+        result.append(_public_item(item))
     return result
 
 
@@ -101,7 +131,23 @@ def correct_tags(item_id: str, body: CorrectionRequest) -> dict:
         body.note,
         meta.request_id,
     )
-    return {"tags": tags_json, "request_id": meta.request_id}
+    try:
+        version, taste, taste_meta, _ = update_taste(profile)
+    except TaskError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"error": str(exc), "request_ids": exc.request_ids},
+        ) from exc
+    return {
+        "tags": tags_json,
+        "request_id": meta.request_id,
+        "taste": {
+            "version": version,
+            "profile": taste,
+            "changes": taste["changes"],
+            "request_id": taste_meta.request_id,
+        },
+    }
 
 
 @app.get("/api/model/stats")

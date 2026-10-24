@@ -26,11 +26,16 @@ def _tag_one(item: dict[str, Any]) -> tuple[str, int | None, str | None]:
         return "failed", None, f"{item['id']}: {message}"
 
 
-def tag_untagged(limit: int, concurrency: int, source: str | None = None) -> dict[str, Any]:
+def tag_untagged(
+    limit: int,
+    concurrency: int,
+    source: str | None = None,
+    retry_failed: bool = False,
+) -> dict[str, Any]:
     if concurrency < 1 or concurrency > 4:
         raise ValueError("concurrency must be between 1 and 4")
     db.init_db()
-    items = db.untagged_items(limit, source)
+    items = db.untagged_items(limit, source, retry_failed)
     ok = failed = 0
     latencies: list[int] = []
     errors: list[str] = []
@@ -70,10 +75,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=100000)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--source", choices=("vinted", "retail"))
+    parser.add_argument("--retry-failed", action="store_true")
     args = parser.parse_args()
     if args.limit < 1:
         parser.error("--limit must be positive")
-    result = tag_untagged(args.limit, args.concurrency, args.source)
+    result = tag_untagged(args.limit, args.concurrency, args.source, args.retry_failed)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if result["credit_error"]:
         raise SystemExit(2)

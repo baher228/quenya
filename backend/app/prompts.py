@@ -5,7 +5,7 @@ Changing any string here starts a NEW Mubit task and resets its kept-example cou
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-23.1"
+PROMPT_VERSION = "2026-10-24.2"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -69,7 +69,8 @@ Rules:
 - title: 2-4 words, concrete, like a lookbook caption, e.g. "Corduroy and cashmere". No hype.
 - mood: 3-6 words, e.g. "Japanese workwear, softened".
 - why: one or two plain sentences that cite the shopper's actual signals (what they kept, passed or said), not generic praise.
-Return only JSON matching the schema."""
+Return only JSON of exactly this shape, with no other keys:
+{"outfits": [{"title": "...", "mood": "...", "piece_ids": ["<pool id>", "..."], "why": "..."}]}"""
 
 READER_SYSTEM = """You are the inspiration reader for Quenya, a UK fashion discovery app.
 You receive one photo a shopper uploaded as style inspiration. It may show one garment, a full outfit, a street-style shot or a mood image.
@@ -84,4 +85,5 @@ Rules:
 - search_queries: 2-5 short marketplace search phrases that would find similar pieces.
 - one_line: one plain sentence (max 20 words) describing the look.
 If the photo shows no clothing, return empty lists and one_line "No clothing visible."
-Return only JSON matching the schema."""
+Return only JSON of exactly this shape, with no other keys:
+{"garments": [{"slot": "...", "category": "...", "colours": ["..."]}], "aesthetics": ["..."], "palette": ["..."], "fit": "...", "era": "...", "search_queries": ["..."], "one_line": "..."}"""

@@ -164,10 +164,14 @@ def insert_items(items: list[dict[str, Any]]) -> int:
     return inserted
 
 
-def untagged_items(limit: int, source: str | None = None) -> list[dict[str, Any]]:
+def untagged_items(
+    limit: int, source: str | None = None, retry_failed: bool = False
+) -> list[dict[str, Any]]:
     init_db()
     query = "SELECT * FROM items WHERE tags_json IS NULL"
     params: list[Any] = []
+    if not retry_failed:
+        query += " AND tag_error IS NULL"
     if source:
         query += " AND source=?"
         params.append(source)

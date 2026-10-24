@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from app.config import TAVILY_API_KEY
+from app.images import normalize_image_url
 
 RETAIL_DOMAINS = [
     "asos.com", "hm.com", "uniqlo.com", "cos.com", "arket.com", "zara.com",
@@ -191,7 +192,7 @@ def parse_extract_result(
         "price_gbp": price,
         "size": None,
         "description": None,
-        "image_url": images[0],
+        "image_url": normalize_image_url(images[0]),
         "gender_hint": gender,
         "condition_hint": "new",
         "availability": None,

@@ -147,7 +147,11 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(monkeypatch
     assert calls[1][3][1]["role"] == "assistant"
     assert calls[1][3][2]["role"] == "user"
     assert response["request_ids"] == ["mreq-1", "mreq-2"]
-    assert response["outfits"][0]["piece_ids"] == ["top", "bottom", "shoes"]
+    assert [piece["id"] for piece in response["outfits"][0]["pieces"]] == [
+        "top",
+        "bottom",
+        "shoes",
+    ]
     assert response["dropped"] == 0
 
 

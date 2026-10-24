@@ -30,7 +30,7 @@ def test_retail_extract_parser_prefers_now_price_and_canonicalizes_asos():
             "url": page_url,
             "raw_content": "# Vans Drill jacket\n\nWas £59.99, Now £39.99",
             "images": [
-                "https://images.asos-media.com/products/vans-drill-jacket/123456789-1-black"
+                "https://images.asos-media.com/products/vans-drill-jacket/123456789-1-black?$n_240w$&wid=44&fit=constrain"
             ],
         },
         page_url=page_url,
@@ -41,6 +41,10 @@ def test_retail_extract_parser_prefers_now_price_and_canonicalizes_asos():
     assert record["brand"] == "Vans"
     assert record["price_gbp"] == 39.99
     assert record["source_url"] == "https://www.asos.com/vans/vans-drill-jacket/prd/123456789"
+    assert record["image_url"] == (
+        "https://images.asos-media.com/products/vans-drill-jacket/"
+        "123456789-1-black?$n_640w$&wid=640&fit=constrain"
+    )
     assert record["condition_hint"] == "new"
     assert record["raw_json"]["price_source"] == "tavily_extract_text"
     assert "Now £39.99" in record["raw_json"]["price_snippet"]
@@ -58,7 +62,10 @@ def test_asos_parser_requires_a_product_image_not_the_product_page():
     record, reason = parse_extract_result(result, page_url=page_url)
     assert reason is None
     assert record is not None
-    assert record["image_url"] == result["images"][1]
+    assert record["image_url"] == (
+        "https://images.asos-media.com/products/workwear-jacket/"
+        "123456789-1-black?$n_640w$&wid=640&fit=constrain"
+    )
 
     result["images"] = [page_url]
     record, reason = parse_extract_result(result, page_url=page_url)

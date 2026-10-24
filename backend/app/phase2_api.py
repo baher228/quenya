@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from time import monotonic
@@ -20,7 +21,7 @@ from app.schemas import (
     InspirationRead,
     LiveSearchRequest,
     OutfitRequest,
-    ProfileBrief,
+    ProfileCreateRequest,
     StylistOutput,
     SwapRequest,
     SwipeRequest,
@@ -62,8 +63,41 @@ def _taste(profile_id: str) -> dict[str, Any]:
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result = dict(item)
-    result["image_url"] = f"/img/{image_key(item['image_url'])}.jpg"
+    tags = result.get("tags")
+    if not isinstance(tags, dict):
+        try:
+            tags = json.loads(result.get("tags_json") or "null")
+        except (TypeError, json.JSONDecodeError):
+            tags = None
+    result.pop("tags_json", None)
+    result["tags"] = tags
+    image_url = result.get("image_url")
+    local_image = f"/img/{image_key(image_url)}.jpg" if image_url else None
+    result["image"] = local_image
+    result["image_url"] = local_image
+    result["origin"] = "live" if str(result.get("query") or "").startswith("live:") else "snapshot"
+    result["condition"] = result.get("condition_hint")
     return result
+
+
+def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
+    pieces = [
+        item
+        for item_id in outfit["piece_ids"]
+        if (item := db.get_item_with_tags(item_id))
+    ]
+    return {
+        "id": outfit["id"],
+        "title": outfit["title"],
+        "mood": outfit["mood"],
+        "why": outfit["why"],
+        "pieces": [_public_item(item) for item in pieces],
+        "total_gbp": outfit["total_gbp"],
+        "verdict": outfit.get("verdict"),
+        "reason": outfit.get("reason"),
+        "request_id": outfit.get("request_id"),
+        "taste_version": outfit.get("taste_version"),
+    }
 
 
 def _fetch_profile_items(profile_id: str, queries: list[str], gender: str) -> None:
@@ -80,34 +114,54 @@ def _fetch_profile_items(profile_id: str, queries: list[str], gender: str) -> No
             pending = [
                 dict(row)
                 for row in connection.execute(
-                    "SELECT * FROM items WHERE query=? AND tags_json IS NULL",
+                    "SELECT * FROM items WHERE query=? AND tags_json IS NULL AND tag_error IS NULL",
                     (f"live:{profile_id}",),
                 ).fetchall()
             ]
+        tagged = failed = 0
+        errors = []
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {executor.submit(tag_item, item): item for item in pending}
             for future, item in futures.items():
                 try:
                     tags, meta = future.result()
                     db.save_tags(item["id"], tags.model_dump(), meta.request_id, item["image_path"])
+                    tagged += 1
                 except Exception as exc:
                     db.save_tag_error(item["id"], str(exc))
-        job.update(status="complete", fetched=len(records), tagged=len(pending))
+                    failed += 1
+                    errors.append(f"{item['id']}: {exc}")
+        job.update(
+            status="done",
+            fetched=len(records),
+            tagged=tagged,
+            failed=failed,
+            errors=errors,
+        )
     except Exception as exc:
-        job.update(status="failed", error=str(exc))
+        job.update(status="failed", errors=[str(exc)])
 
 
 @router.post("/api/profile")
-def create_profile(body: ProfileBrief, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def create_profile(
+    body: ProfileCreateRequest, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
     profile_id = uuid.uuid4().hex
-    brief = body.model_dump(exclude_none=True)
+    brief = body.brief.model_dump(exclude_none=True)
     try:
         taste, meta = create_taste(brief, profile_id)
     except TaskError as exc:
         raise _http_task_error(exc) from exc
     db.create_profile(profile_id, brief)
     job_id = uuid.uuid4().hex
-    FETCH_JOBS[job_id] = {"id": job_id, "status": "queued", "fetched": 0, "tagged": 0}
+    FETCH_JOBS[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "fetched": 0,
+        "tagged": 0,
+        "failed": 0,
+        "errors": [],
+    }
     FETCH_JOBS[profile_id] = FETCH_JOBS[job_id]
     background_tasks.add_task(
         _fetch_profile_items,
@@ -118,7 +172,7 @@ def create_profile(body: ProfileBrief, background_tasks: BackgroundTasks) -> dic
     return {
         "profile_id": profile_id,
         "brief": brief,
-        "taste": taste,
+        "taste": {"version": 1, "profile": taste},
         "version": 1,
         "request_id": meta.request_id,
         "fetch_job_id": job_id,
@@ -130,7 +184,13 @@ def fetch_job(job_id: str) -> dict[str, Any]:
     job = FETCH_JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Fetch job not found")
-    return dict(job)
+    return {
+        "status": "done" if job.get("status") == "complete" else job.get("status"),
+        "fetched": job.get("fetched", 0),
+        "tagged": job.get("tagged", 0),
+        "failed": job.get("failed", 0),
+        "errors": job.get("errors", []),
+    }
 
 
 @router.get("/api/deck")
@@ -196,7 +256,7 @@ def taste_history() -> dict[str, Any]:
         "profile_id": active["id"],
         "current": {"version": current["version"], "profile": current["profile"]},
         "history": db.get_taste_history(active["id"]),
-        "signal_counts": counts,
+        "counts": counts,
     }
 
 
@@ -265,7 +325,25 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
             active["id"], current["version"], outfit, outfit["piece_ids"],
             outfit["total_gbp"], request_ids[-1]
         )
-        saved.append({"id": outfit_id, **outfit})
+        pieces_by_id = {item["id"]: item for item in pool}
+        saved.append(
+            {
+                "id": outfit_id,
+                "title": outfit["title"],
+                "mood": outfit["mood"],
+                "why": outfit["why"],
+                "pieces": [
+                    _public_item(pieces_by_id[item_id])
+                    for item_id in outfit["piece_ids"]
+                    if item_id in pieces_by_id
+                ],
+                "total_gbp": outfit["total_gbp"],
+                "verdict": None,
+                "reason": None,
+                "request_id": request_ids[-1],
+                "taste_version": current["version"],
+            }
+        )
     return {
         "outfits": saved,
         "taste_version": current["version"],
@@ -310,8 +388,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     total = outfit["total_gbp"] - replaced["price_gbp"] + replacement["price_gbp"]
     db.update_outfit_pieces(outfit_id, ids, total)
     updated = db.get_outfit(outfit_id)
-    updated["pieces"] = [db.get_item_with_tags(item_id) for item_id in ids]
-    return {"outfit": updated, "total_gbp": round(total, 2)}
+    return _public_outfit(updated)
 
 
 @router.post("/api/outfits/{outfit_id}/verdict")
@@ -320,7 +397,7 @@ def verdict(outfit_id: str, body: VerdictRequest) -> dict[str, Any]:
     outfit = db.get_outfit(outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
-    saved = db.update_outfit_verdict(outfit_id, body.verdict, body.reason)
+    db.update_outfit_verdict(outfit_id, body.verdict, body.reason)
     if body.verdict == "reject" and body.reason:
         db.add_correction(
             active["id"], "outfit", outfit_id, {}, {"verdict": body.verdict},
@@ -331,9 +408,13 @@ def verdict(outfit_id: str, body: VerdictRequest) -> dict[str, Any]:
     except TaskError as exc:
         raise _http_task_error(exc) from exc
     return {
-        "outfit": saved,
-        "taste": {"version": version, "profile": profile, "changes": profile["changes"]},
-        "request_id": meta.request_id,
+        "outfit": _public_outfit(db.get_outfit(outfit_id)),
+        "taste": {
+            "version": version,
+            "profile": profile,
+            "changes": profile["changes"],
+            "request_id": meta.request_id,
+        },
     }
 
 
@@ -414,7 +495,12 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
         ) from exc
     return {
         "upload_id": upload_id, "read": read.model_dump(),
-        "taste": {"version": version, "profile": profile},
+        "taste": {
+            "version": version,
+            "profile": profile,
+            "changes": profile["changes"],
+            "request_id": taste_meta.request_id,
+        },
         "request_ids": request_ids,
     }
 
@@ -448,7 +534,7 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
                 dict(row)
                 for row in connection.execute(
                     f"SELECT * FROM items WHERE source_url IN ({placeholders}) "
-                    "AND tags_json IS NULL",
+                    "AND tags_json IS NULL AND tag_error IS NULL",
                     urls,
                 ).fetchall()
             ]
