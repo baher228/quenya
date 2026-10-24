@@ -37,6 +37,7 @@ export default function App() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [routeNote, setRouteNote] = useState<RouteNote | null>(null);
   const [briefKey, setBriefKey] = useState(0);
+  const [picking, setPicking] = useState(true);
   const activeBoard = boards.find(b => b.active) ?? null;
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
   useEffect(refreshBoards, [refreshBoards]);
@@ -71,9 +72,9 @@ export default function App() {
   }, [announce]);
 
   const switchBoard = async (b: Board) => {
-    if (b.active) return;
-    try { await api.activate(b.id); setBrief({ ...DEFAULT_BRIEF, ...b.brief }); setBriefKey(k => k + 1); boardChanged(); setRouteNote(null); }
-    catch (e) { setToast({ id: Date.now(), title: "Couldn't switch board", lines: [errText(e)] }); }
+    if (b.active) return true;
+    try { await api.activate(b.id); setBrief({ ...DEFAULT_BRIEF, ...b.brief }); setBriefKey(k => k + 1); boardChanged(); setRouteNote(null); return true; }
+    catch (e) { setToast({ id: Date.now(), title: "Couldn't switch board", lines: [errText(e)] }); return false; }
   };
 
   const newBoard = () => { setBrief({ ...DEFAULT_BRIEF, text: "" }); setBriefKey(k => k + 1); setTab("brief"); };
@@ -109,6 +110,7 @@ export default function App() {
       }
       if (r.fetch_job_id) void pollFetch(r.fetch_job_id);
       setDeckKey(k => k + 1);
+      setPicking(false);
       setTab("swipe");
     } catch (e) { setCreateErr(e); } finally { setCreating(false); }
   };
@@ -166,7 +168,7 @@ export default function App() {
           <span className="logo">quenya<i>.</i></span>
           <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? (version ? `taste v${version}` : "")}</span>
         </header>
-        {boards.length > 0 && (
+        {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
             {boards.map(b => (
               <button key={b.id} role="tab" aria-selected={b.active} className={"board" + (b.active ? " on" : "")} onClick={() => switchBoard(b)}>
@@ -193,11 +195,14 @@ export default function App() {
               {createErr !== null && <ErrorBox error={createErr} />}
             </>
           )}
-          {tab === "swipe" && (hasProfile
+          {tab === "swipe" && (hasProfile && !picking
             ? <DeckScreen key={deckKey} profile={taste?.current?.profile ?? null} version={version}
+                board={activeBoard?.label ?? ""} onChange={() => setPicking(true)}
                 onSignal={due => { if (due && !updating) void runUpdate("from your swipes"); }}
                 onDone={deckDone} onOpenItem={item => setSheet({ kind: "item", item })} />
-            : <NeedsBrief go={() => setTab("brief")} />)}
+            : boards.length > 0
+              ? <StylePicker boards={boards} onNew={newBoard} onPick={async b => { if (await switchBoard(b)) setPicking(false); }} />
+              : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "outfits" && (hasProfile
             ? <OutfitsScreen outfits={outfits} loading={outLoading} error={outErr} version={version} onBuild={build}
                 onReplace={replace} onReject={o => setSheet({ kind: "reject", outfit: o })} onLike={like}
@@ -216,7 +221,7 @@ export default function App() {
 
         <nav className="tabs">
           {([["brief", "Brief"], ["swipe", "Swipe"], ["outfits", "Outfits"], ["find", "Find"], ["taste", "Taste"]] as [Tab, string][]).map(([t, l]) => (
-            <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>{l}</button>
+            <button key={t} className={tab === t ? "active" : ""} onClick={() => { if (t === "swipe") setPicking(true); setTab(t); }}>{l}</button>
           ))}
         </nav>
 
@@ -231,6 +236,29 @@ export default function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function StylePicker({ boards, onPick, onNew }: { boards: Board[]; onPick: (b: Board) => void; onNew: () => void }) {
+  return (
+    <section className="screen pick">
+      <p className="eyebrow">Swipe</p>
+      <p className="h3">Which style today?</p>
+      <div className="pick-list">
+        {boards.map(b => (
+          <button key={b.id} className={"pick-row" + (b.active ? " on" : "")} onClick={() => onPick(b)}>
+            <span className="pick-t">{b.label}</span>
+            <span className="pick-m">{b.context}{b.version ? ` · taste v${b.version}` : ""} · {b.counts.swipes} swiped</span>
+            <span className="pick-go" aria-hidden="true">→</span>
+          </button>
+        ))}
+        <button className="pick-row add" onClick={onNew}>
+          <span className="pick-t">New style</span>
+          <span className="pick-m">Write a brief</span>
+          <span className="pick-go" aria-hidden="true">+</span>
+        </button>
+      </div>
+    </section>
   );
 }
 

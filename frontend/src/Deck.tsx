@@ -3,9 +3,11 @@ import { api, gbp, img } from "./api";
 import { ErrorBox, Loading, Provenance, pretty } from "./ui";
 import type { Item, TasteProfile } from "./types";
 
-export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
+export function DeckScreen({ profile, version, board, onChange, onSignal, onDone, onOpenItem }: {
   profile: TasteProfile | null;
   version: number | null;
+  board: string;
+  onChange: () => void;
   onSignal: (updateDue: boolean) => void;
   onDone: () => void;
   onOpenItem: (it: Item) => void;
@@ -57,7 +59,7 @@ export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
     <section className="screen swipe">
       <div className="swipe-main">
       <div className="deck-head">
-        <div><p className="eyebrow">Calibrating{version ? ` · taste v${version}` : ""}</p><p className="h3">Keep or pass?</p></div>
+        <button className="deck-ctx" onClick={onChange}><span>{board}</span>{version ? <em>v{version}</em> : null}<i>Change</i></button>
         <span className="deck-count">{seen} swiped</span>
       </div>
       <div className="deck-bar"><i style={{ width: `${Math.min(100, (seen % 10) * 10)}%` }} /></div>
