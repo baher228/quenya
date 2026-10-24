@@ -54,6 +54,7 @@ def stylist_user_content(
     core_rules: list[str] | None = None,
     history: dict[str, Any] | None = None,
     include_shoes: bool = True,
+    style_notes: list[str] | None = None,
 ) -> str:
     lines = [
         f"{item['id']} | {tags_for(item).get('slot')} | "
@@ -89,6 +90,8 @@ def stylist_user_content(
         if most_kept:
             history_line += " Most kept: " + "; ".join(most_kept)
         content += "\n" + history_line
+    if style_notes:
+        content += "\nStyle notes: " + "; ".join(style_notes)
     content += f"\n\n{request}\n\nPool:\n" + "\n".join(lines)
     if core_rules:
         content += (

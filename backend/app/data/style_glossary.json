@@ -1,0 +1,977 @@
+[
+ {
+  "name": "roadman",
+  "aliases": [
+   "roadman",
+   "roadmen",
+   "roadman style",
+   "road style",
+   "roadboy"
+  ],
+  "gender": "men",
+  "pieces": "matching tracksuit (Nike Tech Fleece), black puffer, crossbody bag, running cap, tracksuit bottoms",
+  "brands": "Nike, Trapstar, Corteiz, Stone Island, The North Face",
+  "colours": "black, grey, one bold colour head to toe",
+  "queries": [
+   "nike tech fleece tracksuit",
+   "trapstar hoodie",
+   "black puffer jacket mens",
+   "crossbody bag mens",
+   "nike air max plus tn"
+  ]
+ },
+ {
+  "name": "uk drill",
+  "aliases": [
+   "uk drill",
+   "drill rapper",
+   "driller",
+   "drill"
+  ],
+  "gender": "men",
+  "pieces": "black puffer, plain or Trapstar hoodie, cargo or tracksuit bottoms, balaclava, gloves",
+  "brands": "Trapstar, Corteiz, Stone Island, Nike, Carhartt WIP",
+  "colours": "all matte black",
+  "queries": [
+   "black cargo trousers mens",
+   "trapstar puffer",
+   "corteiz hoodie",
+   "black nike tech fleece"
+  ]
+ },
+ {
+  "name": "trackie / central cee",
+  "aliases": [
+   "central cee",
+   "cench",
+   "trackie",
+   "tracksuit fit",
+   "tracksuit look"
+  ],
+  "gender": "men",
+  "pieces": "coloured two-piece tracksuit worn as an outfit, running trainers, cap",
+  "brands": "Trapstar, Nike Tech, Adidas, Palm Angels",
+  "colours": "one colour per set, often bright",
+  "queries": [
+   "two piece tracksuit mens",
+   "trapstar tracksuit",
+   "nike tech fleece set"
+  ]
+ },
+ {
+  "name": "chav",
+  "aliases": [
+   "chav",
+   "chavvy",
+   "charva",
+   "charver",
+   "scally",
+   "scallies",
+   "townie"
+  ],
+  "gender": "any",
+  "pieces": "tracksuit bottoms, polo or track top, check cap, gold chain, white trainers",
+  "brands": "Burberry check, Lacoste, Berghaus, Nike, Ellesse",
+  "colours": "white, navy, Burberry beige check",
+  "queries": [
+   "lacoste tracksuit",
+   "burberry check cap",
+   "berghaus fleece",
+   "white leather trainers"
+  ]
+ },
+ {
+  "name": "football casual",
+  "aliases": [
+   "football casual",
+   "terrace casual",
+   "terrace style",
+   "casuals"
+  ],
+  "gender": "men",
+  "pieces": "overshirt or soft-shell jacket with compass badge, polo, straight jeans, terrace trainers, bucket hat",
+  "brands": "Stone Island, C.P. Company, Sergio Tacchini, Fred Perry, Adidas Spezial",
+  "colours": "navy, olive, stone, muted",
+  "queries": [
+   "stone island overshirt",
+   "cp company jacket",
+   "fred perry polo",
+   "adidas spezial"
+  ]
+ },
+ {
+  "name": "blokecore",
+  "aliases": [
+   "blokecore",
+   "bloke core",
+   "ladcore",
+   "lad style"
+  ],
+  "gender": "men",
+  "pieces": "vintage football shirt, straight or baggy jeans, track jacket, terrace trainers",
+  "brands": "Adidas, Umbro, Kappa, Levi's",
+  "colours": "club colours, blue, white, black",
+  "queries": [
+   "vintage football shirt",
+   "adidas samba",
+   "umbro track jacket",
+   "levis straight jeans"
+  ]
+ },
+ {
+  "name": "blokette",
+  "aliases": [
+   "blokette"
+  ],
+  "gender": "women",
+  "pieces": "football shirt or track jacket with pleated mini or frilly skirt, bows, lace socks, Sambas",
+  "brands": "Adidas, vintage football kits",
+  "colours": "club colours with white and pink",
+  "queries": [
+   "vintage football shirt womens",
+   "pleated mini skirt",
+   "adidas samba womens"
+  ]
+ },
+ {
+  "name": "eshay",
+  "aliases": [
+   "eshay",
+   "eshays",
+   "adlay"
+  ],
+  "gender": "men",
+  "pieces": "polo or logo tee, trackie shorts, bum bag, wraparound sunglasses, TNs",
+  "brands": "Ralph Lauren, Nike, Lacoste, Tommy Hilfiger, Nautica",
+  "colours": "white, navy, bright Nike colourways",
+  "queries": [
+   "ralph lauren polo",
+   "nike tn",
+   "bum bag",
+   "tracksuit shorts mens"
+  ]
+ },
+ {
+  "name": "grime era",
+  "aliases": [
+   "grime",
+   "grime era",
+   "2000s grime"
+  ],
+  "gender": "men",
+  "pieces": "black tracksuit, oversized hoodie, puffer or parka, Air Max BW or 95",
+  "brands": "Nike, Avirex, Akademiks, Evisu",
+  "colours": "black, white",
+  "queries": [
+   "nike air max 95",
+   "black hoodie oversized",
+   "evisu jeans"
+  ]
+ },
+ {
+  "name": "opium",
+  "aliases": [
+   "opium",
+   "opium style",
+   "carti",
+   "playboi carti",
+   "ken carson",
+   "destroy lonely",
+   "vamp"
+  ],
+  "gender": "men",
+  "pieces": "black oversized leather or big-shoulder jacket, skinny or flared black jeans, chunky boots, mesh, chains",
+  "brands": "Rick Owens, Balenciaga, Chrome Hearts, Raf Simons",
+  "colours": "black, blood red, white",
+  "queries": [
+   "rick owens",
+   "black leather jacket oversized",
+   "flared black jeans",
+   "chunky black boots"
+  ]
+ },
+ {
+  "name": "gorpcore",
+  "aliases": [
+   "gorpcore",
+   "outdoorsy city"
+  ],
+  "gender": "any",
+  "pieces": "shell jacket, fleece, hiking or trail shoes, cargo trousers, beanie",
+  "brands": "Arc'teryx, Salomon, Patagonia, The North Face, Montbell",
+  "colours": "earth tones, olive, orange accents",
+  "queries": [
+   "arcteryx jacket",
+   "salomon xt-6",
+   "patagonia fleece",
+   "north face nuptse"
+  ]
+ },
+ {
+  "name": "techwear",
+  "aliases": [
+   "techwear",
+   "tech wear",
+   "darkwear",
+   "dark wear",
+   "acronym style"
+  ],
+  "gender": "men",
+  "pieces": "black technical shell, strapped cargo trousers, sling bag, tactical vest",
+  "brands": "Acronym, Nike ACG, Stone Island Shadow, Y-3, Arc'teryx Veilance",
+  "colours": "black, charcoal",
+  "queries": [
+   "black cargo techwear trousers",
+   "nike acg",
+   "y-3 jacket",
+   "sling bag black"
+  ]
+ },
+ {
+  "name": "archive fashion",
+  "aliases": [
+   "archive fashion",
+   "archive pieces"
+  ],
+  "gender": "any",
+  "pieces": "early-2000s designer pieces, distressed knitwear, bondage trousers",
+  "brands": "Raf Simons, Helmut Lang, Undercover, Number (N)ine, Jean Paul Gaultier",
+  "colours": "black, washed, muted",
+  "queries": [
+   "helmut lang",
+   "raf simons",
+   "undercover jacket",
+   "jean paul gaultier mesh"
+  ]
+ },
+ {
+  "name": "indie sleaze",
+  "aliases": [
+   "indie sleaze",
+   "2007 indie"
+  ],
+  "gender": "any",
+  "pieces": "skinny black jeans, leather jacket, band tee, Converse, skinny scarf",
+  "brands": "AllSaints, Converse, American Apparel, Dr. Martens",
+  "colours": "black, white, leopard",
+  "queries": [
+   "skinny black jeans",
+   "leather biker jacket",
+   "band t shirt vintage",
+   "converse chuck taylor"
+  ]
+ },
+ {
+  "name": "rockstar",
+  "aliases": [
+   "rockstar",
+   "rock star",
+   "hedi slimane"
+  ],
+  "gender": "any",
+  "pieces": "skinny jeans, leather or suede jacket, Chelsea boots, open shirt",
+  "brands": "Saint Laurent, Celine, AllSaints, Acne Studios",
+  "colours": "black, leopard, deep red",
+  "queries": [
+   "chelsea boots",
+   "skinny black jeans",
+   "suede jacket",
+   "leather jacket"
+  ]
+ },
+ {
+  "name": "whimsymaxxing",
+  "aliases": [
+   "whimsymaxxing"
+  ],
+  "gender": "any",
+  "pieces": "clashing prints, colourful knits, brooches, patterned shirts",
+  "brands": "Bode, Wales Bonner, Dries Van Noten",
+  "colours": "bright, clashing",
+  "queries": [
+   "patterned knit cardigan",
+   "printed shirt mens",
+   "brooch"
+  ]
+ },
+ {
+  "name": "city boy",
+  "aliases": [
+   "city boy",
+   "cityboy",
+   "japanese city boy",
+   "popeye style"
+  ],
+  "gender": "men",
+  "pieces": "oversized shirt, wide chinos, baggy cardigans, tote, loafers or New Balance",
+  "brands": "Beams, Uniqlo U, Auralee, Kaptain Sunshine",
+  "colours": "navy, ecru, khaki",
+  "queries": [
+   "oversized oxford shirt",
+   "wide chinos",
+   "new balance 990"
+  ]
+ },
+ {
+  "name": "amekaji",
+  "aliases": [
+   "amekaji",
+   "japanese americana",
+   "heritage workwear",
+   "japanese workwear"
+  ],
+  "gender": "men",
+  "pieces": "selvedge denim, chore jacket, flannel shirt, work boots, deck jacket",
+  "brands": "Orslow, Kapital, Iron Heart, Red Wing, Carhartt",
+  "colours": "indigo, brown, olive",
+  "queries": [
+   "selvedge jeans",
+   "chore jacket",
+   "red wing boots",
+   "kapital"
+  ]
+ },
+ {
+  "name": "ivy / prep",
+  "aliases": [
+   "ivy",
+   "ivy league",
+   "preppy",
+   "prep"
+  ],
+  "gender": "any",
+  "pieces": "Oxford button-down, navy blazer, chinos, cable knit, loafers, rugby shirt",
+  "brands": "Ralph Lauren, Brooks Brothers, J.Crew, Gant",
+  "colours": "navy, cream, green, burgundy",
+  "queries": [
+   "oxford button down shirt",
+   "navy blazer",
+   "penny loafers",
+   "rugby shirt"
+  ]
+ },
+ {
+  "name": "old money",
+  "aliases": [
+   "old money",
+   "quiet luxury",
+   "stealth wealth",
+   "old-money"
+  ],
+  "gender": "any",
+  "pieces": "cashmere jumper, tailored trousers, polo knit, loafers, trench or overcoat",
+  "brands": "Loro Piana, Ralph Lauren, Brunello Cucinelli, John Smedley, Sunspel",
+  "colours": "cream, camel, navy, grey",
+  "queries": [
+   "cashmere jumper",
+   "knitted polo",
+   "suede loafers",
+   "camel overcoat"
+  ]
+ },
+ {
+  "name": "tech bro",
+  "aliases": [
+   "tech bro",
+   "techbro",
+   "silicon valley",
+   "vc style",
+   "finance bro",
+   "patagonia vest"
+  ],
+  "gender": "men",
+  "pieces": "quarter-zip, fleece or Patagonia vest, chinos or jeans, grey New Balance",
+  "brands": "Patagonia, Arc'teryx, New Balance, Allbirds, Uniqlo",
+  "colours": "grey, navy, black",
+  "queries": [
+   "quarter zip jumper",
+   "patagonia vest",
+   "new balance 990 grey"
+  ]
+ },
+ {
+  "name": "fisherman",
+  "aliases": [
+   "fisherman",
+   "fisherman aesthetic",
+   "coastal fisherman"
+  ],
+  "gender": "any",
+  "pieces": "chunky cable or Aran knit, wax jacket, beanie, wide trousers, boots",
+  "brands": "Barbour, Inis Meain, Le Tricoteur",
+  "colours": "cream, navy, yellow",
+  "queries": [
+   "aran jumper",
+   "fisherman beanie",
+   "barbour wax jacket"
+  ]
+ },
+ {
+  "name": "scandi minimal",
+  "aliases": [
+   "scandi",
+   "scandinavian",
+   "copenhagen style"
+  ],
+  "gender": "any",
+  "pieces": "clean knit, wide trousers, long wool coat, white trainers",
+  "brands": "COS, Arket, Acne Studios, Our Legacy, Filippa K",
+  "colours": "black, grey, ecru, muted",
+  "queries": [
+   "wool coat minimal",
+   "wide leg trousers",
+   "white leather trainers"
+  ]
+ },
+ {
+  "name": "skater",
+  "aliases": [
+   "skater",
+   "skatewear",
+   "skate style"
+  ],
+  "gender": "any",
+  "pieces": "baggy jeans or work pants, hoodie, graphic tee, skate shoes, beanie",
+  "brands": "Dickies, Carhartt WIP, Vans, Palace, Polar",
+  "colours": "washed, earthy, black",
+  "queries": [
+   "carhartt wip double knee",
+   "palace hoodie",
+   "vans old skool"
+  ]
+ },
+ {
+  "name": "grunge",
+  "aliases": [
+   "grunge",
+   "90s grunge",
+   "grunge revival"
+  ],
+  "gender": "any",
+  "pieces": "flannel shirt, ripped jeans, band tee, cardigan, Doc Martens",
+  "brands": "Dr. Martens, Levi's, Converse",
+  "colours": "plaid red, black, faded",
+  "queries": [
+   "flannel shirt",
+   "dr martens 1460",
+   "ripped jeans"
+  ]
+ },
+ {
+  "name": "emo",
+  "aliases": [
+   "emo",
+   "emo revival",
+   "pop punk"
+  ],
+  "gender": "any",
+  "pieces": "skinny black jeans, band hoodie, studded belt, checkerboard Vans",
+  "brands": "Vans, Hot Topic style",
+  "colours": "black, red, checkerboard",
+  "queries": [
+   "studded belt",
+   "checkerboard vans",
+   "black band hoodie"
+  ]
+ },
+ {
+  "name": "hypebeast",
+  "aliases": [
+   "hypebeast",
+   "streetwear hype"
+  ],
+  "gender": "men",
+  "pieces": "logo hoodie, graphic tee, cargo pants, hyped trainers",
+  "brands": "Supreme, BAPE, Off-White, Stussy, Jordan",
+  "colours": "bold logos, camo",
+  "queries": [
+   "supreme box logo",
+   "bape hoodie",
+   "stussy t shirt",
+   "jordan 1"
+  ]
+ },
+ {
+  "name": "y2k",
+  "aliases": [
+   "y2k",
+   "noughties"
+  ],
+  "gender": "any",
+  "pieces": "low-rise jeans, baby tee, velour tracksuit, tinted sunglasses, chunky trainers",
+  "brands": "Juicy Couture, Von Dutch, Ed Hardy, Diesel",
+  "colours": "pink, silver, baby blue",
+  "queries": [
+   "low rise jeans",
+   "baby tee",
+   "velour tracksuit",
+   "diesel"
+  ]
+ },
+ {
+  "name": "afro-street",
+  "aliases": [
+   "afrobeats",
+   "afro swag",
+   "afroswing"
+  ],
+  "gender": "men",
+  "pieces": "printed shirts, matching sets, slides or loafers, chains",
+  "brands": "Daily Paper, Orange Culture",
+  "colours": "bold prints, earthy",
+  "queries": [
+   "daily paper",
+   "printed matching set mens"
+  ]
+ },
+ {
+  "name": "coquette",
+  "aliases": [
+   "coquette",
+   "angelcore"
+  ],
+  "gender": "women",
+  "pieces": "bows, lace, slip dresses, ballet flats, frilly socks",
+  "brands": "Sandy Liang, Miu Miu",
+  "colours": "pink, white, cream",
+  "queries": [
+   "lace slip dress",
+   "bow top",
+   "ballet flats"
+  ]
+ },
+ {
+  "name": "balletcore",
+  "aliases": [
+   "balletcore",
+   "ballet core",
+   "ballerina"
+  ],
+  "gender": "women",
+  "pieces": "wrap top, leg warmers, tulle skirt, ballet flats, bodysuit",
+  "brands": "Repetto, Danskin",
+  "colours": "baby pink, black, white",
+  "queries": [
+   "wrap cardigan",
+   "leg warmers",
+   "ballet flats",
+   "tulle skirt"
+  ]
+ },
+ {
+  "name": "mob wife",
+  "aliases": [
+   "mob wife",
+   "mobwife"
+  ],
+  "gender": "women",
+  "pieces": "faux fur coat, leopard print, leather, gold jewellery, big sunglasses",
+  "brands": "Dolce & Gabbana",
+  "colours": "black, leopard, gold, red",
+  "queries": [
+   "faux fur coat",
+   "leopard print",
+   "gold hoop earrings"
+  ]
+ },
+ {
+  "name": "office siren",
+  "aliases": [
+   "office siren",
+   "corpcore",
+   "corporate siren"
+  ],
+  "gender": "women",
+  "pieces": "pencil skirt, fitted shirt, slim blazer, thin glasses, kitten heels",
+  "brands": "Theory, Reiss",
+  "colours": "grey, black, white",
+  "queries": [
+   "pencil skirt",
+   "fitted shirt womens",
+   "kitten heels"
+  ]
+ },
+ {
+  "name": "tomato girl",
+  "aliases": [
+   "tomato girl",
+   "mediterranean summer",
+   "italian summer"
+  ],
+  "gender": "women",
+  "pieces": "linen dress, red gingham, espadrilles, gold jewellery",
+  "brands": "Rouje, Faithfull the Brand",
+  "colours": "red, white, tan",
+  "queries": [
+   "linen midi dress",
+   "gingham dress",
+   "espadrilles"
+  ]
+ },
+ {
+  "name": "clean girl",
+  "aliases": [
+   "clean girl",
+   "that girl"
+  ],
+  "gender": "women",
+  "pieces": "quality basics, slicked-bun style, fitted tank, wide trousers, gold hoops",
+  "brands": "Skims, COS, Aritzia",
+  "colours": "neutral, white, black",
+  "queries": [
+   "ribbed tank top",
+   "wide leg trousers",
+   "gold hoops"
+  ]
+ },
+ {
+  "name": "cottagecore",
+  "aliases": [
+   "cottagecore",
+   "cottage core"
+  ],
+  "gender": "women",
+  "pieces": "floral prairie dress, puff sleeves, knit cardigan, wicker basket",
+  "brands": "Laura Ashley, Doen",
+  "colours": "floral, cream, sage",
+  "queries": [
+   "prairie dress",
+   "puff sleeve blouse",
+   "floral midi dress"
+  ]
+ },
+ {
+  "name": "dark academia",
+  "aliases": [
+   "dark academia"
+  ],
+  "gender": "any",
+  "pieces": "tweed blazer, turtleneck, plaid trousers, Oxford shoes, long coat",
+  "brands": "Ralph Lauren, Barbour",
+  "colours": "brown, burgundy, forest green, black",
+  "queries": [
+   "tweed blazer",
+   "wool turtleneck",
+   "plaid trousers"
+  ]
+ },
+ {
+  "name": "whimsigoth",
+  "aliases": [
+   "whimsigoth",
+   "whimsy goth"
+  ],
+  "gender": "women",
+  "pieces": "velvet, long flowing dresses, moon and star prints, lace, platform boots",
+  "brands": "Free People, vintage",
+  "colours": "black, purple, deep red",
+  "queries": [
+   "velvet maxi dress",
+   "lace top black",
+   "platform boots"
+  ]
+ },
+ {
+  "name": "coastal cowgirl",
+  "aliases": [
+   "coastal cowgirl",
+   "cowgirl"
+  ],
+  "gender": "women",
+  "pieces": "western shirt, denim, linen, cowboy boots, wide-brim hat",
+  "brands": "Levi's, Ganni",
+  "colours": "denim, sand, white",
+  "queries": [
+   "western shirt",
+   "cowboy boots",
+   "straight leg jeans"
+  ]
+ },
+ {
+  "name": "boho grunge",
+  "aliases": [
+   "boho chic",
+   "bohemian",
+   "sienna miller",
+   "boho"
+  ],
+  "gender": "women",
+  "pieces": "suede jacket, paisley or peasant blouse, flared jeans, coin belt, boots",
+  "brands": "Chloe, Free People, Isabel Marant",
+  "colours": "tan, brown, cream, paisley",
+  "queries": [
+   "suede fringe jacket",
+   "peasant blouse",
+   "flared jeans"
+  ]
+ },
+ {
+  "name": "frazzled english woman",
+  "aliases": [
+   "frazzled english woman",
+   "frazzled english"
+  ],
+  "gender": "women",
+  "pieces": "mismatched cardigans, floral dresses, wellies or boots, layered scarves",
+  "brands": "Toast, Boden, vintage",
+  "colours": "muted floral, mustard, brown",
+  "queries": [
+   "floral midi dress",
+   "chunky cardigan",
+   "wellies"
+  ]
+ },
+ {
+  "name": "brat",
+  "aliases": [
+   "brat summer",
+   "charli xcx"
+  ],
+  "gender": "women",
+  "pieces": "tiny tank, low-rise trousers, sunglasses, clubwear",
+  "brands": "Diesel, Jean Paul Gaultier",
+  "colours": "lime green, black",
+  "queries": [
+   "lime green top",
+   "low rise trousers"
+  ]
+ },
+ {
+  "name": "barbiecore",
+  "aliases": [
+   "barbiecore"
+  ],
+  "gender": "women",
+  "pieces": "hot pink everything, mini dresses, platform heels",
+  "brands": "Valentino, any",
+  "colours": "hot pink",
+  "queries": [
+   "hot pink dress",
+   "pink blazer"
+  ]
+ },
+ {
+  "name": "mob boss / mafia",
+  "aliases": [
+   "mafia",
+   "gangster style",
+   "peaky blinders"
+  ],
+  "gender": "men",
+  "pieces": "three-piece suit, flat cap, long wool overcoat, collarless shirt",
+  "brands": "Hackett, Suitsupply, vintage tailoring",
+  "colours": "charcoal, brown tweed, black",
+  "queries": [
+   "flat cap tweed",
+   "three piece suit",
+   "wool overcoat"
+  ]
+ },
+ {
+  "name": "mod",
+  "aliases": [
+   "mod",
+   "modernist",
+   "mods"
+  ],
+  "gender": "men",
+  "pieces": "slim suit, Harrington or parka, Fred Perry polo, desert boots",
+  "brands": "Fred Perry, Baracuta, Clarks, Ben Sherman",
+  "colours": "navy, burgundy, white",
+  "queries": [
+   "harrington jacket",
+   "fred perry polo",
+   "clarks desert boots"
+  ]
+ },
+ {
+  "name": "britpop",
+  "aliases": [
+   "britpop",
+   "oasis",
+   "liam gallagher"
+  ],
+  "gender": "men",
+  "pieces": "parka, Adidas track top, bucket hat, round sunglasses, straight jeans",
+  "brands": "Adidas, Pretty Green, Clarks",
+  "colours": "navy, khaki",
+  "queries": [
+   "fishtail parka",
+   "adidas track top",
+   "bucket hat"
+  ]
+ },
+ {
+  "name": "normcore",
+  "aliases": [
+   "normcore",
+   "dad core",
+   "dadcore"
+  ],
+  "gender": "any",
+  "pieces": "plain fleece, straight jeans, grey dad trainers, plain tee",
+  "brands": "New Balance, Gap, Uniqlo",
+  "colours": "grey, navy, washed blue",
+  "queries": [
+   "new balance 574",
+   "plain fleece",
+   "straight jeans"
+  ]
+ },
+ {
+  "name": "gym bro",
+  "aliases": [
+   "gym bro",
+   "gymshark",
+   "gym fit",
+   "pump cover"
+  ],
+  "gender": "men",
+  "pieces": "oversized pump cover, stringer, gym shorts, joggers, trainers",
+  "brands": "Gymshark, Represent 247, Nike",
+  "colours": "black, grey",
+  "queries": [
+   "oversized pump cover",
+   "gym shorts mens",
+   "represent 247"
+  ]
+ },
+ {
+  "name": "clean fit / streetwear basic",
+  "aliases": [
+   "clean fit",
+   "basic streetwear"
+  ],
+  "gender": "any",
+  "pieces": "heavyweight tee, straight jeans or cargos, clean trainers, overshirt",
+  "brands": "Represent, Carhartt WIP, Nike, Adidas",
+  "colours": "neutrals, black, white",
+  "queries": [
+   "heavyweight t shirt",
+   "cargo trousers",
+   "nike dunk"
+  ]
+ },
+ {
+  "name": "japanese street",
+  "aliases": [
+   "harajuku",
+   "japanese street style",
+   "japanese streetwear",
+   "ura-harajuku"
+  ],
+  "gender": "any",
+  "pieces": "layered oversized pieces, wide trousers, kimono-style jackets, tabi or chunky shoes",
+  "brands": "Comme des Garcons, Yohji Yamamoto, Kapital, Needles, Neighborhood",
+  "colours": "black, indigo, layered",
+  "queries": [
+   "comme des garcons",
+   "needles track pants",
+   "kimono jacket",
+   "maison margiela tabi"
+  ]
+ },
+ {
+  "name": "avant-garde",
+  "aliases": [
+   "avant garde",
+   "avant-garde",
+   "goth ninja",
+   "drape"
+  ],
+  "gender": "any",
+  "pieces": "asymmetric draped tops, long layers, drop-crotch trousers, sculpted boots",
+  "brands": "Rick Owens, Yohji Yamamoto, Ann Demeulemeester, Julius",
+  "colours": "black, off-white",
+  "queries": [
+   "drop crotch trousers",
+   "rick owens",
+   "asymmetric top black"
+  ]
+ },
+ {
+  "name": "gothic",
+  "aliases": [
+   "gothic",
+   "trad goth",
+   "goth"
+  ],
+  "gender": "any",
+  "pieces": "black lace, corset or velvet, long coat, platform boots, silver jewellery",
+  "brands": "Dr. Martens, Killstar",
+  "colours": "black, deep red",
+  "queries": [
+   "black long coat",
+   "platform boots",
+   "velvet top black"
+  ]
+ },
+ {
+  "name": "vintage americana",
+  "aliases": [
+   "americana",
+   "vintage americana",
+   "workwear americana"
+  ],
+  "gender": "any",
+  "pieces": "denim jacket, varsity jacket, white tee, work boots, flannel",
+  "brands": "Levi's, Carhartt, Champion, Wrangler",
+  "colours": "indigo, red, white",
+  "queries": [
+   "varsity jacket",
+   "levis trucker jacket",
+   "carhartt detroit jacket"
+  ]
+ },
+ {
+  "name": "coastal grandma",
+  "aliases": [
+   "coastal grandma",
+   "coastal grandmother",
+   "nancy meyers"
+  ],
+  "gender": "women",
+  "pieces": "linen shirt, cream knit, wide trousers, straw hat",
+  "brands": "Ralph Lauren, Toast",
+  "colours": "cream, white, blue",
+  "queries": [
+   "linen shirt womens",
+   "cream cable knit",
+   "wide linen trousers"
+  ]
+ },
+ {
+  "name": "sporty spice / athleisure",
+  "aliases": [
+   "athleisure",
+   "sporty spice"
+  ],
+  "gender": "women",
+  "pieces": "track jacket, leggings or flares, crop top, chunky trainers",
+  "brands": "Adidas, Lululemon, Alo",
+  "colours": "black, white, pastel",
+  "queries": [
+   "flared leggings",
+   "adidas track jacket womens",
+   "crop top"
+  ]
+ },
+ {
+  "name": "rave / festival",
+  "aliases": [
+   "rave",
+   "raver",
+   "glasto",
+   "glastonbury"
+  ],
+  "gender": "any",
+  "pieces": "mesh top, cargo shorts, bucket hat, wellies or chunky trainers, bum bag",
+  "brands": "any",
+  "colours": "neon, black, metallic",
+  "queries": [
+   "mesh top",
+   "bucket hat",
+   "cargo shorts"
+  ]
+ }
+]

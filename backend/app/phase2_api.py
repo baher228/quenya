@@ -33,6 +33,7 @@ from app.schemas import (
     VerdictRequest,
 )
 from app.sources import catalog, retail, sport, vinted
+from app.styles import decode_brief, style_notes, style_queries
 from app.tagging import tag_item
 from app.taste import create_taste, update_taste
 
@@ -123,6 +124,7 @@ def _route_response(
 def _start_fetch(
     profile: dict[str, Any], queries: list[str], background_tasks: BackgroundTasks
 ) -> str:
+    queries = list(dict.fromkeys(style_queries(profile.get("brief") or {}) + queries))
     job_id = uuid.uuid4().hex
     job = {
         "id": job_id,
@@ -358,6 +360,7 @@ def create_profile(
     body: ProfileCreateRequest, background_tasks: BackgroundTasks
 ) -> dict[str, Any]:
     brief = body.brief.model_dump(exclude_none=True)
+    brief["style_refs"] = decode_brief(brief)
     try:
         route_output, existing, route_meta, _content = route_input("brief", brief["text"])
     except TaskError as exc:
@@ -455,6 +458,7 @@ def update_board_brief(
         raise HTTPException(status_code=404, detail="Board not found")
 
     brief = body.brief.model_dump(exclude_none=True)
+    brief["style_refs"] = decode_brief(brief)
     profile = db.activate_profile(board_id, kind="user")
     if not profile:
         raise HTTPException(status_code=404, detail="Board not found")
@@ -779,6 +783,7 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
         core_rules=[item["rule"] for item in core["rules"]],
         history=db.swipe_history(active["id"]),
         include_shoes=active["brief"].get("include_shoes", True),
+        style_notes=style_notes(active["brief"]),
     )
     request_ids: list[str | None] = []
     try:

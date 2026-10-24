@@ -4,7 +4,8 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 300,
-      "regions": ["dub1"]
+      "regions": ["dub1"],
+      "includeFiles": "app/data/**"
     }
   },
   "rewrites": [

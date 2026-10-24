@@ -26,6 +26,11 @@ from app.sources.sport import parse_product_html
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def stub_style_decoder(monkeypatch):
+    monkeypatch.setattr(phase2_api, "decode_brief", lambda _brief: [])
+
+
 def _brief(**overrides):
     return {
         "text": "Relaxed city workwear",
@@ -161,6 +166,7 @@ def test_existing_brief_route_activates_board_without_new_taste(monkeypatch, tmp
     _create_board("board-1", active=False)
     existing = db.get_profile("board-1")
     previous_taste = db.latest_taste("board-1")
+    decoded_briefs = []
     output = RouteOut(
         context="city",
         board_id="board-1",
@@ -172,6 +178,11 @@ def test_existing_brief_route_activates_board_without_new_taste(monkeypatch, tmp
         phase2_api,
         "route_input",
         lambda *_args: (output, existing, SimpleNamespace(request_id="mreq-r"), "content"),
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "decode_brief",
+        lambda brief: decoded_briefs.append(brief) or ["roadman"],
     )
     monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job-1")
     monkeypatch.setattr(
@@ -188,6 +199,8 @@ def test_existing_brief_route_activates_board_without_new_taste(monkeypatch, tmp
     assert db.unconsumed_signals("board-1")["corrections"][0]["kind"] == "brief"
     assert result["route"]["routed"] == "existing"
     assert db.get_profile("board-1")["brief"]["text"] == "new city brief"
+    assert db.get_profile("board-1")["brief"]["style_refs"] == ["roadman"]
+    assert len(decoded_briefs) == 1
     assert db.latest_taste("board-1")["version"] == previous_taste["version"]
 
 
@@ -213,14 +226,22 @@ def test_new_board_flag_ignores_existing_route(monkeypatch, tmp_path):
             "content",
         ),
     )
+    monkeypatch.setattr(phase2_api, "decode_brief", lambda _brief: ["roadman"])
     monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job-1")
+
+    taste_contents = []
+
+    def fake_taste_call(_task, _system, _model, content, _output_model):
+        taste_contents.append(content)
+        return (
+            TasteProfile.model_validate(_profile()),
+            SimpleNamespace(request_id="mreq-taste", latency_ms=10),
+        )
+
     monkeypatch.setattr(
         taste,
         "call_task",
-        lambda *_args: (
-            TasteProfile.model_validate(_profile()),
-            SimpleNamespace(request_id="mreq-taste", latency_ms=10),
-        ),
+        fake_taste_call,
     )
     result = phase2_api.create_profile(
         ProfileCreateRequest(
@@ -237,6 +258,8 @@ def test_new_board_flag_ignores_existing_route(monkeypatch, tmp_path):
     assert result["route"]["label"] == "Tech bro"
     assert len(db.profile_boards()) == 2
     assert db.get_profile("existing")["brief"] == previous["brief"]
+    assert db.get_profile(result["profile_id"])["brief"]["style_refs"] == ["roadman"]
+    assert "Style notes (what these style names usually mean):" in taste_contents[0]
     assert db.latest_taste("existing")["version"] == previous_taste["version"]
     with db.db_connection() as connection:
         row = connection.execute(
@@ -326,6 +349,7 @@ def test_update_board_brief_updates_only_target_board(monkeypatch, tmp_path):
         )
 
     monkeypatch.setattr(taste, "call_task", fake_taste_call)
+    monkeypatch.setattr(phase2_api, "decode_brief", lambda _brief: ["roadman"])
     monkeypatch.setattr(
         phase2_api,
         "_start_fetch",
@@ -345,6 +369,7 @@ def test_update_board_brief_updates_only_target_board(monkeypatch, tmp_path):
     assert result["version"] == 2
     assert result["request_id"] == "mreq-update"
     assert db.get_profile("a")["brief"]["text"] == "A sharper city wardrobe"
+    assert db.get_profile("a")["brief"]["style_refs"] == ["roadman"]
     assert db.active_profile()["id"] == "a"
     assert db.latest_taste("a")["version"] == 2
     assert db.get_profile("b")["brief"] == previous_b_brief
