@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errText, gbp, img } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
 import { DeckScreen } from "./Deck";
@@ -39,7 +39,11 @@ export default function App() {
   const [routeNote, setRouteNote] = useState<RouteNote | null>(null);
   const [briefKey, setBriefKey] = useState(0);
   const [picking, setPicking] = useState(true);
+  const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [tab, picking, activeBoard?.id]);
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
   useEffect(refreshBoards, [refreshBoards]);
   useEffect(() => { if (tab === "swipe" && picking) refreshBoards(); }, [tab, picking, refreshBoards]);
@@ -187,7 +191,7 @@ export default function App() {
       <div className="phone">
         <header className="top">
           <span className="logo">quenya<i>.</i></span>
-          <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? (version ? `taste v${version}` : "")}</span>
+          <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? ""}</span>
         </header>
         {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
@@ -209,7 +213,7 @@ export default function App() {
             <button className="x" onClick={() => setRouteNote(null)} aria-label="Dismiss">×</button>
           </div>
         )}
-        <main className="body">
+        <main ref={bodyRef} className="body">
           {tab === "brief" && (
             <>
               <BriefScreen key={briefKey} initial={brief} busy={creating} onSubmit={submitBrief}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import { ErrorBox, Loading, pretty } from "./ui";
+import { ErrorBox, gbpText, Loading, pretty, uniqueTasteEntries } from "./ui";
 import type { Board, TaskStats, TasteState } from "./types";
 
 const TASK_LABEL: Record<string, string> = {
@@ -25,11 +25,12 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
     ...Object.entries(p.avoids).map(([k, v]) => [k, -v] as const),
   ].sort((a, b) => b[1] - a[1]) : [];
   const core = taste?.core;
-  const coreLikes = core ? [
+  const coreLikes = core ? uniqueTasteEntries([
     ...Object.entries(core.likes).map(([k, v]) => [k, v] as const),
     ...Object.entries(core.avoids).map(([k, v]) => [k, -v] as const),
-  ].slice(0, 8) : [];
+  ], 8) : [];
   const shown = bars.length > 10 ? [...bars.slice(0, 7), ...bars.slice(-3)] : bars;
+  const trainingTarget = stats?.find(s => s.first_training_at != null)?.first_training_at ?? 25;
 
   return (
     <section className="screen">
@@ -39,10 +40,10 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
       {taste && !p && <p className="muted">No profile yet. Start with a brief.</p>}
       {p && (
         <>
-          <p className="summary">{p.summary}</p>
+          <p className="summary">{gbpText(p.summary)}</p>
           {core && (core.rules.length > 0 || coreLikes.length > 0 || core.palette.length > 0) && (
             <div className="panel core"><span className="lbl">Across your boards <em>applies everywhere</em></span>
-              {core.rules.length > 0 && <ul className="rules">{core.rules.map(r => <li key={r.rule}>{r.rule}<span className="from"> · {r.boards.join(", ")}</span></li>)}</ul>}
+              {core.rules.length > 0 && <ul className="rules">{core.rules.map(r => <li key={r.rule}>{gbpText(r.rule)}<span className="from"> · {r.boards.join(", ")}</span></li>)}</ul>}
               <div className="chips">
                 {coreLikes.map(([k, v]) => <span key={k} className={"chip static " + (v > 0 ? "pos" : "neg")}>{v > 0 ? "+" : "−"} {pretty(k)}</span>)}
                 {core.palette.map(c => <span key={c} className="chip static">{c}</span>)}
@@ -56,7 +57,7 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
           </div>
           {(p.rules.length > 0 || p.palette.length > 0) && (
             <div className="panel"><span className="lbl">Rules & palette</span>
-              <ul className="rules">{p.rules.map(r => <li key={r}>{r}</li>)}</ul>
+              <ul className="rules">{p.rules.map(r => <li key={r}>{gbpText(r)}</li>)}</ul>
               <div className="chips">{p.palette.map(c => <span key={c} className="chip static">{c}</span>)}</div>
               <div className="mrow"><span>Budget ceiling</span><b>£{Math.round(p.price_ceiling_gbp)}</b></div>
               <div className="mrow"><span>Condition</span><b>{p.condition_preference}</b></div>
@@ -99,11 +100,11 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
             <div key={s.task} className="task">
               <div className="mrow"><span>{TASK_LABEL[s.task] ?? s.task}</span><b>{s.ok} ok{s.p50_latency_ms ? ` · ${(s.p50_latency_ms / 1000).toFixed(1)}s p50` : ""}</b></div>
               <div className="train"><i style={{ width: `${Math.min(100, (toward / target) * 100)}%` }} /></div>
-              <p className="small muted">{toward >= target ? `${toward} successful calls, past the ${target}-example training threshold. Adapter status lives in the Mubit console.` : `${toward} / ${target} successful calls toward first training`}</p>
+              {toward < target && <p className="small muted">{toward} / {target} successful calls toward first training</p>}
             </div>
           );
         })}
-        <p className="small muted">Every call goes through Mubit with a fixed prompt per task, and your corrections are sent as calls of the same task.</p>
+        <p className="small muted">Every call goes through Mubit with a fixed prompt per task, and your corrections are sent as calls of the same task. Past {trainingTarget} successful calls a task is ready for Mubit training; adapter status lives in the Mubit console.</p>
       </div>
 
       <button className="btn ghost wide danger" onClick={onReset}>Reset all boards</button>

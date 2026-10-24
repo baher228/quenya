@@ -46,5 +46,32 @@ export function Provenance({ source, condition }: { source: string; condition?: 
 }
 
 export function pretty(k: string) {
-  return k.replace(/^(color|colour|aesthetic|style|category|material|pattern|fit|era|brand|slot)_/, "").replace(/_/g, " ");
+  const value = k
+    .replace(/^(colou?rs?|aesthetics?|styles?|categor(?:y|ies)|materials?|patterns?|fits?|eras?|brands?|slots?)[_:]/i, "")
+    .replace(/_/g, " ");
+  return value === value.toLowerCase()
+    ? value.replace(/\b[a-z]/g, letter => letter.toUpperCase())
+    : value;
+}
+
+export function uniqueTasteEntries(
+  entries: readonly (readonly [string, number])[],
+  limit?: number,
+) {
+  const seen = new Set<string>();
+  const unique = entries.filter(([key, value]) => {
+    const sign = value > 0 ? "+" : "−";
+    const label = pretty(key).toLocaleLowerCase("en-GB");
+    const identity = `${sign}:${label}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+  return limit === undefined ? unique : unique.slice(0, limit);
+}
+
+export function gbpText(s: string) {
+  return s.replace(/(\d[\d,]*(?:\.\d+)?)\s*GBP/g, (_match, amount: string) =>
+    `£${Number(amount.replace(/,/g, "")).toLocaleString("en-GB")}`,
+  );
 }
