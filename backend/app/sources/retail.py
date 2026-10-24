@@ -5,6 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from app.config import TAVILY_API_KEY
 from app.images import normalize_image_url
+from app.sources import STOCK_PHRASE
 
 RETAIL_DOMAINS = [
     "asos.com", "hm.com", "uniqlo.com", "cos.com", "arket.com", "zara.com",
@@ -70,12 +71,20 @@ def _product_id(url: str, domain: str) -> str | None:
 
 
 def _title_from_markdown(content: str) -> tuple[str | None, int]:
-    match = re.search(r"(?m)^\s{0,3}#{1,3}\s+(.+?)\s*$", content)
-    if not match:
-        return None, -1
-    title = re.sub(r"[*_`]", "", match.group(1)).strip()
+    pattern = r"(?m)^\s{0,3}#{1,3}\s+(.+?)\s*$"
+    for match in re.finditer(pattern, content):
+        title = re.sub(r"[*_`]", "", match.group(1)).strip()
+        title = re.sub(r"\s+\|\s*ASOS\s*$", "", title, flags=re.I).strip()
+        if title and not STOCK_PHRASE.fullmatch(title):
+            return title, match.start(1)
+    return None, -1
+
+
+def _stock_line(line: str) -> bool:
+    title = re.sub(r"^\s{0,3}#{1,6}\s+", "", line.strip())
+    title = re.sub(r"[*_`]", "", title).strip()
     title = re.sub(r"\s+\|\s*ASOS\s*$", "", title, flags=re.I).strip()
-    return (title or None), match.start(1)
+    return bool(STOCK_PHRASE.fullmatch(title))
 
 
 def _fallback_title(title: str | None) -> str | None:
@@ -157,11 +166,21 @@ def parse_extract_result(
     if not title:
         title = _fallback_title(search_title)
         title_start = 0
+    if title and _stock_line(title):
+        return None, "out_of_stock"
     if not title:
+        first_price = _price_match(content, 0)
+        before_price = content[:first_price.start()] if first_price else content
+        if any(_stock_line(line) for line in before_price.splitlines()):
+            return None, "out_of_stock"
         return None, "no_title"
     match = _price_match(content, max(0, title_start))
     if not match:
+        if any(_stock_line(line) for line in content[title_start:].splitlines()):
+            return None, "out_of_stock"
         return None, "no_price"
+    if any(_stock_line(line) for line in content[:match.start()].splitlines()):
+        return None, "out_of_stock"
     price = float(match.group(0).replace("£", ""))
     images = _product_image_urls(
         result.get("images"), page_url, domain, product_id

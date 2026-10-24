@@ -517,7 +517,12 @@ def list_items(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     init_db()
-    clauses = ["tags_json IS NOT NULL"]
+    clauses = [
+        "tags_json IS NOT NULL",
+        "(availability IS NULL OR (availability NOT LIKE '%OutOfStock' "
+        "AND availability NOT LIKE '%SoldOut' "
+        "AND availability NOT LIKE '%Discontinued'))",
+    ]
     params: list[Any] = []
     filters = (
         ("gender_hint", gender),

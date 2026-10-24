@@ -14,7 +14,7 @@ import httpx
 from PIL import Image
 
 from app.config import SPORT_IMAGE_UA, TAVILY_API_KEY
-from app.sources import sport
+from app.sources import is_unavailable, sport
 
 logger = logging.getLogger(__name__)
 _SCRAPLING_UNAVAILABLE_LOGGED = False
@@ -289,7 +289,15 @@ def _record(
     if not _product_url(page_url, domain):
         return None
     offers = item.get("offers") or group.get("offers")
-    price = _gbp_price(offers)
+    normalized_offers = _offers(offers)
+    available_offers = [
+        offer
+        for offer in normalized_offers
+        if not is_unavailable(offer.get("availability"))
+    ]
+    if normalized_offers and not available_offers:
+        return None
+    price = _gbp_price(available_offers if normalized_offers else offers)
     title = str(item.get("name") or group.get("name") or "").strip()
     if not title or price is None:
         return None
@@ -321,7 +329,11 @@ def _record(
         "gender_hint": gender,
         "condition_hint": "new",
         "availability": next(
-            (offer.get("availability") for offer in _offers(offers) if offer.get("availability")),
+            (
+                offer.get("availability")
+                for offer in available_offers
+                if offer.get("availability")
+            ),
             None,
         ),
         "query": query,

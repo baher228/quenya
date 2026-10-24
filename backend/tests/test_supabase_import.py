@@ -201,6 +201,49 @@ def test_file_import_tags_new_rows_and_rerun_is_noop(monkeypatch, tmp_path):
     assert len(calls) == 2
 
 
+def test_file_import_skips_unavailable_and_stock_title_rows(monkeypatch, tmp_path):
+    _isolated_db(monkeypatch, tmp_path)
+    path = tmp_path / "stock-listings.jsonl"
+    out_of_stock = _file_row("out-of-stock")
+    out_of_stock["availability"] = "https://schema.org/OutOfStock"
+    out_of_stock["record"]["availability"] = out_of_stock["availability"]
+
+    stock_title = _file_row("stock-title")
+    stock_title["title"] = "Out of stock"
+
+    limited = _file_row("limited")
+    limited["availability"] = "https://schema.org/LimitedAvailability"
+    limited["record"]["availability"] = limited["availability"]
+    _write_rows(path, [out_of_stock, stock_title, limited])
+
+    calls = []
+    image_bytes = _large_image_bytes()
+
+    class Response:
+        content = image_bytes
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(
+        supabase_import.httpx,
+        "get",
+        lambda url, **_kwargs: (calls.append(url) or Response()),
+    )
+
+    result = supabase_import.run_file_import([path], per_shop=1, no_tag=True)
+    assert result == {
+        "fetched": 3, "inserted": 1, "tagged": 0, "skipped": 2,
+        "tag_failed": 0, "failed": 0,
+    }
+    assert len(calls) == 1
+    assert db.get_item("cos.com:out-of-stock") is None
+    assert db.get_item("cos.com:stock-title") is None
+    assert db.get_item("cos.com:limited")["availability"] == (
+        "https://schema.org/LimitedAvailability"
+    )
+
+
 def test_file_import_existing_urls_do_not_count_toward_per_shop(
     monkeypatch, tmp_path
 ):
