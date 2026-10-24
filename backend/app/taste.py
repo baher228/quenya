@@ -1,17 +1,55 @@
 import json
+import math
 import re
 from typing import Any
 
 from app import db
 from app.mubit import CallMeta, call_task
 from app.prompts import TASTE_MODEL, TASTE_SYSTEM
+from app.rank import norm_token
 from app.schemas import TasteProfile
 
-_KEY_PREFIX = re.compile(
-    r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
-    r"category|categories|material|materials|fit|era|brand|brands|slot)"
-    r"(?=[:_\-\s])[:_\-\s]+"
+SUPPORT_Z = 1.5
+CONTRA_Z = 0.5
+CONTRA_MIN_N = 4
+_FIELD_NAMES = frozenset(
+    {
+        "aesthetic",
+        "aesthetics",
+        "style",
+        "styles",
+        "colour",
+        "colours",
+        "color",
+        "colors",
+        "material",
+        "materials",
+        "category",
+        "categories",
+        "fit",
+        "era",
+        "brand",
+        "brands",
+        "pattern",
+        "patterns",
+    }
 )
+_FILTER_WORDS = frozenset(
+    {
+        "outerwear",
+        "top",
+        "tops",
+        "bottom",
+        "bottoms",
+        "knitwear",
+        "shoes",
+        "accessories",
+        "menswear",
+        "womenswear",
+        "unisex",
+    }
+)
+_CONDITION_GENDER_PREFIX = re.compile(r"^(?:condition|gender)(?:[:_\-\s])")
 
 
 def _compact(value: Any) -> str:
@@ -132,14 +170,12 @@ def normalize_profile(profile: TasteProfile, brief: dict[str, Any]) -> dict[str,
     return data
 
 
-def _normalised_key(key: str) -> str:
-    value = _KEY_PREFIX.sub("", str(key).strip().lower(), count=1)
-    return " ".join(value.replace("_", " ").replace("-", " ").split())
+_normalised_key = norm_token
 
 
 def _word_boundary_match(left: str, right: str) -> bool:
-    left = " ".join(str(left).lower().replace("_", " ").replace("-", " ").split())
-    right = " ".join(str(right).lower().replace("_", " ").replace("-", " ").split())
+    left = norm_token(left)
+    right = norm_token(right)
     if not left or not right:
         return False
     return bool(
@@ -154,7 +190,7 @@ def _key_evidence(
     matching = [
         counts
         for token, counts in evidence.items()
-        if _word_boundary_match(key, _normalised_key(token))
+        if _word_boundary_match(norm_token(key), norm_token(token))
     ]
     return (
         bool(matching),
@@ -163,64 +199,191 @@ def _key_evidence(
     )
 
 
+def _evidence_z(kept: int, passed: int, base_rate: float) -> float:
+    n = kept + passed
+    if n == 0 or base_rate <= 0 or base_rate >= 1:
+        return 0.0
+    return (kept - base_rate * n) / math.sqrt(n * base_rate * (1 - base_rate))
+
+
+def _evidence_status(
+    field: str,
+    kept: int,
+    passed: int,
+    base_rate: float,
+) -> str:
+    n = kept + passed
+    if n == 0:
+        return "unseen"
+    z = _evidence_z(kept, passed, base_rate)
+    if field == "likes":
+        if kept >= 2 and z >= SUPPORT_Z:
+            return "supported"
+        if n >= CONTRA_MIN_N and z <= -CONTRA_Z:
+            return "contradicted"
+    else:
+        if passed >= 3 and z <= -SUPPORT_Z:
+            return "supported"
+        if n >= CONTRA_MIN_N and z >= CONTRA_Z:
+            return "contradicted"
+    return "weak"
+
+
+def _is_junk_key(original: str, canonical: str) -> bool:
+    original_key = str(original).strip().lower()
+    return (
+        not canonical
+        or canonical in _FIELD_NAMES
+        or canonical in _FILTER_WORDS
+        or bool(_CONDITION_GENDER_PREFIX.match(original_key))
+        or canonical.startswith(("condition ", "gender "))
+    )
+
+
+def _canonical_weights(weights: dict[str, Any]) -> dict[str, float]:
+    canonical: dict[str, float] = {}
+    for key, weight in weights.items():
+        token = norm_token(key)
+        if token:
+            canonical[token] = max(canonical.get(token, 0.0), float(weight))
+    return canonical
+
+
+def clean_keys(
+    profile: dict[str, Any],
+    evidence: dict[str, dict[str, int]] | None = None,
+    base_rate: float = 0.5,
+) -> dict[str, Any]:
+    cleaned = dict(profile)
+    evidence = evidence or {}
+    for field in ("likes", "avoids"):
+        weights: dict[str, float] = {}
+        for original, weight in (profile.get(field) or {}).items():
+            canonical = norm_token(original)
+            if _is_junk_key(original, canonical):
+                continue
+            value = max(0.0, min(1.0, float(weight)))
+            weights[canonical] = max(weights.get(canonical, 0.0), value)
+        cleaned[field] = weights
+
+    likes = cleaned["likes"]
+    avoids = cleaned["avoids"]
+    for key in set(likes) & set(avoids):
+        seen, kept, passed = _key_evidence(key, evidence)
+        z = _evidence_z(kept, passed, base_rate) if seen else 0.0
+        if seen and z > 0:
+            del avoids[key]
+        elif seen and z < 0:
+            del likes[key]
+        elif likes[key] >= avoids[key]:
+            del avoids[key]
+        else:
+            del likes[key]
+
+    for field in ("likes", "avoids"):
+        cleaned[field] = dict(
+            sorted(cleaned[field].items(), key=lambda entry: entry[1], reverse=True)[:15]
+        )
+    return cleaned
+
+
 def settle_profile(
     new: dict[str, Any],
     previous: dict[str, Any] | None,
     evidence: dict[str, dict[str, int]],
     explicit_text: str,
     brief_text: str = "",
+    *,
+    history_text: str = "",
+    base_rate: float = 0.5,
+    mode: str = "update",
 ) -> tuple[dict[str, Any], set[str]]:
+    if mode not in {"update", "cleanup"}:
+        raise ValueError(f"Unsupported settlement mode: {mode}")
     if previous is None:
-        return new, set()
+        return clean_keys(new, evidence, base_rate), set()
 
     settled = dict(new)
     blocked: set[str] = set()
     for field in ("likes", "avoids"):
-        previous_weights = previous.get(field) or {}
-        new_weights = new.get(field) or {}
-        new_by_key = {
-            _normalised_key(key): (key, float(weight))
-            for key, weight in new_weights.items()
-        }
-        previous_keys = {_normalised_key(key) for key in previous_weights}
+        previous_weights = _canonical_weights(previous.get(field) or {})
+        new_weights = _canonical_weights(new.get(field) or {})
         weights: dict[str, float] = {}
 
-        for old_key, old_weight in previous_weights.items():
-            normalized = _normalised_key(old_key)
-            llm_value = new_by_key.get(normalized)
-            is_explicit = _word_boundary_match(normalized, explicit_text)
+        for key, old_weight in previous_weights.items():
+            llm_value = new_weights.get(key)
+            is_explicit = _word_boundary_match(key, explicit_text)
+            is_protected = (
+                is_explicit
+                or _word_boundary_match(key, brief_text)
+                or _word_boundary_match(key, history_text)
+            )
             if is_explicit:
-                if llm_value is not None:
-                    weights[old_key] = llm_value[1]
+                if llm_value is None:
+                    blocked.add(key)
+                else:
+                    weights[key] = llm_value
                 continue
-            if llm_value is None:
-                decayed = float(old_weight) - 0.3
-                if decayed >= 0.1:
-                    weights[old_key] = decayed
+            _, kept, passed = _key_evidence(key, evidence)
+            status = _evidence_status(field, kept, passed, base_rate)
+            if is_protected:
+                if llm_value is None:
+                    decayed = old_weight - 0.3
+                    if decayed >= 0.1:
+                        weights[key] = decayed
+                    else:
+                        blocked.add(key)
+                else:
+                    delta = max(-0.3, min(0.3, llm_value - old_weight))
+                    weights[key] = old_weight + delta
                 continue
-            delta = max(-0.3, min(0.3, llm_value[1] - float(old_weight)))
-            weights[old_key] = float(old_weight) + delta
 
-        for normalized, (new_key, new_weight) in new_by_key.items():
-            if normalized in previous_keys:
+            if status == "supported":
+                if llm_value is None:
+                    decayed = old_weight - 0.3
+                    if decayed >= 0.1:
+                        weights[key] = decayed
+                    else:
+                        blocked.add(key)
+                else:
+                    delta = max(-0.3, min(0.3, llm_value - old_weight))
+                    weights[key] = old_weight + delta
+            elif status == "weak":
+                if llm_value is None:
+                    decayed = old_weight - 0.3
+                    if decayed >= 0.1:
+                        weights[key] = decayed
+                    else:
+                        blocked.add(key)
+                else:
+                    weights[key] = min(old_weight, llm_value)
+            elif mode == "update":
+                decayed = old_weight - 0.3
+                if decayed >= 0.1:
+                    weights[key] = decayed
+                else:
+                    blocked.add(key)
+            else:
+                blocked.add(key)
+
+        for key, new_weight in new_weights.items():
+            if key in previous_weights:
                 continue
-            if _word_boundary_match(normalized, explicit_text):
-                weights[new_key] = new_weight
+            if _word_boundary_match(key, explicit_text):
+                weights[key] = new_weight
                 continue
-            mentioned_in_brief = _word_boundary_match(normalized, brief_text)
-            seen, kept, passed = _key_evidence(normalized, evidence)
-            if field == "likes":
-                if not mentioned_in_brief and seen and kept < 2:
-                    blocked.add(normalized)
-                    continue
-            elif (
-                not mentioned_in_brief
-                and seen
-                and (passed < 2 or passed <= kept)
-            ):
-                blocked.add(normalized)
+            protected = (
+                _word_boundary_match(key, brief_text)
+                or _word_boundary_match(key, history_text)
+            )
+            if protected:
+                weights[key] = min(new_weight, 0.5)
                 continue
-            weights[new_key] = min(new_weight, 0.5)
+            _, kept, passed = _key_evidence(key, evidence)
+            if _evidence_status(field, kept, passed, base_rate) != "supported":
+                blocked.add(key)
+                continue
+            weights[key] = min(new_weight, 0.5)
 
         clamped = {
             key: max(0.0, min(1.0, float(weight)))
@@ -230,12 +393,20 @@ def settle_profile(
             sorted(clamped.items(), key=lambda entry: entry[1], reverse=True)[:15]
         )
 
-    settled["changes"] = [
+    cleaned = clean_keys(settled, evidence, base_rate)
+    for field in ("likes", "avoids"):
+        kept_keys = set(cleaned[field])
+        blocked.update(
+            norm_token(key)
+            for key in (settled.get(field) or {})
+            if norm_token(key) not in kept_keys
+        )
+    cleaned["changes"] = [
         phrase
         for phrase in settled.get("changes") or []
         if not any(_word_boundary_match(key, str(phrase)) for key in blocked)
     ]
-    return settled, blocked
+    return cleaned, blocked
 
 
 def create_taste(
@@ -243,7 +414,7 @@ def create_taste(
 ) -> tuple[dict[str, Any], CallMeta]:
     content = taste_user_content(brief, None, 1, [])
     result, meta = call_task("taste", TASTE_SYSTEM, TASTE_MODEL, content, TasteProfile)
-    profile = normalize_profile(result, brief)
+    profile = clean_keys(normalize_profile(result, brief))
     db.save_taste_version(
         profile_id,
         1,
@@ -267,6 +438,11 @@ def update_taste(
     if require_signals and not lines:
         raise ValueError("No unconsumed taste signals")
     evidence = db.tag_evidence(profile_id)
+    counts = db.signal_counts(profile_id)
+    base_rate = (
+        counts["kept"] / counts["swipes"] if counts["swipes"] else 0.5
+    )
+    history_text = "\n".join(db.explicit_history_lines(profile_id))
     content = taste_user_content(
         profile_row["brief"], current, current_version, lines, evidence=evidence
     )
@@ -279,6 +455,8 @@ def update_taste(
         evidence,
         explicit_text,
         brief_text=_compact(profile_row["brief"]),
+        history_text=history_text,
+        base_rate=base_rate,
     )
     stored_signals = {
         "lines": lines,
