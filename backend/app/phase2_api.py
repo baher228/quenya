@@ -8,10 +8,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
-from app import db
-from app.config import BACKEND_ROOT, CONTEXT_SOURCES, SHOP_TIERS, SPORT_CONTEXTS
+from app import db, images
+from app.config import CONTEXT_SOURCES, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
-from app.images import image_key
 from app.mubit import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
@@ -38,7 +37,6 @@ from app.tagging import tag_item
 from app.taste import create_taste, update_taste
 
 router = APIRouter()
-FETCH_JOBS: dict[str, dict[str, Any]] = {}
 
 
 def _gender_code(gender: str) -> str:
@@ -126,17 +124,19 @@ def _start_fetch(
     profile: dict[str, Any], queries: list[str], background_tasks: BackgroundTasks
 ) -> str:
     job_id = uuid.uuid4().hex
-    FETCH_JOBS[job_id] = {
+    job = {
         "id": job_id,
+        "started_at": db.now_iso(),
         "status": "running",
         "fetched": 0,
         "tagged": 0,
         "failed": 0,
         "errors": [],
     }
-    FETCH_JOBS[profile["id"]] = FETCH_JOBS[job_id]
+    db.save_fetch_job(job_id, profile["id"], job)
     background_tasks.add_task(
         _fetch_profile_items,
+        job_id,
         profile["id"],
         queries,
         profile["brief"]["gender"],
@@ -179,7 +179,7 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result.pop("tags_json", None)
     result["tags"] = tags
     image_url = result.get("image_url")
-    local_image = f"/img/{image_key(image_url)}.jpg" if image_url else None
+    local_image = f"/img/{images.image_key(image_url)}.jpg" if image_url else None
     result["image"] = local_image
     result["image_url"] = local_image
     result["origin"] = "live" if str(result.get("query") or "").startswith("live:") else "snapshot"
@@ -208,11 +208,19 @@ def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_profile_items(
-    profile_id: str, queries: list[str], gender: str, context: str = "other",
+    job_id: str, profile_id: str, queries: list[str], gender: str, context: str = "other",
     brief: dict[str, Any] | None = None,
 ) -> None:
-    job = FETCH_JOBS[profile_id]
+    job = db.get_fetch_job(job_id) or {
+        "id": job_id,
+        "started_at": db.now_iso(),
+        "fetched": 0,
+        "tagged": 0,
+        "failed": 0,
+        "errors": [],
+    }
     job["status"] = "running"
+    db.update_fetch_job(job_id, job)
     try:
         source_domains = CONTEXT_SOURCES.get(
             context, CONTEXT_SOURCES["other"]
@@ -339,8 +347,10 @@ def _fetch_profile_items(
             errors=errors,
             domain_counts=domain_counts,
         )
+        db.update_fetch_job(job_id, job)
     except Exception as exc:
         job.update(status="failed", errors=[str(exc)])
+        db.update_fetch_job(job_id, job)
 
 
 @router.post("/api/profile")
@@ -647,7 +657,7 @@ def merge_board(board_id: str, body: BoardMergeRequest) -> dict[str, Any]:
 
 @router.get("/api/fetch/{job_id}")
 def fetch_job(job_id: str) -> dict[str, Any]:
-    job = FETCH_JOBS.get(job_id)
+    job = db.get_fetch_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Fetch job not found")
     return {
@@ -973,12 +983,16 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
         with Image.open(io.BytesIO(data)) as original:
             image = ImageOps.exif_transpose(original).convert("RGB")
             image.thumbnail((512, 512), Image.Resampling.LANCZOS)
-            path = BACKEND_ROOT / "data" / "uploads" / f"{uuid.uuid4().hex}.jpg"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            image.save(path, format="JPEG", quality=80)
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=80)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid image") from exc
-    image_url = "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+    image_bytes = buffer.getvalue()
+    path = images.save_upload(uuid.uuid4().hex, image_bytes)
+    image_url = (
+        "data:image/jpeg;base64,"
+        + base64.b64encode(image_bytes).decode("ascii")
+    )
     request_ids = []
     try:
         read, meta = call_task(
@@ -1013,7 +1027,7 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
         or (not selected and route_output.confidence < 0.6)
     ) else None
     upload_id = db.add_upload(
-        destination, str(path), read_data, meta.request_id
+        destination, path, read_data, meta.request_id
     )
     route_id = db.create_route(
         "user",
@@ -1237,6 +1251,7 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
 @router.post("/api/reset")
 def reset() -> dict[str, Any]:
     with db.db_connection() as connection:
+        connection.execute("DELETE FROM fetch_jobs")
         connection.execute("DELETE FROM routes WHERE profile_kind='user'")
         connection.execute(
             "DELETE FROM uploads WHERE profile_id IS NULL OR profile_id IN "
@@ -1251,5 +1266,4 @@ def reset() -> dict[str, Any]:
                 "WHERE profile_id IN (SELECT id FROM profiles WHERE kind='user')"
             )
         connection.execute("DELETE FROM profiles WHERE kind='user'")
-    FETCH_JOBS.clear()
     return {"ok": True}

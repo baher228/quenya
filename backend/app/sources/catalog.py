@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import logging
 import re
 import threading
 import time
@@ -11,10 +12,24 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from PIL import Image
-from scrapling.fetchers import Fetcher, StealthyFetcher
 
 from app.config import SPORT_IMAGE_UA, TAVILY_API_KEY
 from app.sources import sport
+
+logger = logging.getLogger(__name__)
+_SCRAPLING_UNAVAILABLE_LOGGED = False
+
+
+def _scrapling_fetchers():
+    global _SCRAPLING_UNAVAILABLE_LOGGED
+    try:
+        from scrapling.fetchers import Fetcher, StealthyFetcher
+    except ImportError:
+        if not _SCRAPLING_UNAVAILABLE_LOGGED:
+            logger.warning("Scrapling is unavailable; catalog sources are disabled")
+            _SCRAPLING_UNAVAILABLE_LOGGED = True
+        return None
+    return Fetcher, StealthyFetcher
 
 CATALOG: dict[str, dict[str, Any]] = {
     "ssense.com": {
@@ -450,6 +465,10 @@ def _listing_urls(html: str, page_url: str, domain: str) -> list[str]:
 
 
 def _fetch(url: str, domain: str, *, stealth: bool = False, listing: bool = False):
+    fetchers = _scrapling_fetchers()
+    if fetchers is None:
+        return "", url, None
+    Fetcher, StealthyFetcher = fetchers
     semaphore = _MAX_PER_DOMAIN[domain]
     with semaphore:
         time.sleep(0.15)
@@ -639,6 +658,12 @@ def crawl(
     config = CATALOG.get(domain)
     if not config:
         return [], {"domain": domain, "error": "unsupported_domain", "fetched": 0}
+    if _scrapling_fetchers() is None:
+        return [], {
+            "domain": domain,
+            "error": "scrapling_unavailable",
+            "fetched": 0,
+        }
     if gender_code not in {"m", "w", "u"}:
         gender_code = "m" if gender_code == "menswear" else "w"
     categories = category_urls(domain, gender_code, pieces)
