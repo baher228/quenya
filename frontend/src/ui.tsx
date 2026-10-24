@@ -35,13 +35,12 @@ export function Seg<T extends string>({ value, options, onChange }: {
   );
 }
 
-export function Provenance({ source, origin, condition }: { source: string; origin?: string; condition?: string | null }) {
+export function Provenance({ source, condition }: { source: string; condition?: string | null }) {
   const name = source === "vinted" ? "Vinted" : source === "retail" ? "Retail" : source;
   return (
     <span className="prov">
       {name}
       {condition ? ` · ${condition}` : ""}
-      {origin ? <em className={origin === "live" ? "live" : ""}>{origin === "live" ? "live" : "snapshot"}</em> : null}
     </span>
   );
 }

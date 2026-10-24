@@ -338,7 +338,7 @@ function ItemSheet({ item, onClose, onCorrected }: { item: Item; onClose: () => 
           <p className="brand">{item.brand || "Unbranded"}</p>
           <p className="h3">{item.title}</p>
           <p><b>{gbp(item.price_gbp)}</b>{item.size ? ` · size ${item.size}` : ""}</p>
-          <Provenance source={item.source} origin={item.origin} condition={tags?.condition ?? item.condition} />
+          <Provenance source={item.source} condition={tags?.condition ?? item.condition} />
         </div>
       </div>
       {tags && (
