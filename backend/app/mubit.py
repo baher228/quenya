@@ -86,10 +86,15 @@ def _call_task(
         http_client=_new_http_client(),
         max_retries=0,
     )
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user_content},
-    ]
+    if isinstance(user_content, list) and user_content and all(
+        message.get("role") in {"user", "assistant"} for message in user_content
+    ):
+        messages = [{"role": "system", "content": system}, *user_content]
+    else:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ]
     request_ids: list[str | None] = []
     validation_retries = 0
     busy_retries = 0
