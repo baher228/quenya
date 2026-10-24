@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 
 from app.config import CONTEXT_SOURCES, SPORT_IMAGE_UA, TAVILY_API_KEY
+from app.sources import is_unavailable
 
 logger = logging.getLogger(__name__)
 _SCRAPLING_UNAVAILABLE_LOGGED = False
@@ -213,12 +214,31 @@ def parse_product_html(
     for product in products:
         offer = product.get("offers")
         if isinstance(offer, list):
-            if len(offer) != 1:
+            if not offer:
+                reason = "not_single_offer"
+                continue
+            if all(
+                isinstance(value, dict)
+                and is_unavailable(value.get("availability"))
+                for value in offer
+            ):
+                reason = "out_of_stock"
+                continue
+            available_offers = [
+                value
+                for value in offer
+                if isinstance(value, dict)
+                and not is_unavailable(value.get("availability"))
+            ]
+            if len(available_offers) != 1:
                 reason = "multiple_offers"
                 continue
-            offer = offer[0]
+            offer = available_offers[0]
         if not isinstance(offer, dict) or not _type_is(offer.get("@type"), "Offer"):
             reason = "not_single_offer"
+            continue
+        if is_unavailable(offer.get("availability")):
+            reason = "out_of_stock"
             continue
         if str(offer.get("priceCurrency", "")).upper() != "GBP":
             reason = "not_gbp"

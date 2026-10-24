@@ -9,6 +9,7 @@ import httpx
 from PIL import Image, ImageOps
 
 from app import db, images
+from app.sources import STOCK_PHRASE, is_unavailable
 from app.tagging import tag_item
 
 
@@ -94,6 +95,25 @@ def _cache_image(image_url: str, content: bytes) -> str:
     return str(destination)
 
 
+def _is_stock_row(row: dict[str, Any], record: dict[str, Any] | None = None) -> bool:
+    if record is None:
+        record = row.get("record")
+        if isinstance(record, str):
+            try:
+                record = json.loads(record)
+            except json.JSONDecodeError:
+                record = None
+    if not isinstance(record, dict):
+        record = {}
+    availability = row.get("availability") or record.get("availability")
+    if is_unavailable(availability):
+        return True
+    return any(
+        isinstance(title, str) and bool(STOCK_PHRASE.fullmatch(title.strip()))
+        for title in (row.get("title"), record.get("title"))
+    )
+
+
 def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
     known_urls = db.source_urls()
     inserted = tagged = skipped = tag_failed = failed = 0
@@ -117,6 +137,11 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                 continue
         if not isinstance(record, dict):
             failed += 1
+            continue
+        if _is_stock_row(row, record):
+            skipped += 1
+            if "image_path" in row:
+                completed.append(url)
             continue
         try:
             file_import = bool(row.get("_file_import"))
@@ -217,7 +242,7 @@ def run_file_import(
                 if source.lower() in excluded:
                     continue
                 url = row.get("url")
-                if url not in known_urls:
+                if url not in known_urls and not _is_stock_row(row):
                     count = selected_per_shop.get(source, 0)
                     if per_shop is not None and count >= per_shop:
                         continue
