@@ -41,6 +41,17 @@ def _brief(**overrides):
     }
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Tech bro: quarter-zips, …", "Tech bro"),
+        ("  baggy 90s skate look with washed hoodies", "Baggy 90s skate look"),
+    ],
+)
+def test_label_from_brief(text, expected):
+    assert phase2_api._label_from_brief(text) == expected
+
+
 def _profile(**overrides):
     return {
         "summary": "A practical style",
@@ -213,13 +224,17 @@ def test_new_board_flag_ignores_existing_route(monkeypatch, tmp_path):
     )
     result = phase2_api.create_profile(
         ProfileCreateRequest(
-            brief=ProfileBrief.model_validate(_brief(text="Tech bro quarter-zips")),
+            brief=ProfileBrief.model_validate(
+                _brief(text="Tech bro: quarter-zips, New Balance trainers, blue jeans")
+            ),
             new_board=True,
         ),
         phase2_api.BackgroundTasks(),
     )
 
     assert result["profile_id"] != "existing"
+    assert result["board"]["label"] == "Tech bro"
+    assert result["route"]["label"] == "Tech bro"
     assert len(db.profile_boards()) == 2
     assert db.get_profile("existing")["brief"] == previous["brief"]
     assert db.latest_taste("existing")["version"] == previous_taste["version"]
@@ -230,6 +245,51 @@ def test_new_board_flag_ignores_existing_route(monkeypatch, tmp_path):
     route_output = json.loads(row["output_json"])
     assert route_output["_routed"] == "new"
     assert route_output["_forced_new"] is True
+    assert route_output["label"] == "Tech bro"
+
+
+def test_new_board_label_deduplicates_existing_user_board(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    db.save_taste_version("existing", 1, _profile(), {}, "mreq-v1")
+    db.create_profile("existing", _brief(), label="tech bro", context="city")
+    existing = db.get_profile("existing")
+    output = RouteOut(
+        context="city",
+        board_id="existing",
+        label="Tech bro",
+        confidence=0.95,
+        reason="Matches the existing style",
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "route_input",
+        lambda *_args: (
+            output,
+            existing,
+            SimpleNamespace(request_id="mreq-router"),
+            "content",
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job-1")
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            TasteProfile.model_validate(_profile()),
+            SimpleNamespace(request_id="mreq-taste", latency_ms=10),
+        ),
+    )
+
+    result = phase2_api.create_profile(
+        ProfileCreateRequest(
+            brief=ProfileBrief.model_validate(_brief(text="Tech bro: new style")),
+            new_board=True,
+        ),
+        phase2_api.BackgroundTasks(),
+    )
+
+    assert result["board"]["label"] == "Tech bro 2"
+    assert result["route"]["label"] == "Tech bro 2"
 
 
 def test_update_board_brief_updates_only_target_board(monkeypatch, tmp_path):

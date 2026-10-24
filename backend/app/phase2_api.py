@@ -45,6 +45,28 @@ def _gender_code(gender: str) -> str:
     return {"menswear": "m", "womenswear": "w", "both": "u"}.get(gender, gender)
 
 
+def _label_from_brief(text: str) -> str | None:
+    delimiters = (":", ",", ";", ".", "—", "–", "-", "\n")
+    positions = [text.find(delimiter) for delimiter in delimiters]
+    positions = [position for position in positions if position >= 0]
+    heading = text[: min(positions)] if positions else text
+    label = " ".join(heading.strip().split()[:4]).strip()
+    if len(label) < 2:
+        return None
+    label = (label[0].upper() + label[1:])[:32].strip()
+    return label if len(label) >= 2 else None
+
+
+def _unique_board_label(label: str) -> str:
+    existing = {board["label"].casefold() for board in db.profile_boards()}
+    if label.casefold() not in existing:
+        return label
+    suffix = 2
+    while f"{label} {suffix}".casefold() in existing:
+        suffix += 1
+    return f"{label} {suffix}"
+
+
 def _http_task_error(exc: TaskError) -> HTTPException:
     return HTTPException(
         status_code=502,
@@ -291,6 +313,7 @@ def create_profile(
         route_output, existing, route_meta, _content = route_input("brief", brief["text"])
     except TaskError as exc:
         raise _http_task_error(exc) from exc
+    route_note_output: Any = route_output
     if existing and not body.new_board:
         profile_id = existing["id"]
         profile = db.activate_profile(profile_id)
@@ -321,17 +344,23 @@ def create_profile(
         routed = "existing"
     else:
         profile_id = uuid.uuid4().hex
+        label = route_output.label
+        if body.new_board and existing is not None:
+            label = _label_from_brief(brief["text"]) or label
+        label = _unique_board_label(label)
         try:
             taste_profile, taste_meta = create_taste(brief, profile_id)
         except TaskError as exc:
             raise _http_task_error(exc) from exc
         db.create_profile(
-            profile_id, brief, label=route_output.label, context=route_output.context
+            profile_id, brief, label=label, context=route_output.context
         )
         route_output_data = route_output.model_dump() | {
             "input_brief": brief,
+            "label": label,
             "_routed": "new",
         }
+        route_note_output = route_output_data
         if body.new_board:
             route_output_data["_forced_new"] = True
         route_id = db.create_route(
@@ -357,7 +386,9 @@ def create_profile(
         "request_id": taste_request_id,
         "fetch_job_id": job_id,
         "board": _board_summary(board),
-        "route": _route_response(route_id, routed, route_output, route_meta.request_id),
+        "route": _route_response(
+            route_id, routed, route_note_output, route_meta.request_id
+        ),
     }
 
 
