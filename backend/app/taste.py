@@ -48,10 +48,14 @@ def _signal_lines(
         lines.append("- " + line[2:])
         consumed["outfits"].append(outfit["id"])
     for correction in signals["corrections"]:
-        lines.append(
-            f'- tag correction on "{correction.get("title") or correction["target_id"]}": '
-            f'"{correction["note"]}"'
-        )
+        if correction["kind"] == "brief":
+            lines.append(f'- brief: "{correction["note"]}"')
+        else:
+            title = correction.get("title") or correction["target_id"]
+            lines.append(
+                f'- tag correction on "{title}": '
+                f'"{correction["note"]}"'
+            )
         consumed["corrections"].append(correction["id"])
     for upload in signals["uploads"]:
         read = upload["read"]

@@ -36,7 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_items_untagged ON items(tags_json, tag_error);
 CREATE INDEX IF NOT EXISTS idx_items_tags_source ON items(source, gender_hint, condition_hint);
 CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY, brief_json TEXT NOT NULL, created_at TEXT NOT NULL,
-    kind TEXT NOT NULL DEFAULT 'user', active INTEGER NOT NULL DEFAULT 1
+    kind TEXT NOT NULL DEFAULT 'user', active INTEGER NOT NULL DEFAULT 1,
+    label TEXT, context TEXT, updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS swipes (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
@@ -60,9 +61,15 @@ CREATE TABLE IF NOT EXISTS corrections (
     consumed_version INTEGER
 );
 CREATE TABLE IF NOT EXISTS uploads (
-    id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, image_path TEXT NOT NULL,
+    id TEXT PRIMARY KEY, profile_id TEXT, image_path TEXT NOT NULL,
     read_json TEXT, request_id TEXT, created_at TEXT NOT NULL,
     consumed_version INTEGER
+);
+CREATE TABLE IF NOT EXISTS routes (
+    id TEXT PRIMARY KEY, profile_kind TEXT NOT NULL, input_kind TEXT NOT NULL,
+    input_text TEXT NOT NULL, output_json TEXT NOT NULL, request_id TEXT,
+    chosen_board_id TEXT, corrected INTEGER NOT NULL DEFAULT 0,
+    corrected_to_json TEXT, created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llm_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +119,9 @@ def init_db() -> None:
                 "profiles": {
                     "kind": "TEXT NOT NULL DEFAULT 'user'",
                     "active": "INTEGER NOT NULL DEFAULT 1",
+                    "label": "TEXT",
+                    "context": "TEXT",
+                    "updated_at": "TEXT",
                 },
                 "swipes": {"consumed_version": "INTEGER"},
                 "outfits": {"consumed_version": "INTEGER"},
@@ -127,8 +137,45 @@ def init_db() -> None:
                         connection.execute(
                             f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
                         )
+            upload_columns = {
+                row["name"]: row
+                for row in connection.execute("PRAGMA table_info(uploads)")
+            }
+            if upload_columns["profile_id"]["notnull"]:
+                connection.execute("ALTER TABLE uploads RENAME TO uploads_before_boards")
+                connection.execute(
+                    """CREATE TABLE uploads (
+                       id TEXT PRIMARY KEY, profile_id TEXT, image_path TEXT NOT NULL,
+                       read_json TEXT, request_id TEXT, created_at TEXT NOT NULL,
+                       consumed_version INTEGER)"""
+                )
+                connection.execute(
+                    """INSERT INTO uploads
+                       SELECT id, profile_id, image_path, read_json, request_id,
+                              created_at, consumed_version
+                       FROM uploads_before_boards"""
+                )
+                connection.execute("DROP TABLE uploads_before_boards")
+            connection.execute(
+                """UPDATE profiles SET label=COALESCE(label, 'Your style'),
+                   context=COALESCE(context, 'other'),
+                   updated_at=COALESCE(updated_at, created_at)"""
+            )
+            connection.execute(
+                """UPDATE profiles SET active=0
+                   WHERE kind='user' AND active=1
+                     AND id != (
+                       SELECT id FROM profiles
+                       WHERE kind='user' AND active=1
+                       ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1
+                     )"""
+            )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_profiles_active ON profiles(kind, active)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_routes_kind_corrected "
+                "ON routes(profile_kind, corrected, created_at)"
             )
 
 
@@ -162,6 +209,13 @@ def insert_items(items: list[dict[str, Any]]) -> int:
             cursor = connection.execute(sql, row)
             inserted += cursor.rowcount
     return inserted
+
+
+def source_urls() -> set[str]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute("SELECT source_url FROM items").fetchall()
+    return {row["source_url"] for row in rows}
 
 
 def untagged_items(
@@ -332,7 +386,13 @@ def _percentile(values: list[int], quantile: float) -> int:
 
 
 def create_profile(
-    profile_id: str, brief: dict[str, Any], *, kind: str = "user", active: bool = True
+    profile_id: str,
+    brief: dict[str, Any],
+    *,
+    kind: str = "user",
+    active: bool = True,
+    label: str = "Your style",
+    context: str = "other",
 ) -> None:
     init_db()
     with db_connection() as connection:
@@ -351,6 +411,187 @@ def create_profile(
                 int(active),
             ),
         )
+        connection.execute(
+            "UPDATE profiles SET label=?, context=?, updated_at=? WHERE id=?",
+            (label, context, now_iso(), profile_id),
+        )
+
+
+def update_profile_brief(profile_id: str, brief: dict[str, Any]) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE profiles SET brief_json=?, updated_at=? WHERE id=?",
+            (json.dumps(brief, ensure_ascii=False, separators=(",", ":")), now_iso(), profile_id),
+        )
+
+
+def set_profile_label(profile_id: str, label: str) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE profiles SET label=?, updated_at=? WHERE id=?",
+            (label, now_iso(), profile_id),
+        )
+
+
+def activate_profile(profile_id: str, *, kind: str = "user") -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM profiles WHERE id=? AND kind=?", (profile_id, kind)
+        ).fetchone()
+        if not row:
+            return None
+        connection.execute("UPDATE profiles SET active=0 WHERE kind=?", (kind,))
+        connection.execute(
+            "UPDATE profiles SET active=1, updated_at=? WHERE id=?",
+            (now_iso(), profile_id),
+        )
+    return get_profile(profile_id, kind=kind)
+
+
+def profile_boards(kind: str = "user") -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM profiles WHERE kind=?
+               ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC""",
+            (kind,),
+        ).fetchall()
+    boards = []
+    for row in rows:
+        board = dict(row)
+        board["brief"] = json.loads(board.pop("brief_json"))
+        latest = latest_taste(board["id"])
+        board["version"] = latest["version"] if latest else 0
+        board["taste"] = latest["profile"] if latest else None
+        boards.append(board)
+    return boards
+
+
+def create_route(
+    profile_kind: str,
+    input_kind: str,
+    input_text: str,
+    output: dict[str, Any],
+    request_id: str | None,
+    chosen_board_id: str | None,
+) -> str:
+    route_id = uuid.uuid4().hex
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO routes
+               (id, profile_kind, input_kind, input_text, output_json, request_id,
+                chosen_board_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                route_id, profile_kind, input_kind, input_text,
+                json.dumps(output, ensure_ascii=False), request_id,
+                chosen_board_id, now_iso(),
+            ),
+        )
+    return route_id
+
+
+def get_route(route_id: str, *, kind: str = "user") -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM routes WHERE id=? AND profile_kind=?", (route_id, kind)
+        ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["output"] = json.loads(result.pop("output_json"))
+    if result.get("corrected_to_json"):
+        result["corrected_to"] = json.loads(result["corrected_to_json"])
+    return result
+
+
+def corrected_routes(kind: str = "user", limit: int = 8) -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT input_text, corrected_to_json FROM routes
+               WHERE profile_kind=? AND corrected=1
+               ORDER BY created_at DESC LIMIT ?""",
+            (kind, limit),
+        ).fetchall()
+    return [
+        {
+            "input_text": row["input_text"],
+            "corrected_to": json.loads(row["corrected_to_json"] or "{}"),
+        }
+        for row in rows
+    ]
+
+
+def correct_route(route_id: str, correction: dict[str, Any], *, kind: str = "user") -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """UPDATE routes SET corrected=1, corrected_to_json=?, chosen_board_id=?
+               WHERE id=? AND profile_kind=?""",
+            (
+                json.dumps(correction, ensure_ascii=False),
+                correction.get("board_id"),
+                route_id,
+                kind,
+            ),
+        )
+
+
+def assign_upload(upload_id: str, profile_id: str) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE uploads SET profile_id=? WHERE id=?", (profile_id, upload_id)
+        )
+
+
+def get_upload(upload_id: str) -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute("SELECT * FROM uploads WHERE id=?", (upload_id,)).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["read"] = json.loads(result.pop("read_json") or "{}")
+    return result
+
+
+def route_for_upload(upload_id: str, kind: str = "user") -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM routes WHERE profile_kind=? AND input_kind='photo'
+               ORDER BY created_at DESC""",
+            (kind,),
+        ).fetchall()
+    for row in rows:
+        output = json.loads(row["output_json"])
+        if output.get("upload_id") == upload_id:
+            result = dict(row)
+            result["output"] = output
+            return result
+    return None
+
+
+def remove_pending_brief_correction(profile_id: str, route_id: str) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """DELETE FROM corrections WHERE profile_id=? AND kind='brief'
+               AND target_id=? AND consumed_version IS NULL""",
+            (profile_id, route_id),
+        )
+
+
+def merge_profile_data(source_id: str, target_id: str) -> None:
+    with db_connection() as connection:
+        for table in ("swipes", "outfits", "corrections", "uploads"):
+            connection.execute(
+                f"UPDATE {table} SET profile_id=? WHERE profile_id=?",
+                (target_id, source_id),
+            )
+        connection.execute("DELETE FROM taste_versions WHERE profile_id=?", (source_id,))
+        connection.execute("DELETE FROM profiles WHERE id=?", (source_id,))
 
 
 def get_profile(profile_id: str, *, kind: str | None = None) -> dict[str, Any] | None:
@@ -433,7 +674,8 @@ def unconsumed_signals(profile_id: str) -> dict[str, list[dict[str, Any]]]:
         ).fetchall()
         correction_rows = connection.execute(
             """SELECT c.*, i.title FROM corrections c LEFT JOIN items i
-               ON i.id=c.target_id WHERE c.profile_id=? AND c.kind='tag'
+               ON c.kind='tag' AND i.id=c.target_id
+               WHERE c.profile_id=? AND c.kind IN ('tag', 'brief')
                AND c.consumed_version IS NULL ORDER BY c.created_at""",
             (profile_id,),
         ).fetchall()
@@ -481,6 +723,10 @@ def save_taste_version(
                 now_iso(),
             ),
         )
+        connection.execute(
+            "UPDATE profiles SET updated_at=? WHERE id=?",
+            (now_iso(), profile_id),
+        )
         for table in ("swipes", "outfits", "corrections", "uploads"):
             ids = consumed.get(table, [])
             if ids:
@@ -497,6 +743,9 @@ def insert_swipe(profile_id: str, item_id: str, liked: bool) -> None:
             """INSERT INTO swipes (id, profile_id, item_id, liked, created_at)
                VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)""",
             (profile_id, item_id, int(liked), now_iso()),
+        )
+        connection.execute(
+            "UPDATE profiles SET updated_at=? WHERE id=?", (now_iso(), profile_id)
         )
 
 
@@ -528,6 +777,9 @@ def save_outfit(
                 request_id,
                 now_iso(),
             ),
+        )
+        connection.execute(
+            "UPDATE profiles SET updated_at=? WHERE id=?", (now_iso(), profile_id)
         )
     return outfit_id
 
@@ -587,11 +839,14 @@ def add_correction(
                 now_iso(),
             ),
         )
+        connection.execute(
+            "UPDATE profiles SET updated_at=? WHERE id=?", (now_iso(), profile_id)
+        )
     return correction_id
 
 
 def add_upload(
-    profile_id: str, image_path: str, read: dict[str, Any], request_id: str | None
+    profile_id: str | None, image_path: str, read: dict[str, Any], request_id: str | None
 ) -> str:
     upload_id = uuid.uuid4().hex
     with db_connection() as connection:
@@ -607,6 +862,11 @@ def add_upload(
                 now_iso(),
             ),
         )
+        if profile_id:
+            connection.execute(
+                "UPDATE profiles SET updated_at=? WHERE id=?",
+                (now_iso(), profile_id),
+            )
     return upload_id
 
 
@@ -646,11 +906,19 @@ def update_outfit_verdict(
     outfit_id: str, verdict: str, reason: str | None
 ) -> dict[str, Any] | None:
     with db_connection() as connection:
+        row = connection.execute(
+            "SELECT profile_id FROM outfits WHERE id=?", (outfit_id,)
+        ).fetchone()
         connection.execute(
             "UPDATE outfits SET verdict=?, reason=? WHERE id=?",
             (verdict, reason, outfit_id),
         )
         row = connection.execute("SELECT * FROM outfits WHERE id=?", (outfit_id,)).fetchone()
+        if row:
+            connection.execute(
+                "UPDATE profiles SET updated_at=? WHERE id=?",
+                (now_iso(), row["profile_id"]),
+            )
     if not row:
         return None
     result = dict(row)

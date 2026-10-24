@@ -21,13 +21,19 @@ def build_pool(
     profile: dict[str, Any],
     locked_ids: list[str],
     exclude_ids: list[str],
+    *,
+    core_profile: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    ranked = rank_items(items, brief, profile, exclude_ids=set(exclude_ids))
+    ranked = rank_items(
+        items, brief, profile, exclude_ids=set(exclude_ids), core_profile=core_profile
+    )
     by_slot: dict[str, list[dict[str, Any]]] = {}
     for item in ranked:
         by_slot.setdefault(str(tags_for(item).get("slot")), []).append(item)
     pool: dict[str, dict[str, Any]] = {}
     for slot, quota in SLOT_QUOTAS.items():
+        if slot == "shoes" and brief.get("include_shoes") is False:
+            continue
         if slot == "dress" and brief.get("gender") == "menswear":
             continue
         for item in by_slot.get(slot, [])[:quota]:
@@ -40,7 +46,13 @@ def build_pool(
 
 
 def stylist_user_content(
-    profile: dict[str, Any], count: int, locked_ids: list[str], pool: list[dict[str, Any]]
+    profile: dict[str, Any],
+    count: int,
+    locked_ids: list[str],
+    pool: list[dict[str, Any]],
+    *,
+    core_rules: list[str] | None = None,
+    include_shoes: bool = True,
 ) -> str:
     lines = [
         f"{item['id']} | {tags_for(item).get('slot')} | "
@@ -51,11 +63,21 @@ def stylist_user_content(
         f"{tags_for(item).get('fit')} | {item['source']}"
         for item in pool
     ]
-    return (
-        f"Profile:\n{json.dumps(profile, ensure_ascii=False, separators=(',', ':'))}\n\n"
-        f"Request: build {count} outfits. Locked piece ids: "
-        f"{json.dumps(locked_ids)}.\n\nPool:\n" + "\n".join(lines)
+    request = (
+        "Request: clothes only, no shoes."
+        if not include_shoes
+        else f"Request: build {count} outfits. Locked piece ids: {json.dumps(locked_ids)}."
     )
+    content = (
+        f"Profile:\n{json.dumps(profile, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        f"{request}\n\nPool:\n" + "\n".join(lines)
+    )
+    if core_rules:
+        content += (
+            "\nShared rules across the shopper's boards: "
+            + "; ".join(core_rules)
+        )
+    return content
 
 
 def validate_outfits(
@@ -64,6 +86,8 @@ def validate_outfits(
     count: int,
     locked_ids: list[str],
     price_ceiling: float,
+    *,
+    include_shoes: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     by_id = {item["id"]: item for item in pool}
     valid: list[dict[str, Any]] = []
@@ -87,10 +111,14 @@ def validate_outfits(
         slots = [tags_for(piece).get("slot") for piece in existing]
         if any(slots.count(slot) > (2 if slot == "accessory" else 1) for slot in set(slots)):
             reasons.append("breaks slot limits")
-        if "shoes" not in slots or not (
-            "dress" in slots or ({"top", "knitwear"} & set(slots) and "bottom" in slots)
-        ):
-            reasons.append("missing shoes or a complete clothing combination")
+        complete_clothing = "dress" in slots or (
+            {"top", "knitwear"} & set(slots) and "bottom" in slots
+        )
+        if include_shoes:
+            if "shoes" not in slots or not complete_clothing:
+                reasons.append("missing shoes or a complete clothing combination")
+        elif "shoes" in slots or not complete_clothing:
+            reasons.append("must be shoe-less and contain a complete clothing combination")
         total = sum(float(piece["price_gbp"] or 0) for piece in existing)
         if total > price_ceiling:
             reasons.append("exceeds the price ceiling")

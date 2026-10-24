@@ -265,23 +265,26 @@ def search(
     gender: str | None = None,
     *,
     client: Any = None,
+    include_domains: list[str] | None = None,
+    cached_urls: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    search_domains = include_domains or RETAIL_DOMAINS
     try:
         client = client or _tavily_client()
     except Exception:
-        for domain in RETAIL_DOMAINS:
+        for domain in search_domains:
             _report[domain]["tavily_search_error"] += 1
         return []
     try:
         response = client.search(
             query=f"{query} UK buy",
-            include_domains=RETAIL_DOMAINS,
+            include_domains=search_domains,
             include_images=True,
             country="united kingdom",
             max_results=max(10, per_page * 3),
         )
     except Exception:
-        for domain in RETAIL_DOMAINS:
+        for domain in search_domains:
             _report[domain]["tavily_search_error"] += 1
         return []
 
@@ -292,7 +295,7 @@ def search(
         if not isinstance(url, str):
             continue
         domain = _domain(url)
-        if not domain:
+        if not domain or domain not in search_domains:
             continue
         if domain == "asos.com" and not _asos_locale_ok(url):
             _report[domain]["non_uk_locale"] += 1
@@ -301,6 +304,9 @@ def search(
             _report[domain]["not_product_url"] += 1
             continue
         canonical = _canonical(url, domain)
+        if canonical in (cached_urls or set()):
+            _report[domain]["cached_url"] += 1
+            continue
         if canonical in _seen_urls:
             _report[domain]["duplicate_url"] += 1
             continue
@@ -318,7 +324,10 @@ def search(
         match = re.search(r"images\.asos-media\.com/products/[^/]+/(\d+)-", image_url)
         if match:
             url = f"https://www.asos.com/prd/{match.group(1)}"
-            if url not in candidates and url not in _seen_urls and sum(
+            canonical = _canonical(url, "asos.com")
+            if canonical in (cached_urls or set()):
+                _report["asos.com"]["cached_url"] += 1
+            elif url not in candidates and url not in _seen_urls and sum(
                 _domain(candidate) == "asos.com" for candidate in candidates
             ) < per_page:
                 candidates.append(url)

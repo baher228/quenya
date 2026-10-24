@@ -26,6 +26,7 @@ class ProfileBrief(StrictModel):
     text: str = Field(min_length=1)
     looking_for: LookingFor
     pieces: list[Slot] = Field(default_factory=list)
+    include_shoes: bool = True
     gender: BriefGender
     condition: BriefCondition
     niche: float = Field(ge=0, le=1)
@@ -127,3 +128,32 @@ class TasteUpdateResponse(StrictModel):
     changes: list[str]
     request_id: str | None
     latency_ms: int
+
+
+class RouteOut(StrictModel):
+    context: Literal[
+        "gym", "running", "outdoor", "city", "workwear", "smart",
+        "evening", "lounge", "swim", "other",
+    ]
+    board_id: str | None
+    label: str
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+
+
+class BoardLabelRequest(StrictModel):
+    label: str = Field(min_length=1, max_length=80)
+
+
+class RouteCorrectionRequest(StrictModel):
+    board_id: str | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class BoardMergeRequest(StrictModel):
+    into_id: str = Field(min_length=1)
+
+
+class UploadAssignRequest(StrictModel):
+    board_id: str | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=80)

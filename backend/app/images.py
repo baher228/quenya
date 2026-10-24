@@ -8,7 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from PIL import Image, ImageOps
 
-from app.config import BACKEND_ROOT
+from app.config import BACKEND_ROOT, SPORT_IMAGE_UA
 
 IMAGE_DIR = BACKEND_ROOT / "data" / "img"
 BROWSER_UA = (
@@ -18,6 +18,20 @@ BROWSER_UA = (
 ASOS_IMAGE_HOST = "images.asos-media.com"
 ASOS_IMAGE_QUERY = "$n_640w$&wid=640&fit=constrain"
 ASOS_IMAGE_UA = "curl/8.5.0"
+SPORT_IMAGE_DOMAINS = (
+    "gymshark.com",
+    "nike.com",
+    "underarmour.co.uk",
+    "lululemon.co.uk",
+    "decathlon.co.uk",
+    "sportsdirect.com",
+    "cotswoldoutdoor.com",
+    "arcteryx.com",
+    "montane.com",
+    "rab.equipment",
+    "ellis-brigham.com",
+    "patagonia.com",
+)
 
 
 def normalize_image_url(url: str) -> str:
@@ -47,7 +61,18 @@ def image_data_url(url: str) -> str:
     if not destination.exists():
         IMAGE_DIR.mkdir(parents=True, exist_ok=True)
         is_asos_image = (urlsplit(normalized_url).hostname or "").lower() == ASOS_IMAGE_HOST
-        user_agent = ASOS_IMAGE_UA if is_asos_image else BROWSER_UA
+        host = (urlsplit(normalized_url).hostname or "").lower()
+        is_sport_image = any(
+            host == domain or host.endswith(f".{domain}")
+            for domain in SPORT_IMAGE_DOMAINS
+        )
+        user_agent = (
+            ASOS_IMAGE_UA
+            if is_asos_image
+            else SPORT_IMAGE_UA
+            if is_sport_image
+            else BROWSER_UA
+        )
         for attempt in range(2 if is_asos_image else 1):
             try:
                 response = httpx.get(
