@@ -1,6 +1,7 @@
 import json
 import math
 import statistics
+import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock
@@ -34,11 +35,12 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_items_untagged ON items(tags_json, tag_error);
 CREATE INDEX IF NOT EXISTS idx_items_tags_source ON items(source, gender_hint, condition_hint);
 CREATE TABLE IF NOT EXISTS profiles (
-    id TEXT PRIMARY KEY, brief_json TEXT NOT NULL, created_at TEXT NOT NULL
+    id TEXT PRIMARY KEY, brief_json TEXT NOT NULL, created_at TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'user', active INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS swipes (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
-    liked INTEGER NOT NULL, created_at TEXT NOT NULL
+    liked INTEGER NOT NULL, created_at TEXT NOT NULL, consumed_version INTEGER
 );
 CREATE TABLE IF NOT EXISTS taste_versions (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, version INTEGER NOT NULL,
@@ -49,16 +51,18 @@ CREATE TABLE IF NOT EXISTS outfits (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, taste_version INTEGER NOT NULL,
     title TEXT NOT NULL, mood TEXT NOT NULL, piece_ids_json TEXT NOT NULL,
     why TEXT NOT NULL, total_gbp REAL, verdict TEXT, reason TEXT, request_id TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL, consumed_version INTEGER
 );
 CREATE TABLE IF NOT EXISTS corrections (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, kind TEXT NOT NULL,
     target_id TEXT NOT NULL, before_json TEXT NOT NULL, after_json TEXT,
-    note TEXT NOT NULL, request_id TEXT, created_at TEXT NOT NULL
+    note TEXT NOT NULL, request_id TEXT, created_at TEXT NOT NULL,
+    consumed_version INTEGER
 );
 CREATE TABLE IF NOT EXISTS uploads (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, image_path TEXT NOT NULL,
-    read_json TEXT, request_id TEXT, created_at TEXT NOT NULL
+    read_json TEXT, request_id TEXT, created_at TEXT NOT NULL,
+    consumed_version INTEGER
 );
 CREATE TABLE IF NOT EXISTS llm_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,6 +108,28 @@ def init_db() -> None:
         with db_connection() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
+            migrations = {
+                "profiles": {
+                    "kind": "TEXT NOT NULL DEFAULT 'user'",
+                    "active": "INTEGER NOT NULL DEFAULT 1",
+                },
+                "swipes": {"consumed_version": "INTEGER"},
+                "outfits": {"consumed_version": "INTEGER"},
+                "corrections": {"consumed_version": "INTEGER"},
+                "uploads": {"consumed_version": "INTEGER"},
+            }
+            for table, columns in migrations.items():
+                existing = {
+                    row["name"] for row in connection.execute(f"PRAGMA table_info({table})")
+                }
+                for column, definition in columns.items():
+                    if column not in existing:
+                        connection.execute(
+                            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                        )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_profiles_active ON profiles(kind, active)"
+            )
 
 
 def insert_items(items: list[dict[str, Any]]) -> int:
@@ -138,13 +164,17 @@ def insert_items(items: list[dict[str, Any]]) -> int:
     return inserted
 
 
-def untagged_items(limit: int) -> list[dict[str, Any]]:
+def untagged_items(limit: int, source: str | None = None) -> list[dict[str, Any]]:
     init_db()
+    query = "SELECT * FROM items WHERE tags_json IS NULL"
+    params: list[Any] = []
+    if source:
+        query += " AND source=?"
+        params.append(source)
+    query += " ORDER BY fetched_at LIMIT ?"
+    params.append(limit)
     with db_connection() as connection:
-        rows = connection.execute(
-            "SELECT * FROM items WHERE tags_json IS NULL ORDER BY fetched_at LIMIT ?",
-            (limit,),
-        ).fetchall()
+        rows = connection.execute(query, params).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -217,8 +247,12 @@ def total_counts() -> tuple[int, int]:
 
 
 def list_items(
-    *, slot: str | None, gender: str | None, condition: str | None,
-    source: str | None, limit: int
+    *,
+    slot: str | None = None,
+    gender: str | None = None,
+    condition: str | None = None,
+    source: str | None = None,
+    limit: int = 50,
 ) -> list[dict[str, Any]]:
     init_db()
     clauses = ["tags_json IS NOT NULL"]
@@ -277,6 +311,8 @@ def model_stats() -> list[dict[str, Any]]:
                 "p50_latency_ms": _percentile(latencies, 0.5),
                 "p95_latency_ms": _percentile(latencies, 0.95),
                 "total_tokens": total_tokens,
+                "calls_toward_training": sum(call["ok"] for call in calls),
+                "first_training_at": 25,
                 "last_request_ids": [call["request_id"] for call in calls[:5]],
             }
         )
@@ -289,3 +325,330 @@ def _percentile(values: list[int], quantile: float) -> int:
     if quantile == 0.5:
         return round(statistics.median(values))
     return values[min(len(values) - 1, max(0, math.ceil(len(values) * quantile) - 1))]
+
+
+def create_profile(
+    profile_id: str, brief: dict[str, Any], *, kind: str = "user", active: bool = True
+) -> None:
+    init_db()
+    with db_connection() as connection:
+        if kind == "user" and active:
+            connection.execute(
+                "UPDATE profiles SET active=0 WHERE kind='user' AND active=1"
+            )
+        connection.execute(
+            """INSERT INTO profiles (id, brief_json, created_at, kind, active)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                profile_id,
+                json.dumps(brief, ensure_ascii=False, separators=(",", ":")),
+                now_iso(),
+                kind,
+                int(active),
+            ),
+        )
+
+
+def get_profile(profile_id: str, *, kind: str | None = None) -> dict[str, Any] | None:
+    init_db()
+    query = "SELECT * FROM profiles WHERE id=?"
+    params: list[Any] = [profile_id]
+    if kind:
+        query += " AND kind=?"
+        params.append(kind)
+    with db_connection() as connection:
+        row = connection.execute(query, params).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["brief"] = json.loads(result.pop("brief_json"))
+    return result
+
+
+def active_profile(kind: str = "user") -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM profiles WHERE kind=? AND active=1 ORDER BY created_at DESC LIMIT 1",
+            (kind,),
+        ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["brief"] = json.loads(result.pop("brief_json"))
+    return result
+
+
+def latest_taste(profile_id: str) -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            """SELECT * FROM taste_versions WHERE profile_id=?
+               ORDER BY version DESC LIMIT 1""",
+            (profile_id,),
+        ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["profile"] = json.loads(result.pop("profile_json"))
+    result["signals"] = json.loads(result.pop("signals_json"))
+    return result
+
+
+def get_taste_history(profile_id: str) -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM taste_versions WHERE profile_id=?
+               ORDER BY version DESC""",
+            (profile_id,),
+        ).fetchall()
+    history = []
+    for row in rows:
+        item = dict(row)
+        item["profile"] = json.loads(item.pop("profile_json"))
+        item["signals"] = json.loads(item.pop("signals_json"))
+        history.append(item)
+    return history
+
+
+def unconsumed_signals(profile_id: str) -> dict[str, list[dict[str, Any]]]:
+    init_db()
+    with db_connection() as connection:
+        swipe_rows = connection.execute(
+            """SELECT s.*, i.title, i.price_gbp, i.tags_json
+               FROM swipes s JOIN items i ON i.id=s.item_id
+               WHERE s.profile_id=? AND s.consumed_version IS NULL
+               ORDER BY s.created_at""",
+            (profile_id,),
+        ).fetchall()
+        outfit_rows = connection.execute(
+            """SELECT * FROM outfits WHERE profile_id=? AND verdict IS NOT NULL
+               AND consumed_version IS NULL ORDER BY created_at""",
+            (profile_id,),
+        ).fetchall()
+        correction_rows = connection.execute(
+            """SELECT c.*, i.title FROM corrections c LEFT JOIN items i
+               ON i.id=c.target_id WHERE c.profile_id=? AND c.kind='tag'
+               AND c.consumed_version IS NULL ORDER BY c.created_at""",
+            (profile_id,),
+        ).fetchall()
+        upload_rows = connection.execute(
+            """SELECT * FROM uploads WHERE profile_id=? AND read_json IS NOT NULL
+               AND consumed_version IS NULL ORDER BY created_at""",
+            (profile_id,),
+        ).fetchall()
+    swipes = []
+    for row in swipe_rows:
+        item = dict(row)
+        item["liked"] = bool(item["liked"])
+        item["tags"] = json.loads(item.pop("tags_json") or "{}")
+        swipes.append(item)
+    return {
+        "swipes": swipes,
+        "outfits": [dict(row) for row in outfit_rows],
+        "corrections": [dict(row) for row in correction_rows],
+        "uploads": [
+            {**dict(row), "read": json.loads(row["read_json"] or "{}")}
+            for row in upload_rows
+        ],
+    }
+
+
+def save_taste_version(
+    profile_id: str,
+    version: int,
+    profile: dict[str, Any],
+    signals: dict[str, Any],
+    request_id: str | None,
+) -> None:
+    consumed = signals.get("consumed_ids", {})
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO taste_versions
+               (id, profile_id, version, profile_json, signals_json, request_id, created_at)
+               VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)""",
+            (
+                profile_id,
+                version,
+                json.dumps(profile, ensure_ascii=False),
+                json.dumps(signals, ensure_ascii=False),
+                request_id,
+                now_iso(),
+            ),
+        )
+        for table in ("swipes", "outfits", "corrections", "uploads"):
+            ids = consumed.get(table, [])
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                connection.execute(
+                    f"UPDATE {table} SET consumed_version=? WHERE id IN ({placeholders})",
+                    [version, *ids],
+                )
+
+
+def insert_swipe(profile_id: str, item_id: str, liked: bool) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO swipes (id, profile_id, item_id, liked, created_at)
+               VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)""",
+            (profile_id, item_id, int(liked), now_iso()),
+        )
+
+
+def save_outfit(
+    profile_id: str,
+    taste_version: int,
+    outfit: dict[str, Any],
+    piece_ids: list[str],
+    total_gbp: float,
+    request_id: str | None,
+    outfit_id: str | None = None,
+) -> str:
+    outfit_id = outfit_id or uuid.uuid4().hex
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO outfits
+               (id, profile_id, taste_version, title, mood, piece_ids_json,
+                why, total_gbp, request_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                outfit_id,
+                profile_id,
+                taste_version,
+                outfit["title"],
+                outfit["mood"],
+                json.dumps(piece_ids),
+                outfit["why"],
+                total_gbp,
+                request_id,
+                now_iso(),
+            ),
+        )
+    return outfit_id
+
+
+def get_outfit(outfit_id: str) -> dict[str, Any] | None:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute("SELECT * FROM outfits WHERE id=?", (outfit_id,)).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["piece_ids"] = json.loads(result.pop("piece_ids_json"))
+    return result
+
+
+def update_outfit_pieces(outfit_id: str, piece_ids: list[str], total_gbp: float) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE outfits SET piece_ids_json=?, total_gbp=? WHERE id=?",
+            (json.dumps(piece_ids), total_gbp, outfit_id),
+        )
+
+
+def set_outfit_verdict(outfit_id: str, verdict: str, reason: str | None) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE outfits SET verdict=?, reason=? WHERE id=?",
+            (verdict, reason, outfit_id),
+        )
+
+
+def add_correction(
+    profile_id: str,
+    kind: str,
+    target_id: str,
+    before: Any,
+    after: Any,
+    note: str,
+    request_id: str | None,
+) -> str:
+    correction_id = uuid.uuid4().hex
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO corrections
+               (id, profile_id, kind, target_id, before_json, after_json, note,
+                request_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                correction_id,
+                profile_id,
+                kind,
+                target_id,
+                json.dumps(before, ensure_ascii=False),
+                json.dumps(after, ensure_ascii=False) if after is not None else None,
+                note,
+                request_id,
+                now_iso(),
+            ),
+        )
+    return correction_id
+
+
+def add_upload(
+    profile_id: str, image_path: str, read: dict[str, Any], request_id: str | None
+) -> str:
+    upload_id = uuid.uuid4().hex
+    with db_connection() as connection:
+        connection.execute(
+            """INSERT INTO uploads (id, profile_id, image_path, read_json,
+               request_id, created_at) VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                upload_id,
+                profile_id,
+                image_path,
+                json.dumps(read, ensure_ascii=False),
+                request_id,
+                now_iso(),
+            ),
+        )
+    return upload_id
+
+
+def signal_counts(profile_id: str) -> dict[str, int]:
+    init_db()
+    with db_connection() as connection:
+        swipes, kept, passed = connection.execute(
+            """SELECT COUNT(*), SUM(liked=1), SUM(liked=0) FROM swipes
+               WHERE profile_id=?""",
+            (profile_id,),
+        ).fetchone()
+        corrections = connection.execute(
+            "SELECT COUNT(*) FROM corrections WHERE profile_id=?",
+            (profile_id,),
+        ).fetchone()[0]
+        uploads = connection.execute(
+            "SELECT COUNT(*) FROM uploads WHERE profile_id=?",
+            (profile_id,),
+        ).fetchone()[0]
+    return {
+        "swipes": int(swipes or 0),
+        "kept": int(kept or 0),
+        "passed": int(passed or 0),
+        "corrections": int(corrections or 0),
+        "uploads": int(uploads or 0),
+    }
+
+
+def get_item_with_tags(item_id: str) -> dict[str, Any] | None:
+    item = get_item(item_id)
+    if item and item.get("tags_json"):
+        item["tags"] = json.loads(item["tags_json"])
+    return item
+
+
+def update_outfit_verdict(
+    outfit_id: str, verdict: str, reason: str | None
+) -> dict[str, Any] | None:
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE outfits SET verdict=?, reason=? WHERE id=?",
+            (verdict, reason, outfit_id),
+        )
+        row = connection.execute("SELECT * FROM outfits WHERE id=?", (outfit_id,)).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["piece_ids"] = json.loads(result.pop("piece_ids_json"))
+    return result

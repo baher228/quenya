@@ -14,6 +14,7 @@ from app.config import (
 )
 from app.images import cached_image_path, image_key
 from app.mubit import TaskError
+from app.phase2_api import router as phase2_router
 from app.prompts import READER_MODEL, STYLIST_MODEL, TAGGER_MODEL, TASTE_MODEL
 from app.tagging import tag_item
 
@@ -75,6 +76,9 @@ def items(
 
 @app.post("/api/items/{item_id}/correct-tags")
 def correct_tags(item_id: str, body: CorrectionRequest) -> dict:
+    profile = db.active_profile("user")
+    if not profile:
+        raise HTTPException(status_code=409, detail="Create a profile first")
     item = db.get_item(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -88,21 +92,15 @@ def correct_tags(item_id: str, body: CorrectionRequest) -> dict:
         ) from exc
     tags_json = tags.model_dump()
     db.save_tags(item_id, tags_json, meta.request_id, item.get("image_path"))
-    with db.db_connection() as connection:
-        connection.execute(
-            """INSERT INTO corrections
-               (id, profile_id, kind, target_id, before_json, after_json,
-                note, request_id, created_at)
-               VALUES (lower(hex(randomblob(16))), 'default', 'tag', ?, ?, ?, ?, ?, ?)""",
-            (
-                item_id,
-                before or json.dumps({}),
-                json.dumps(tags_json, ensure_ascii=False),
-                body.note,
-                meta.request_id,
-                db.now_iso(),
-            ),
-        )
+    db.add_correction(
+        profile["id"],
+        "tag",
+        item_id,
+        json.loads(before) if before else {},
+        tags_json,
+        body.note,
+        meta.request_id,
+    )
     return {"tags": tags_json, "request_id": meta.request_id}
 
 
@@ -123,3 +121,6 @@ def get_image(filename: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path, media_type="image/jpeg")
+
+
+app.include_router(phase2_router)

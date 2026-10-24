@@ -17,6 +17,7 @@ dependencies = [
     "scrapling[fetchers]>=0.2",
     "tavily-python>=0.5",
     "python-dotenv>=1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
