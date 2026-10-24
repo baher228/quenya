@@ -23,6 +23,7 @@ interface Toast { id: number; title: string; lines: string[] }
 export default function App() {
   const [tab, setTab] = useState<Tab>("brief");
   const [brief, setBrief] = useState<Brief>(DEFAULT_BRIEF);
+  const [briefMode, setBriefMode] = useState<"new" | "edit">("new");
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<unknown>(null);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
@@ -72,12 +73,25 @@ export default function App() {
   }, [announce]);
 
   const switchBoard = async (b: Board) => {
-    if (b.active) return true;
-    try { await api.activate(b.id); setBrief({ ...DEFAULT_BRIEF, ...b.brief }); setBriefKey(k => k + 1); boardChanged(); setRouteNote(null); return true; }
+    const showBoardBrief = () => {
+      if (tab === "brief") setBriefMode("edit");
+      setBrief({ ...DEFAULT_BRIEF, ...b.brief });
+      setBriefKey(k => k + 1);
+    };
+    if (b.active) {
+      if (tab === "brief") showBoardBrief();
+      return true;
+    }
+    try { await api.activate(b.id); showBoardBrief(); boardChanged(); setRouteNote(null); return true; }
     catch (e) { setToast({ id: Date.now(), title: "Couldn't switch board", lines: [errText(e)] }); return false; }
   };
 
-  const newBoard = () => { setBrief({ ...DEFAULT_BRIEF, text: "" }); setBriefKey(k => k + 1); setTab("brief"); };
+  const newBoard = () => {
+    setBriefMode("new");
+    setBrief({ ...DEFAULT_BRIEF, text: "" });
+    setBriefKey(k => k + 1);
+    setTab("brief");
+  };
 
   const moveRoute = async (route: Route, boardId: string | null) => {
     setSheet(null);
@@ -101,10 +115,16 @@ export default function App() {
   const submitBrief = async (b: Brief, photos: File[]) => {
     setCreating(true); setCreateErr(null); setBrief(b);
     try {
-      const r = await api.createProfile(b);
+      if (briefMode === "edit" && !activeBoard) {
+        throw new Error("Select a style before updating.");
+      }
+      const r = briefMode === "edit"
+        ? await api.updateBrief(activeBoard!.id, b)
+        : await api.createProfile(b, true);
+      if (briefMode === "edit") announce(r.taste, "from your new brief");
+      else if (r.route && r.board) setRouteNote({ route: r.route, board: r.board });
       setOutfits([]);
       refreshTaste(); refreshBoards();
-      if (r.route && r.board) setRouteNote({ route: r.route, board: r.board });
       for (const f of photos) {
         try { await handleUpload(f); } catch (e) { setToast({ id: Date.now(), title: "Couldn't read a photo", lines: [errText(e)] }); }
       }
@@ -157,7 +177,7 @@ export default function App() {
     if (!window.confirm("Reset the demo? All boards, swipes, outfits and taste versions are deleted.")) return;
     await api.reset().catch(() => undefined);
     setBoards([]); setRouteNote(null); setBriefKey(k => k + 1);
-    setOutfits([]); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setTab("brief");
+    setOutfits([]); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setBriefMode("new"); setTab("brief");
   };
 
   const hasProfile = !!taste?.current;
@@ -191,7 +211,8 @@ export default function App() {
         <main className="body">
           {tab === "brief" && (
             <>
-              <BriefScreen key={briefKey} initial={brief} busy={creating} onSubmit={submitBrief} hasBoards={boards.length > 0} />
+              <BriefScreen key={briefKey} initial={brief} busy={creating} onSubmit={submitBrief}
+                mode={briefMode} boardLabel={activeBoard?.label} onNew={newBoard} />
               {createErr !== null && <ErrorBox error={createErr} />}
             </>
           )}
@@ -221,7 +242,17 @@ export default function App() {
 
         <nav className="tabs">
           {([["brief", "Brief"], ["swipe", "Swipe"], ["outfits", "Outfits"], ["find", "Find"], ["taste", "Taste"]] as [Tab, string][]).map(([t, l]) => (
-            <button key={t} className={tab === t ? "active" : ""} onClick={() => { if (t === "swipe") setPicking(true); setTab(t); }}>{l}</button>
+            <button key={t} className={tab === t ? "active" : ""} onClick={() => {
+              if (t === "swipe") setPicking(true);
+              if (t === "brief") {
+                if (activeBoard) {
+                  setBriefMode("edit");
+                  setBrief({ ...DEFAULT_BRIEF, ...activeBoard.brief });
+                  setBriefKey(k => k + 1);
+                } else setBriefMode("new");
+              }
+              setTab(t);
+            }}>{l}</button>
           ))}
         </nav>
 

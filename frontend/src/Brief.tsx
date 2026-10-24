@@ -19,8 +19,13 @@ export const DEFAULT_BRIEF: Brief = {
   sizes: { tops: "M", waist: "32", shoes: "9" },
 };
 
-export function BriefScreen({ initial, busy, onSubmit, hasBoards }: {
-  initial: Brief; busy: boolean; onSubmit: (b: Brief, photos: File[]) => void; hasBoards: boolean;
+export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew }: {
+  initial: Brief;
+  busy: boolean;
+  onSubmit: (b: Brief, photos: File[]) => void;
+  mode: "new" | "edit";
+  boardLabel?: string;
+  onNew?: () => void;
 }) {
   const [b, setB] = useState<Brief>(initial);
   const [photos, setPhotos] = useState<File[]>([]);
@@ -32,9 +37,8 @@ export function BriefScreen({ initial, busy, onSubmit, hasBoards }: {
 
   return (
     <section className="screen">
-      <p className="eyebrow">New brief</p>
-      <h1 className="h1">Tell us what you're after.</h1>
-      {hasBoards && <p className="small muted lede">We'll file it under the board it fits, or start a new one. Gym likes stay out of your city outfits.</p>}
+      <p className="eyebrow">{mode === "edit" ? "Edit style" : "New style"}</p>
+      <h1 className="h1">{mode === "edit" ? boardLabel ?? "Edit style" : "Tell us what you're after."}</h1>
 
       <label className="field">
         <span className="lbl">In your words</span>
@@ -97,8 +101,9 @@ export function BriefScreen({ initial, busy, onSubmit, hasBoards }: {
         </div></div>
 
       <button className="btn primary wide" disabled={busy || b.text.trim().length < 3} onClick={() => onSubmit(b, photos)}>
-        {busy ? "Reading your brief…" : "Start swiping"}
+        {busy ? (mode === "edit" ? "Updating…" : "Creating…") : (mode === "edit" ? "Update style" : "Create style")}
       </button>
+      {mode === "edit" && <button className="small muted brief-new" onClick={onNew}>+ New style instead</button>}
     </section>
   );
 }

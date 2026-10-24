@@ -85,6 +85,7 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 .btn.wide{display:block;width:100%;margin-top:12px;padding:14px}
 .btn.center{text-align:center}
 .btn.danger{color:var(--coral);margin-top:22px}
+.brief-new{display:block;margin:8px auto 0}
 
 .deck-head{display:flex;justify-content:space-between;align-items:flex-end}
 .deck-count{color:var(--mute);font-size:12px}

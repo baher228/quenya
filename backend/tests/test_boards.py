@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app import db, phase2_api, routing, taste
 from app.config import CONTEXT_SOURCES
@@ -9,10 +11,13 @@ from app.core import shared_core
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.rank import make_deck
 from app.schemas import (
+    BoardBriefRequest,
     ProfileBrief,
     ProfileCreateRequest,
     RouteCorrectionRequest,
     RouteOut,
+    SwipeRequest,
+    TasteProfile,
     UploadAssignRequest,
 )
 from app.sources import sport
@@ -34,6 +39,17 @@ def _brief(**overrides):
         "sizes": {"tops": "M"},
         **overrides,
     }
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Tech bro: quarter-zips, …", "Tech bro"),
+        ("  baggy 90s skate look with washed hoodies", "Baggy 90s skate look"),
+    ],
+)
+def test_label_from_brief(text, expected):
+    assert phase2_api._label_from_brief(text) == expected
 
 
 def _profile(**overrides):
@@ -144,6 +160,7 @@ def test_existing_brief_route_activates_board_without_new_taste(monkeypatch, tmp
     _db(monkeypatch, tmp_path)
     _create_board("board-1", active=False)
     existing = db.get_profile("board-1")
+    previous_taste = db.latest_taste("board-1")
     output = RouteOut(
         context="city",
         board_id="board-1",
@@ -170,6 +187,262 @@ def test_existing_brief_route_activates_board_without_new_taste(monkeypatch, tmp
     assert db.active_profile()["id"] == "board-1"
     assert db.unconsumed_signals("board-1")["corrections"][0]["kind"] == "brief"
     assert result["route"]["routed"] == "existing"
+    assert db.get_profile("board-1")["brief"]["text"] == "new city brief"
+    assert db.latest_taste("board-1")["version"] == previous_taste["version"]
+
+
+def test_new_board_flag_ignores_existing_route(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _create_board("existing", context="city", active=True)
+    previous = db.get_profile("existing")
+    previous_taste = db.latest_taste("existing")
+    output = RouteOut(
+        context="city",
+        board_id="existing",
+        label="Japanese street style",
+        confidence=0.95,
+        reason="Matches the existing style",
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "route_input",
+        lambda *_args: (
+            output,
+            previous,
+            SimpleNamespace(request_id="mreq-router"),
+            "content",
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job-1")
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            TasteProfile.model_validate(_profile()),
+            SimpleNamespace(request_id="mreq-taste", latency_ms=10),
+        ),
+    )
+    result = phase2_api.create_profile(
+        ProfileCreateRequest(
+            brief=ProfileBrief.model_validate(
+                _brief(text="Tech bro: quarter-zips, New Balance trainers, blue jeans")
+            ),
+            new_board=True,
+        ),
+        phase2_api.BackgroundTasks(),
+    )
+
+    assert result["profile_id"] != "existing"
+    assert result["board"]["label"] == "Tech bro"
+    assert result["route"]["label"] == "Tech bro"
+    assert len(db.profile_boards()) == 2
+    assert db.get_profile("existing")["brief"] == previous["brief"]
+    assert db.latest_taste("existing")["version"] == previous_taste["version"]
+    with db.db_connection() as connection:
+        row = connection.execute(
+            "SELECT output_json FROM routes WHERE id=?", (result["route"]["id"],)
+        ).fetchone()
+    route_output = json.loads(row["output_json"])
+    assert route_output["_routed"] == "new"
+    assert route_output["_forced_new"] is True
+    assert route_output["label"] == "Tech bro"
+
+
+def test_new_board_label_deduplicates_existing_user_board(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    db.save_taste_version("existing", 1, _profile(), {}, "mreq-v1")
+    db.create_profile("existing", _brief(), label="tech bro", context="city")
+    existing = db.get_profile("existing")
+    output = RouteOut(
+        context="city",
+        board_id="existing",
+        label="Tech bro",
+        confidence=0.95,
+        reason="Matches the existing style",
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "route_input",
+        lambda *_args: (
+            output,
+            existing,
+            SimpleNamespace(request_id="mreq-router"),
+            "content",
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job-1")
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            TasteProfile.model_validate(_profile()),
+            SimpleNamespace(request_id="mreq-taste", latency_ms=10),
+        ),
+    )
+
+    result = phase2_api.create_profile(
+        ProfileCreateRequest(
+            brief=ProfileBrief.model_validate(_brief(text="Tech bro: new style")),
+            new_board=True,
+        ),
+        phase2_api.BackgroundTasks(),
+    )
+
+    assert result["board"]["label"] == "Tech bro 2"
+    assert result["route"]["label"] == "Tech bro 2"
+
+
+def test_update_board_brief_updates_only_target_board(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _create_board("a", active=False)
+    _create_board("b", active=True)
+    db.insert_items(
+        [
+            {
+                "id": "b-item",
+                "source": "vinted",
+                "source_url": "https://vinted.test/b-item",
+                "title": "shirt",
+                "price_gbp": 20,
+                "image_url": "https://image.test/b-item.jpg",
+                "raw_json": {},
+            }
+        ]
+    )
+    db.save_tags("b-item", _item("b-item", "top")["tags"], "mreq-tag")
+    db.insert_swipe("b", "b-item", True)
+    previous_b_brief = db.get_profile("b")["brief"]
+    previous_b_taste = db.latest_taste("b")
+    previous_b_swipes = db.unconsumed_signals("b")["swipes"]
+    started = {}
+
+    calls = []
+
+    def fake_taste_call(_task, _system, _model, content, _output_model):
+        calls.append(content)
+        return (
+            TasteProfile.model_validate(_profile(changes=["Refined the brief"])),
+            SimpleNamespace(request_id="mreq-update", latency_ms=12),
+        )
+
+    monkeypatch.setattr(taste, "call_task", fake_taste_call)
+    monkeypatch.setattr(
+        phase2_api,
+        "_start_fetch",
+        lambda profile, queries, _background: (
+            started.update(profile=profile, queries=queries) or "job-update"
+        ),
+    )
+    updated_brief = ProfileBrief.model_validate(
+        _brief(text="A sharper city wardrobe")
+    )
+    result = phase2_api.update_board_brief(
+        "a", BoardBriefRequest(brief=updated_brief), phase2_api.BackgroundTasks()
+    )
+
+    assert result["profile_id"] == "a"
+    assert result["route"] is None
+    assert result["version"] == 2
+    assert result["request_id"] == "mreq-update"
+    assert db.get_profile("a")["brief"]["text"] == "A sharper city wardrobe"
+    assert db.active_profile()["id"] == "a"
+    assert db.latest_taste("a")["version"] == 2
+    assert db.get_profile("b")["brief"] == previous_b_brief
+    assert db.latest_taste("b") == previous_b_taste
+    assert db.unconsumed_signals("b")["swipes"] == previous_b_swipes
+    assert "A sharper city wardrobe" in started["queries"]
+    assert any(
+        'New signals:\n- brief: "A sharper city wardrobe"' in content
+        for content in calls
+    )
+    assert db.unconsumed_signals("a")["corrections"] == []
+
+
+@pytest.mark.parametrize("board_id", ["unknown", "warmup-board"])
+def test_update_board_brief_returns_404_for_unknown_or_non_user(
+    monkeypatch, tmp_path, board_id
+):
+    _db(monkeypatch, tmp_path)
+    db.create_profile("warmup-board", _brief(), kind="warmup")
+    with pytest.raises(HTTPException) as error:
+        phase2_api.update_board_brief(
+            board_id,
+            BoardBriefRequest(brief=ProfileBrief.model_validate(_brief())),
+            phase2_api.BackgroundTasks(),
+        )
+    assert error.value.status_code == 404
+
+
+def test_forced_board_creation_and_taste_updates_are_board_local(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    def fake_route_input(*_args):
+        existing = next(iter(db.profile_boards()), None)
+        output = RouteOut(
+            context="gym" if existing else "city",
+            board_id=existing["id"] if existing else None,
+            label="B" if existing else "A",
+            confidence=0.95,
+            reason="Matches an existing board" if existing else "First board",
+        )
+        return output, existing, SimpleNamespace(request_id="mreq-router"), "content"
+
+    monkeypatch.setattr(phase2_api, "route_input", fake_route_input)
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            TasteProfile.model_validate(_profile()),
+            SimpleNamespace(request_id="mreq-taste", latency_ms=5),
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "_start_fetch", lambda *_args: "job")
+    for index in range(4):
+        item_id = f"item-{index}"
+        db.insert_items(
+            [
+                {
+                    "id": item_id,
+                    "source": "vinted",
+                    "source_url": f"https://vinted.test/{item_id}",
+                    "title": item_id,
+                    "price_gbp": 20,
+                    "image_url": f"https://image.test/{item_id}.jpg",
+                    "raw_json": {},
+                }
+            ]
+        )
+        db.save_tags(item_id, _item(item_id, "top")["tags"], "mreq-tag")
+
+    request = phase2_api.BackgroundTasks()
+    created_a = phase2_api.create_profile(
+        ProfileCreateRequest(
+            brief=ProfileBrief.model_validate(_brief(text="Board A")),
+            new_board=True,
+        ),
+        request,
+    )
+    created_b = phase2_api.create_profile(
+        ProfileCreateRequest(
+            brief=ProfileBrief.model_validate(_brief(text="Board B")),
+            new_board=True,
+        ),
+        request,
+    )
+    assert created_a["profile_id"] != created_b["profile_id"]
+    assert len(db.profile_boards()) == 2
+
+    phase2_api.activate_board(created_a["profile_id"])
+    for index in range(3):
+        phase2_api.swipe(SwipeRequest(item_id=f"item-{index}", liked=True))
+    phase2_api.activate_board(created_b["profile_id"])
+    phase2_api.swipe(SwipeRequest(item_id="item-3", liked=False))
+    result = phase2_api.taste_update()
+
+    counts = {board["id"]: board["counts"]["swipes"] for board in phase2_api.boards()}
+    assert counts == {created_a["profile_id"]: 3, created_b["profile_id"]: 1}
+    assert result["version"] == 2
+    assert db.latest_taste(created_a["profile_id"])["version"] == 1
+    assert len(db.unconsumed_signals(created_a["profile_id"])["swipes"]) == 3
 
 
 @pytest.mark.parametrize(
