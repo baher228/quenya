@@ -68,7 +68,7 @@ export function TasteScreen({ taste, refresh, onUpload, onReset }: {
             {[...taste.history].reverse().map(h => (
               <li key={h.version}>
                 <div className="h-top"><b>v{h.version}</b><span className="mono small muted">{h.request_id ?? ""}</span></div>
-                {h.changes.length ? <ul>{h.changes.map((c, i) => <li key={i}>{c}</li>)}</ul> : <p className="small muted">First read of your brief.</p>}
+                {changesOf(h).length ? <ul>{changesOf(h).map((c, i) => <li key={i}>{c}</li>)}</ul> : <p className="small muted">First read of your brief.</p>}
               </li>
             ))}
           </ol>
@@ -95,4 +95,8 @@ export function TasteScreen({ taste, refresh, onUpload, onReset }: {
       <button className="btn ghost wide danger" onClick={onReset}>Reset demo profile</button>
     </section>
   );
+}
+
+function changesOf(h: TasteState["history"][number]): string[] {
+  return h.changes ?? h.profile?.changes ?? [];
 }

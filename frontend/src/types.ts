@@ -68,7 +68,8 @@ export interface TasteState {
   current: { version: number; profile: TasteProfile } | null;
   history: {
     version: number;
-    changes: string[];
+    changes?: string[];
+    profile?: TasteProfile & { changes?: string[] };
     created_at: string;
     request_id: string | null;
     signal_counts?: Record<string, number>;
