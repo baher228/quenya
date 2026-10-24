@@ -15,7 +15,7 @@ from app.images import image_key
 from app.mubit import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
-from app.rank import make_deck, rank_items, secondhand_share, tags_for
+from app.rank import add_exploration, make_deck, rank_items, secondhand_share, tags_for
 from app.routing import route_input
 from app.schemas import (
     BoardBriefRequest,
@@ -670,12 +670,11 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     active = _user_profile()
     taste = _taste(active["id"])
     with db.db_connection() as connection:
-        swiped = {
-            row[0]
-            for row in connection.execute(
-                "SELECT item_id FROM swipes WHERE profile_id=?", (active["id"],)
-            ).fetchall()
-        }
+        swipe_rows = connection.execute(
+            "SELECT item_id FROM swipes WHERE profile_id=?", (active["id"],)
+        ).fetchall()
+    swiped = {row[0] for row in swipe_rows}
+    swipe_count = len(swipe_rows)
     candidates = db.list_items(limit=5000)
     core = shared_core()
     ranked = rank_items(
@@ -686,15 +685,24 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         core_profile=as_profile(core),
     )
     share = secondhand_share(active["brief"], taste)
+    initial_deck = make_deck(
+        ranked,
+        n,
+        active["brief"],
+        include_shoes=active["brief"].get("include_shoes", True),
+        secondhand_share=share,
+    )
+    explored_deck = add_exploration(
+        initial_deck,
+        ranked,
+        n,
+        taste,
+        swipes=swipe_count,
+        seed=f"{active['id']}:{swipe_count}",
+    )
     return [
-        _public_item(item)
-        for item in make_deck(
-            ranked,
-            n,
-            active["brief"],
-            include_shoes=active["brief"].get("include_shoes", True),
-            secondhand_share=share,
-        )
+        {**_public_item(item), "explore": bool(item.get("explore", False))}
+        for item in explored_deck
     ]
 
 

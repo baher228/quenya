@@ -9,7 +9,7 @@ from threading import Lock
 from typing import Any
 
 from app.config import DB_PATH
-from app.rank import tags_for
+from app.rank import tags_for, tokens
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -657,6 +657,25 @@ def get_taste_history(profile_id: str) -> list[dict[str, Any]]:
         item["signals"] = json.loads(item.pop("signals_json"))
         history.append(item)
     return history
+
+
+def tag_evidence(profile_id: str) -> dict[str, dict[str, int]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT s.liked, i.tags_json FROM swipes s
+               LEFT JOIN items i ON i.id=s.item_id
+               WHERE s.profile_id=?""",
+            (profile_id,),
+        ).fetchall()
+
+    evidence: dict[str, dict[str, int]] = {}
+    for row in rows:
+        kind = "kept" if row["liked"] else "passed"
+        for token in tokens({"tags_json": row["tags_json"]}):
+            counts = evidence.setdefault(token, {"kept": 0, "passed": 0})
+            counts[kind] += 1
+    return evidence
 
 
 def unconsumed_signals(profile_id: str) -> dict[str, list[dict[str, Any]]]:

@@ -1,4 +1,5 @@
 import json
+import random
 from typing import Any
 
 
@@ -214,3 +215,61 @@ def make_deck(
                 break
     deck.extend(shoes[: max(0, min(shoe_cap, count - len(deck)))])
     return deck[:count]
+
+
+def add_exploration(
+    deck: list[dict[str, Any]],
+    ranked: list[dict[str, Any]],
+    count: int,
+    profile: dict[str, Any],
+    *,
+    swipes: int,
+    seed: str,
+) -> list[dict[str, Any]]:
+    non_shoe_indices = [
+        index
+        for index, item in enumerate(deck)
+        if tags_for(item).get("slot") != "shoes"
+    ]
+    rate = max(0.15, 0.35 - 0.005 * swipes)
+    explore_count = min(round(rate * count), len(non_shoe_indices))
+    deck_ids = {item["id"] for item in deck}
+    candidates = []
+    candidate_ids = set(deck_ids)
+    for item in ranked[2 * count :]:
+        if item["id"] in candidate_ids or tags_for(item).get("slot") == "shoes":
+            continue
+        candidates.append(item)
+        candidate_ids.add(item["id"])
+    explore_count = min(explore_count, len(candidates))
+    if explore_count == 0:
+        return [{**item, "explore": False} for item in deck]
+
+    removed = set(non_shoe_indices[-explore_count:])
+    remaining = [item for index, item in enumerate(deck) if index not in removed]
+    pool = list(candidates)
+    rng = random.Random(seed)
+    explore_items = []
+    for _ in range(explore_count):
+        weights = [
+            1.0 / (1.0 + max(0.0, -score_item(item, profile)))
+            for item in pool
+        ]
+        selected = rng.choices(range(len(pool)), weights=weights, k=1)[0]
+        explore_items.append(pool.pop(selected))
+
+    length = len(remaining)
+    shoe_boundary = next(
+        (
+            index
+            for index, item in enumerate(remaining)
+            if tags_for(item).get("slot") == "shoes"
+        ),
+        length,
+    )
+    result = [{**item, "explore": False} for item in remaining]
+    for index, item in enumerate(explore_items):
+        position = round((index + 1) * length / (explore_count + 1))
+        position = min(position + index, shoe_boundary + index)
+        result.insert(position, {**item, "explore": True})
+    return result

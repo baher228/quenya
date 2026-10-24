@@ -39,6 +39,252 @@ def _taste_profile(**overrides):
     }
 
 
+def test_taste_user_content_lists_top_tag_evidence():
+    evidence = {
+        f"tag-{index:02}": {"kept": 30 - index, "passed": 0}
+        for index in range(24)
+    }
+    evidence.update(
+        {
+            "zeta": {"kept": 1, "passed": 1},
+            "alpha": {"kept": 1, "passed": 1},
+            "ignored": {"kept": 1, "passed": 0},
+        }
+    )
+
+    content = taste.taste_user_content(_brief(), None, 1, [], evidence=evidence)
+    section = content.split("Evidence so far", maxsplit=1)[1]
+
+    assert "tag-00 30/0" in section
+    assert section.endswith("alpha 1/1")
+    assert "zeta 1/1" not in section
+    assert "ignored 1/0" not in section
+
+
+def test_signal_lines_expose_non_swipe_signals_as_explicit_text():
+    signals = {
+        "swipes": [
+            {
+                "id": "swipe",
+                "liked": False,
+                "title": "Merino jumper",
+                "price_gbp": 50,
+                "tags": {"category": "jumper", "aesthetics": [], "colours": []},
+            }
+        ],
+        "outfits": [
+            {
+                "id": "outfit",
+                "title": "Quiet outfit",
+                "verdict": "reject",
+                "reason": "No logos",
+                "piece_ids_json": "[]",
+            }
+        ],
+        "corrections": [
+            {"id": "brief", "kind": "brief", "note": "No logos"},
+            {
+                "id": "tag",
+                "kind": "tag",
+                "target_id": "item",
+                "title": "Logo jumper",
+                "note": "Remove the logo",
+            },
+        ],
+        "uploads": [
+            {
+                "id": "upload",
+                "read": {
+                    "one_line": "Minimal, no logos",
+                    "aesthetics": ["minimal"],
+                    "palette": ["black"],
+                },
+            }
+        ],
+    }
+
+    lines, consumed, explicit_lines = taste._signal_lines(signals)
+
+    assert lines[0].startswith("- passed:")
+    assert explicit_lines == lines[1:]
+    assert any('reason: "No logos"' in line for line in explicit_lines)
+    assert any("Remove the logo" in line for line in explicit_lines)
+    assert any("Minimal, no logos" in line for line in explicit_lines)
+    assert consumed == {
+        "swipes": ["swipe"],
+        "outfits": ["outfit"],
+        "corrections": ["brief", "tag"],
+        "uploads": ["upload"],
+    }
+
+
+def test_settle_profile_gates_new_likes_and_avoids_and_filters_changes():
+    previous = _taste_profile(likes={}, avoids={})
+
+    one_pass, blocked = taste.settle_profile(
+        _taste_profile(avoids={"quiet luxury": 0.9}),
+        previous,
+        {"quiet luxury": {"kept": 0, "passed": 1}},
+        "",
+    )
+    assert one_pass["avoids"] == {}
+    assert blocked == {"quiet luxury"}
+
+    two_passes, blocked = taste.settle_profile(
+        _taste_profile(avoids={"quiet luxury": 0.9}),
+        previous,
+        {"quiet luxury": {"kept": 1, "passed": 2}},
+        "",
+    )
+    assert two_passes["avoids"] == {"quiet luxury": 0.5}
+    assert blocked == set()
+
+    equal_passes, blocked = taste.settle_profile(
+        _taste_profile(avoids={"quiet luxury": 0.9}),
+        previous,
+        {"quiet luxury": {"kept": 2, "passed": 2}},
+        "",
+    )
+    assert equal_passes["avoids"] == {}
+    assert blocked == {"quiet luxury"}
+
+    one_keep, blocked = taste.settle_profile(
+        _taste_profile(
+            likes={"quiet luxury": 0.9},
+            changes=["Added quiet luxury after one kept jumper", "Keep workwear"],
+        ),
+        previous,
+        {"quiet luxury": {"kept": 1, "passed": 0}},
+        "",
+    )
+    assert one_keep["likes"] == {}
+    assert one_keep["changes"] == ["Keep workwear"]
+    assert blocked == {"quiet luxury"}
+
+    two_keeps, blocked = taste.settle_profile(
+        _taste_profile(likes={"aesthetic:workwear": 0.9}),
+        previous,
+        {"workwear": {"kept": 2, "passed": 0}},
+        "",
+    )
+    assert two_keeps["likes"] == {"aesthetic:workwear": 0.5}
+    assert blocked == set()
+
+    unseen, blocked = taste.settle_profile(
+        _taste_profile(avoids={"logo": 0.9}), previous, {}, ""
+    )
+    assert unseen["avoids"] == {"logo": 0.5}
+    assert blocked == set()
+
+
+def test_settle_profile_steps_existing_weights_and_decays_dropped_keys():
+    previous = _taste_profile(
+        likes={"style:workwear": 0.9, "heritage": 0.5, "quiet": 0.15},
+        avoids={},
+    )
+    new = _taste_profile(likes={"aesthetic:workwear": 0.1}, avoids={})
+
+    settled, blocked = taste.settle_profile(new, previous, {}, "")
+
+    assert settled["likes"]["style:workwear"] == pytest.approx(0.6)
+    assert settled["likes"]["heritage"] == pytest.approx(0.2)
+    assert "quiet" not in settled["likes"]
+    assert blocked == set()
+
+
+def test_settle_profile_explicit_text_bypasses_gates_and_allows_removal():
+    new = _taste_profile(avoids={"logos": 0.9})
+    settled, blocked = taste.settle_profile(
+        new,
+        _taste_profile(likes={}, avoids={}),
+        {},
+        "Correction: NO LOGOS",
+        brief_text="",
+    )
+    assert settled["avoids"] == {"logos": 0.9}
+    assert blocked == set()
+
+    removed, blocked = taste.settle_profile(
+        _taste_profile(likes={}, avoids={}),
+        _taste_profile(likes={}, avoids={"logos": 0.7}),
+        {},
+        "Correction: no logos",
+        brief_text="",
+    )
+    assert removed["avoids"] == {}
+    assert blocked == set()
+
+
+def test_normalised_prefixes_and_word_boundaries_match_evidence():
+    assert taste._normalised_key("color_dark_grey") == "dark grey"
+    assert taste._normalised_key("brands:stone island") == "stone island"
+    previous = _taste_profile(likes={}, avoids={})
+
+    dark_grey, blocked = taste.settle_profile(
+        _taste_profile(likes={"color_dark_grey": 0.9}),
+        previous,
+        {"dark grey": {"kept": 1, "passed": 0}},
+        "",
+    )
+    assert dark_grey["likes"] == {}
+    assert blocked == {"dark grey"}
+
+    red, blocked = taste.settle_profile(
+        _taste_profile(avoids={"red": 0.9}, changes=["Tailored trousers"]),
+        previous,
+        {"tailored trousers": {"kept": 0, "passed": 1}},
+        "",
+    )
+    assert red["avoids"] == {"red": 0.5}
+    assert red["changes"] == ["Tailored trousers"]
+    assert blocked == set()
+
+    boundary, blocked = taste.settle_profile(
+        _taste_profile(
+            avoids={"red": 0.9},
+            changes=["Tailored trousers", "Red boots passed"],
+        ),
+        previous,
+        {"red": {"kept": 0, "passed": 1}},
+        "Tailored trousers",
+    )
+    assert boundary["avoids"] == {}
+    assert boundary["changes"] == ["Tailored trousers"]
+    assert blocked == {"red"}
+
+
+def test_brief_mention_skips_new_key_gate_but_not_caps_or_existing_step():
+    previous = _taste_profile(likes={}, avoids={})
+    new_avoid, blocked = taste.settle_profile(
+        _taste_profile(avoids={"quiet luxury": 0.9}),
+        previous,
+        {},
+        "",
+        brief_text="Avoid quiet luxury",
+    )
+    assert new_avoid["avoids"] == {"quiet luxury": 0.5}
+    assert blocked == set()
+
+    existing_like, blocked = taste.settle_profile(
+        _taste_profile(likes={"style_vintage": 0.1}, avoids={}),
+        _taste_profile(likes={"style_vintage": 0.9}, avoids={}),
+        {},
+        "",
+        brief_text="Style vintage",
+    )
+    assert existing_like["likes"]["style_vintage"] == pytest.approx(0.6)
+    assert blocked == set()
+
+
+def test_settle_profile_returns_new_unchanged_without_previous():
+    new = _taste_profile(likes={"untested": 0.9}, changes=["Keep it"])
+
+    settled, blocked = taste.settle_profile(new, None, {}, "")
+
+    assert settled is new
+    assert blocked == set()
+
+
 def _item(item_id, slot, *, price=20.0, gender="unisex", condition="second-hand"):
     categories = {
         "top": "shirt",
@@ -219,14 +465,15 @@ def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, 
     item = _item("signal-item", "outerwear", price=25)
     db.insert_items([{key: value for key, value in item.items() if key != "tags"}])
     db.save_tags(item["id"], item["tags"], "mreq-tag")
-    db.insert_swipe("profile-1", item["id"], True)
+    db.insert_swipe("profile-1", item["id"], False)
     weights = {f"like-{index}": 2.0 for index in range(17)}
     output = TasteProfile.model_validate(
         _taste_profile(
             likes=weights,
-            avoids={"avoid": -0.5},
+            avoids={"avoid": -0.5, "chore jacket": 0.9},
             price_ceiling_gbp=0,
             condition_preference="new",
+            changes=["Added avoidance of chore jacket after one pass"],
         )
     )
     prompts = []
@@ -242,10 +489,13 @@ def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, 
     assert profile["price_ceiling_gbp"] == 100
     assert profile["condition_preference"] == "second-hand"
     assert len(profile["likes"]) == 15
-    assert set(profile["likes"].values()) == {1.0}
+    assert set(profile["likes"].values()) == {0.5}
     assert profile["avoids"] == {"avoid": 0.0}
+    assert profile["changes"] == []
     assert "Current profile (v1):" in prompts[0]
     assert "New signals:" in prompts[0]
+    assert "Evidence so far" in prompts[0]
+    assert "chore jacket" not in db.latest_taste("profile-1")["profile"]["avoids"]
     assert not any(db.unconsumed_signals("profile-1").values())
     with pytest.raises(ValueError, match="No unconsumed taste signals"):
         taste.update_taste(db.get_profile("profile-1"))
