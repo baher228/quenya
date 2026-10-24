@@ -139,7 +139,7 @@ def _image(value: Any, page_url: str) -> str | None:
     return None
 
 
-def _record(title, price, image, url, page_url, domain, gender):
+def _record(title, price, image, url, page_url, domain, gender, brand=None):
     title = str(title or "").strip()
     amount = _price(price)
     canonical = _canonical(str(url or ""), page_url, domain)
@@ -151,6 +151,7 @@ def _record(title, price, image, url, page_url, domain, gender):
         "name": title,
         "url": canonical,
         "image": image_url,
+        "brand": brand or catalog._HOUSE_BRANDS.get(domain),
         "offers": {"@type": "Offer", "priceCurrency": "GBP", "price": amount},
     }
     return catalog._record(product, product, canonical, domain, gender, f"listing:{domain}")
@@ -196,28 +197,47 @@ def _walk(value: Any):
             yield from _walk(child)
 
 
-def _nuxt(flat: list[Any]):
-    cache = {}
+def _john_flat_products(flat: list[Any]):
+    wrappers = {"ShallowReactive", "Reactive", "Ref", "ShallowRef"}
 
-    def decode(value, depth=0):
-        if depth > 35:
+    def dereference(value, depth=0):
+        if depth > 8:
             return None
-        if isinstance(value, int) and 0 <= value < len(flat):
-            if value not in cache:
-                raw = flat[value]
-                if isinstance(raw, list) and raw and isinstance(raw[0], str) and raw[0] in {
-                    "ShallowReactive", "Reactive", "Ref", "ShallowRef",
-                }:
-                    raw = raw[-1]
-                cache[value] = decode(raw, depth + 1)
-            return cache[value]
-        if isinstance(value, dict):
-            return {key: decode(item, depth + 1) for key, item in value.items()}
-        if isinstance(value, list):
-            return [decode(item, depth + 1) for item in value]
+        if isinstance(value, list) and value and isinstance(value[0], str) and value[0] in wrappers:
+            return dereference(value[-1], depth + 1)
+        if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < len(flat):
+            raw = flat[value]
+            if isinstance(raw, list) and raw and isinstance(raw[0], str) and raw[0] in wrappers:
+                return dereference(raw[-1], depth + 1)
+            return raw
         return value
 
-    yield from _walk(decode(flat))
+    def decode_field(value, encoded, depth=0):
+        if depth > 4:
+            return value
+        if encoded:
+            value = dereference(value)
+        if isinstance(value, list):
+            if value and isinstance(value[0], str) and value[0] in wrappers:
+                return decode_field(value[-1], True, depth + 1)
+            return [decode_field(part, encoded, depth + 1) for part in value]
+        if isinstance(value, dict):
+            return {
+                key: decode_field(part, encoded, depth + 1)
+                for key, part in value.items()
+            }
+        return value
+
+    for container in flat:
+        if not isinstance(container, dict) or "products" not in container:
+            continue
+        products = decode_field(container["products"], True)
+        if not isinstance(products, list):
+            continue
+        for product in products:
+            item = decode_field(product, isinstance(product, int))
+            if isinstance(item, dict):
+                yield item
 
 
 def _itemlist_names(payloads, page_url, domain):
@@ -234,8 +254,156 @@ def _itemlist_names(payloads, page_url, domain):
                     continue
                 url = _canonical(item.get("@id") or item.get("url") or "", page_url, domain)
                 if url and item.get("name"):
-                    names[url] = item["name"]
+                    name = str(item["name"]).strip()
+                    if domain == "barbour.com":
+                        words = set(re.findall(r"[a-z]+", name.lower()))
+                        slug_words = set(re.findall(r"[a-z]+", urlsplit(url).path.lower()))
+                        if name.isupper() or not words.intersection(slug_words):
+                            continue
+                    names[url] = name
     return names
+
+
+def _itemlist_urls(payloads, page_url, domain):
+    urls = set()
+    for payload in payloads:
+        for node in _walk(payload):
+            if str(node.get("@type", "")).lower() != "itemlist":
+                continue
+            for entry in node.get("itemListElement", []):
+                item = entry.get("item") if isinstance(entry, dict) else None
+                if not isinstance(item, dict) and isinstance(entry, dict):
+                    item = entry
+                if isinstance(item, dict):
+                    url = _canonical(
+                        item.get("@id") or item.get("url") or "", page_url, domain
+                    )
+                    if url:
+                        urls.add(url)
+    return urls
+
+
+def _barbour_title(url):
+    slug = urlsplit(url).path.rsplit("/", 1)[-1]
+    slug = re.sub(r"\.html$", "", slug, flags=re.I)
+    slug = re.sub(r"-[A-Z]{2,}[A-Z0-9]*$", "", slug)
+    return " ".join(
+        "-".join(part.capitalize() for part in word.split("-"))
+        for word in slug.split("-")
+    )
+
+
+def _gender_mismatch(item, gender):
+    fields = (
+        "gender", "audience", "targetAudience", "department",
+        "categoryUri", "categoryName", "categories", "categoryUris",
+        "product_gender", "product_gender_value",
+    )
+
+    def flatten(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                yield str(key)
+                yield from flatten(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                yield from flatten(child)
+        elif value is not None:
+            yield str(value)
+
+    text = " ".join(part for key in fields for part in flatten(item.get(key))).lower()
+    if gender == "m":
+        return bool(re.search(r"\b(?:women|womens|female|ladies)\w*", text))
+    return bool(re.search(r"\b(?:men|mens|male|gentlemen)\w*", text))
+
+
+def _listing_tile_urls(html, page_url, domain):
+    tree = _Tree()
+    tree.feed(html)
+    urls = set()
+    for anchor in tree.root.descendants("a"):
+        url = _canonical(anchor.attrs.get("href") or "", page_url, domain)
+        if not url:
+            continue
+        if domain == "johnsmedley.com" and "data-product-card" not in anchor.attrs:
+            continue
+        node = anchor
+        for _ in range(7):
+            if node.descendants("img") and PRICE.search(node.text()):
+                urls.add(url)
+                break
+            if not node.parent:
+                break
+            node = node.parent
+    return urls
+
+
+def _structured_metadata(payloads, page_url, domain):
+    by_url, by_id = {}, {}
+    for payload in payloads:
+        if "__nuxt_flat" in payload:
+            continue
+        for item in _walk(payload):
+            title = item.get("name") or item.get("title")
+            if not title or not any(
+                item.get(key) not in (None, "")
+                for key in ("price", "priceAsNumber", "salePrice", "images", "image")
+            ):
+                continue
+            metadata = {
+                "title": str(title),
+                "brand": item.get("brandName") or item.get("brand"),
+                "salePrice": item.get("salePrice"),
+            }
+            raw_url = (
+                item.get("url") or item.get("href") or item.get("canonical")
+                or item.get("path")
+            )
+            canonical = _canonical(raw_url, page_url, domain) if raw_url else None
+            if canonical:
+                by_url[canonical] = metadata
+            for key in ("id", "product", "sku", "productId"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    by_id[str(value)] = metadata
+    return by_url, by_id
+
+
+def _product_id(url):
+    match = re.search(r"(?:-|/)(\d{5,})(?:/|$)", urlsplit(url).path)
+    return match.group(1) if match else ""
+
+
+def _clean_stories_title(value):
+    value = re.sub(
+        r"\b(?:chevron-right|chevron-left|favourite-inactive|plus)\b", " ", value,
+        flags=re.I,
+    )
+    value = re.sub(r"\+\s*\d+\b|\bnew\b", " ", value, flags=re.I)
+    value = re.sub(
+        r"\b(?:100%\s*)?(?:cotton|wool|cashmere|merino|alpaca)(?:[-/& ]"
+        r"(?:cotton|wool|cashmere|merino|alpaca))*\b\s*$",
+        " ",
+        value,
+        flags=re.I,
+    )
+    return re.sub(r"\s+", " ", value).strip(" ,")
+
+
+def _john_smedley_title(anchor):
+    parts = []
+    for span in anchor.descendants("span"):
+        if "functional-f1" not in (span.attrs.get("class") or "").split():
+            continue
+        value = re.sub(r"\s+", " ", span.text()).strip()
+        if value and value not in parts:
+            parts.append(value)
+    return " ".join(parts)
+
+
+def _clean_tile_title(value):
+    value = re.sub(r"\s*-\s*view\s+\d+\b", "", value, flags=re.I)
+    return re.sub(r"\s+", " ", value).strip(" ,-")
 
 
 def _mango_title(url, text):
@@ -251,7 +419,7 @@ def _mango_title(url, text):
     return ""
 
 
-def _tile_records(html, page_url, domain, gender, names):
+def _tile_records(html, page_url, domain, gender, names, metadata_by_url, metadata_by_id):
     tree = _Tree()
     tree.feed(html)
     records = []
@@ -281,7 +449,10 @@ def _tile_records(html, page_url, domain, gender, names):
         if not tile:
             continue
         text, price, image = tile
-        title = names.get(url)
+        metadata = metadata_by_url.get(url) or metadata_by_id.get(_product_id(url), {})
+        title = metadata.get("title") or names.get(url)
+        brand = metadata.get("brand")
+        price = metadata.get("salePrice") or price
         if not title and domain == "mango.com":
             title = _mango_title(url, text)
         if not title and domain == "asos.com":
@@ -293,6 +464,8 @@ def _tile_records(html, page_url, domain, gender, names):
                 ),
                 "",
             )
+        if not title and domain == "johnsmedley.com":
+            title = _john_smedley_title(anchor)
         if not title:
             title = PRICE.sub("", text)
             title = re.sub(
@@ -306,23 +479,33 @@ def _tile_records(html, page_url, domain, gender, names):
         else:
             title = PRICE.sub("", title)
             title = re.sub(r"\bprice\b\s*$", "", title, flags=re.I).strip(" ,")
-        record = _record(title, price, image, url, page_url, domain, gender)
+        if domain == "stories.com":
+            title = _clean_stories_title(title)
+        else:
+            title = _clean_tile_title(title)
+        if domain == "barbour.com":
+            title_words = set(re.findall(r"[a-z]+", title.lower()))
+            url_words = set(re.findall(r"[a-z]+", urlsplit(url).path.lower()))
+            if title.isupper() or len(title) > 120 or not title_words.intersection(url_words):
+                title = _barbour_title(url)
+        record = _record(title, price, image, url, page_url, domain, gender, brand)
         if record:
             records.append(record)
     return records
 
 
-def _next_products(payloads, page_url, domain, gender):
+def _next_products(
+    payloads, page_url, domain, gender, metadata_by_url, metadata_by_id,
+    gender_mismatch_urls,
+):
     records = []
     for payload in payloads:
-        objects = _nuxt(payload["__nuxt_flat"]) if "__nuxt_flat" in payload else _walk(payload)
+        objects = (
+            _john_flat_products(payload["__nuxt_flat"])
+            if "__nuxt_flat" in payload else _walk(payload)
+        )
         for item in objects:
             if not isinstance(item, dict) or not (item.get("name") or item.get("title")):
-                continue
-            if not any(
-                item.get(k) not in (None, "")
-                for k in ("price", "priceAsNumber", "salePrice")
-            ):
                 continue
             url = (
                 item.get("url") or item.get("uri") or item.get("href")
@@ -337,7 +520,28 @@ def _next_products(payloads, page_url, domain, gender):
             if not url and item.get("id") and item.get("categoryUri"):
                 slug = re.sub(r"[^a-z0-9]+", "-", str(item.get("name")).lower()).strip("-")
                 url = f"/en-gb/{item['categoryUri']}/product/{slug}-{item['id']}"
+            canonical = _canonical(url, page_url, domain) if url else None
+            if domain == "johnsmedley.com" and _gender_mismatch(item, gender):
+                if canonical:
+                    gender_mismatch_urls.add(canonical)
+                continue
+            if not any(
+                item.get(k) not in (None, "")
+                for k in ("price", "priceAsNumber", "salePrice")
+            ):
+                continue
             price = item.get("salePrice") or item.get("priceAsNumber") or item.get("price")
+            metadata = {
+                "title": str(item.get("name") or item.get("title")),
+                "brand": item.get("brandName") or item.get("brand"),
+                "salePrice": item.get("salePrice"),
+            }
+            if canonical:
+                metadata_by_url[canonical] = metadata
+            for key in ("id", "product", "sku", "productId"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    metadata_by_id[str(value)] = metadata
             image = (
                 item.get("primaryImage") or item.get("images") or item.get("mediaObjects")
                 or item.get("image") or item.get("imageUrl")
@@ -350,6 +554,7 @@ def _next_products(payloads, page_url, domain, gender):
                 page_url,
                 domain,
                 gender,
+                item.get("brandName") or item.get("brand"),
             )
             if record:
                 records.append(record)
@@ -361,12 +566,68 @@ def parse_listing(html: str, page_url: str, domain: str, gender: str) -> list[di
     if not html or domain not in DOMAINS:
         return []
     payloads = list(_script_payloads(html))
-    records = _next_products(payloads, page_url, domain, gender)
     names = _itemlist_names(payloads, page_url, domain)
-    records.extend(_tile_records(html, page_url, domain, gender, names))
+    metadata_by_url, metadata_by_id = _structured_metadata(payloads, page_url, domain)
+    gender_mismatch_urls = set()
+    records = _next_products(
+        payloads, page_url, domain, gender, metadata_by_url, metadata_by_id,
+        gender_mismatch_urls,
+    )
+    records.extend(
+        _tile_records(
+            html, page_url, domain, gender, names, metadata_by_url, metadata_by_id
+        )
+    )
+    if domain == "barbour.com":
+        listing_urls = _itemlist_urls(payloads, page_url, domain)
+        if listing_urls:
+            records = [
+                record for record in records
+                if record.get("source_url") in listing_urls
+            ]
+    if domain == "johnsmedley.com":
+        listing_urls = _listing_tile_urls(html, page_url, domain)
+        if listing_urls:
+            records = [
+                record for record in records
+                if record.get("source_url") in listing_urls
+                and record.get("source_url") not in gender_mismatch_urls
+            ]
     deduped = {}
     for record in records:
         url = record.get("source_url")
         if url:
             deduped.setdefault(url, record)
     return list(deduped.values())
+
+
+def infer_category(title: str, page_url: str = "") -> str:
+    value = str(title or "").lower()
+    for pattern, category in (
+        (r"\b(?:shoes?|boots?|loafers?|trainers?|sneakers?|heels?|sandals?)\b", "shoes"),
+        (
+            r"\b(?:bags?|backpacks?|belts?|scarves?|scarfs?|hats?|caps?|"
+            r"gloves?|wallets?)\b",
+            "accessory",
+        ),
+        (r"\b(?:jackets?|coats?|parkas?|blazers?|gilets?)\b", "outerwear"),
+        (r"\b(?:dresses|dress|gowns?)\b", "dress"),
+        (r"\b(?:trousers?|chinos?|jeans?|denim|skirts?|shorts?)\b", "bottom"),
+        (r"\b(?:shirts?|blouses?|tops?|tees?|t-shirts?|polos?)\b", "top"),
+        (r"\b(?:knitwear|knits?|jumpers?|sweaters?|cardigans?|pullovers?)\b", "knitwear"),
+        (r"\b(?:suits?|tailoring|tailored)\b", "tailoring"),
+    ):
+        if re.search(pattern, value):
+            return category
+    path = page_url.lower()
+    for words, category in (
+        (("knit", "jumper", "sweater"), "knitwear"),
+        (("shirt", "top"), "top"),
+        (("trouser", "jean", "denim"), "bottom"),
+        (("jacket", "coat", "outerwear"), "outerwear"),
+        (("dress", "skirt"), "dress"),
+        (("suit", "tailor"), "tailoring"),
+    ):
+        if any(word in path for word in words):
+            return category
+    return "clothing"

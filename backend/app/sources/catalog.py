@@ -89,6 +89,16 @@ _PRODUCT_PATHS = {
     "uniqlo.com": re.compile(r"^/uk/en/products?/[^/?#]+(?:/\d{2})?/?$", re.I),
     "urbanoutfitters.com": re.compile(r"/(?:en-gb/)?shop/[^/?#]+", re.I),
 }
+_HOUSE_BRANDS = {
+    "cos.com": "COS",
+    "arket.com": "ARKET",
+    "stories.com": "& Other Stories",
+    "barbour.com": "Barbour",
+    "johnsmedley.com": "John Smedley",
+    "charlestyrwhitt.com": "Charles Tyrwhitt",
+    "asos.com": "ASOS",
+    "mango.com": "Mango",
+}
 _MAX_PER_DOMAIN = {domain: threading.BoundedSemaphore(2) for domain in CATALOG}
 _TAVILY_DISABLED = False
 _TAVILY_DISABLED_REASON: str | None = None
@@ -261,7 +271,10 @@ def _record(
     )
     if not image:
         return None
-    brand = item.get("brand") or group.get("brand")
+    brand = (
+        item.get("brandName") or group.get("brandName")
+        or item.get("brand") or group.get("brand")
+    )
     if isinstance(brand, dict):
         brand = brand.get("name")
     canonical = _canonical(page_url)
@@ -271,7 +284,7 @@ def _record(
         "source": domain,
         "source_url": canonical,
         "title": title,
-        "brand": str(brand or title.split()[0]),
+        "brand": str(brand or _HOUSE_BRANDS.get(domain) or title.split()[0]),
         "price_gbp": price,
         "size": None,
         "description": None,
@@ -553,7 +566,7 @@ def _tavily_records(
             "source": domain,
             "source_url": canonical,
             "title": title,
-            "brand": str(title.split()[0]),
+            "brand": _HOUSE_BRANDS.get(domain, str(title.split()[0])),
             "price_gbp": price,
             "size": None,
             "description": None,

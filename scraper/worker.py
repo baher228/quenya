@@ -16,7 +16,7 @@ from psycopg.types.json import Jsonb
 from scrapling.fetchers import StealthyFetcher
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from app.sources.listing_readers import parse_listing
+from app.sources.listing_readers import infer_category, parse_listing
 
 ROOT = Path(__file__).resolve().parent
 UA = (
@@ -110,13 +110,18 @@ def _scroll_listing(page):
         page.wait_for_timeout(350)
 
 
-def _fetch(url):
+def _fetch(url, timeout_seconds=45):
     last_error = None
+    deadline = time.monotonic() + max(1, timeout_seconds)
     for attempt in range(2):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
         try:
             page = StealthyFetcher.fetch(
-                url, headless=True, network_idle=True, load_dom=True, wait=1200,
-                page_action=_scroll_listing, timeout=25000, locale="en-GB",
+                url, headless=True, load_dom=True, wait=3000,
+                page_action=_scroll_listing, timeout=max(1000, int(remaining * 1000)),
+                locale="en-GB",
                 timezone_id="Europe/London",
             )
             body = getattr(page, "body", b"")
@@ -125,8 +130,8 @@ def _fetch(url):
                 return html, str(getattr(page, "url", url) or url)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-        if attempt == 0:
-            time.sleep(5)
+        if attempt == 0 and time.monotonic() < deadline:
+            time.sleep(min(5, max(0, deadline - time.monotonic())))
     if last_error:
         raise last_error
     return "", url
@@ -170,23 +175,13 @@ def _ensure_bucket(client, supabase_url, secret):
         response.raise_for_status()
 
 
-def _category(url):
-    path = url.lower()
-    for words, category in (
-        (("knit", "jumper", "sweater"), "knitwear"),
-        (("shirt", "top"), "top"),
-        (("trouser", "jean", "denim"), "bottom"),
-        (("jacket", "coat", "outerwear"), "outerwear"),
-        (("dress", "skirt"), "dress"),
-        (("suit", "tailor"), "tailoring"),
-    ):
-        if any(word in path for word in words):
-            return category
-    return "clothing"
+def _category(title, url):
+    return infer_category(title, url)
 
 
 def run(args):
     _env()
+    deadline = time.monotonic() + max(0, args.time_budget) * 60
     selected = set(filter(None, (args.shops or "").split(",")))
     pages = {
         shop: entries[:args.max_pages] if args.max_pages else entries
@@ -199,30 +194,47 @@ def run(args):
     secret = os.getenv("SUPABASE_SECRET_KEY", "")
     db_url = os.getenv("SUPABASE_DB_URL", "")
     counts = {shop: {"fetched": 0, "inserted": 0, "skipped": 0, "errors": 0} for shop in pages}
-    with httpx.Client(timeout=30, follow_redirects=True) as client, out.open("w", encoding="utf-8") as output:
+    with httpx.Client(timeout=30, follow_redirects=True) as client, out.open(
+        "w", encoding="utf-8", newline="\n"
+    ) as output:
         if not args.dry_run:
             if not supabase_url or not secret or not db_url:
                 raise RuntimeError("SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_DB_URL are required")
             _ensure_bucket(client, supabase_url, secret)
         connection = psycopg.connect(db_url) if not args.dry_run else None
         try:
+            stop = False
             for shop, categories in pages.items():
                 last_request = 0.0
                 for gender, url in categories:
+                    if time.monotonic() >= deadline:
+                        print("Time budget reached; keeping written output.", flush=True)
+                        stop = True
+                        break
                     wait = 5 - (time.monotonic() - last_request)
                     if last_request and wait > 0:
                         time.sleep(wait)
+                    if time.monotonic() >= deadline:
+                        print("Time budget reached; keeping written output.", flush=True)
+                        stop = True
+                        break
+                    page_started = time.monotonic()
+                    parsed_count = 0
                     try:
                         last_request = time.monotonic()
-                        html, final_url = _fetch(url)
+                        html, final_url = _fetch(
+                            url, timeout_seconds=min(45, deadline - page_started)
+                        )
                         records = parse_listing(html, final_url, shop, gender)
+                        parsed_count = len(records)
                         counts[shop]["fetched"] += len(records)
                         for record in records:
                             row = {
                                 "url": record["source_url"], "source": shop,
                                 "title": record["title"], "brand": record.get("brand"),
                                 "price_gbp": record["price_gbp"], "gender": gender,
-                                "category": _category(url), "condition": "new",
+                                "category": _category(record.get("title"), url),
+                                "condition": "new",
                                 "image_url_original": record["image_url"],
                                 "record": record,
                             }
@@ -256,6 +268,15 @@ def run(args):
                                 counts[shop]["errors"] += 1
                     except Exception:  # noqa: BLE001
                         counts[shop]["errors"] += 1
+                    finally:
+                        output.flush()
+                        print(
+                            f"{shop} {url} {time.monotonic() - page_started:.1f}s "
+                            f"parsed={parsed_count}",
+                            flush=True,
+                        )
+                if stop:
+                    break
         finally:
             if connection:
                 connection.close()
@@ -267,6 +288,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--shops", help="comma-separated shop domains")
     parser.add_argument("--max-pages", type=int, default=0, help="maximum pages per shop")
+    parser.add_argument("--time-budget", type=float, default=12, help="overall time budget in minutes")
     run(parser.parse_args())
 
 

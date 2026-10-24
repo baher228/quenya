@@ -25,7 +25,11 @@ The JSONL output is written under `scraper\out\`. Import to Supabase with:
 python worker.py --shops cos.com,arket.com --max-pages 2
 ```
 
-The worker waits at least five seconds between category pages for the same shop.
+The worker waits at least five seconds between category pages for the same shop,
+does not wait for network idle, and limits each page fetch to about 45 seconds.
 `--max-pages` is per shop; `--shops` accepts a comma-separated domain allowlist.
+`--time-budget` sets the overall run limit in minutes (default: 12); completed
+JSONL rows are flushed as the run proceeds, and the worker stops between pages
+when the budget is reached.
 Create the database objects with `supabase/quenya_listings.sql` before the first
 non-dry run. The worker does not use PostgREST.
