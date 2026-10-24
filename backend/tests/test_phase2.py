@@ -188,10 +188,18 @@ def test_settle_profile_steps_existing_weights_and_decays_dropped_keys():
 
     settled, blocked = taste.settle_profile(new, previous, {}, "")
 
-    assert settled["likes"]["workwear"] == pytest.approx(0.6)
+    assert settled["likes"]["workwear"] == pytest.approx(0.1)
     assert settled["likes"]["heritage"] == pytest.approx(0.2)
     assert "quiet" not in settled["likes"]
     assert blocked == {"quiet"}
+
+
+def test_settle_profile_drops_gender_filter_keys_from_existing_profiles():
+    profile = _taste_profile(likes={"gender:both": 1.0}, avoids={})
+
+    settled, _blocked = taste.settle_profile(profile, profile, {}, "")
+
+    assert settled["likes"] == {}
 
 
 def test_settle_profile_explicit_text_bypasses_gates_and_allows_removal():

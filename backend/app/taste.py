@@ -244,7 +244,7 @@ def _canonical_weights(weights: dict[str, Any]) -> dict[str, float]:
     canonical: dict[str, float] = {}
     for key, weight in weights.items():
         token = norm_token(key)
-        if token:
+        if token and not _is_junk_key(key, token):
             canonical[token] = max(canonical.get(token, 0.0), float(weight))
     return canonical
 
@@ -348,7 +348,7 @@ def settle_profile(
                 else:
                     delta = max(-0.3, min(0.3, llm_value - old_weight))
                     weights[key] = old_weight + delta
-            elif status == "weak":
+            elif status in ("weak", "unseen"):
                 if llm_value is None:
                     decayed = old_weight - 0.3
                     if decayed >= 0.1:

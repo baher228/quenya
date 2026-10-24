@@ -19,11 +19,15 @@ def _reason(
     evidence: dict[str, dict[str, int]],
     base_rate: float,
     original: str,
+    *,
+    protected: bool = False,
 ) -> tuple[str, int, int, float]:
     seen, kept, passed = taste._key_evidence(key, evidence)
     z = taste._evidence_z(kept, passed, base_rate) if seen else 0.0
     if taste._is_junk_key(original, key):
         reason = "junk"
+    elif protected:
+        reason = "protected"
     else:
         other_field = "avoids" if field == "likes" else "likes"
         opposite_keys = {
@@ -55,12 +59,13 @@ def resettle(board_id: str | None = None, *, apply: bool = False) -> int:
         evidence = db.tag_evidence(board["id"])
         swipes, base_rate = _base_rate(board["id"])
         history_text = "\n".join(db.explicit_history_lines(board["id"]))
+        brief_text = _compact(board["brief"])
         settled, _blocked = taste.settle_profile(
             previous,
             previous,
             evidence,
             "",
-            _compact(board["brief"]),
+            brief_text,
             history_text=history_text,
             base_rate=base_rate,
             mode="cleanup",
@@ -79,8 +84,18 @@ def resettle(board_id: str | None = None, *, apply: bool = False) -> int:
                     and float(new_weight) == float(old_weight)
                 ):
                     continue
+                protected = new_weight is not None and (
+                    taste._word_boundary_match(key, brief_text)
+                    or taste._word_boundary_match(key, history_text)
+                )
                 reason, kept, passed, z = _reason(
-                    field, key, previous, evidence, base_rate, original
+                    field,
+                    key,
+                    previous,
+                    evidence,
+                    base_rate,
+                    original,
+                    protected=protected,
                 )
                 if new_weight is None:
                     removed += 1
