@@ -960,6 +960,62 @@ def unconsumed_signals(profile_id: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def explicit_history_lines(profile_id: str) -> list[str]:
+    init_db()
+    with db_connection() as connection:
+        outfit_rows = connection.execute(
+            """SELECT * FROM outfits WHERE profile_id=? AND verdict IS NOT NULL
+               ORDER BY created_at""",
+            (profile_id,),
+        ).fetchall()
+        correction_rows = connection.execute(
+            """SELECT c.*, i.title FROM corrections c LEFT JOIN items i
+               ON c.kind='tag' AND i.id=c.target_id
+               WHERE c.profile_id=? AND c.kind IN ('tag', 'brief')
+               ORDER BY c.created_at""",
+            (profile_id,),
+        ).fetchall()
+        upload_rows = connection.execute(
+            """SELECT * FROM uploads WHERE profile_id=? AND read_json IS NOT NULL
+               ORDER BY created_at""",
+            (profile_id,),
+        ).fetchall()
+
+    lines = []
+    for outfit in outfit_rows:
+        pieces = [
+            get_item_with_tags(item_id)
+            for item_id in json.loads(outfit["piece_ids_json"])
+        ]
+        categories = [
+            (item.get("tags") or {}).get("category", item["title"])
+            for item in pieces
+            if item
+        ]
+        action = "liked" if outfit["verdict"] == "like" else "rejected"
+        line = f'- outfit {action} "{outfit["title"]}": {" + ".join(categories)}'
+        if outfit["reason"]:
+            line += f' | reason: "{outfit["reason"]}"'
+        lines.append(line)
+    for correction in correction_rows:
+        if correction["kind"] == "brief":
+            lines.append(f'- brief: "{correction["note"]}"')
+        else:
+            correction = dict(correction)
+            title = correction.get("title") or correction["target_id"]
+            lines.append(
+                f'- tag correction on "{title}": "{correction["note"]}"'
+            )
+    for upload in upload_rows:
+        read = json.loads(upload["read_json"] or "{}")
+        lines.append(
+            f'- inspiration photo: {read.get("one_line", "")} | '
+            f'{", ".join(read.get("aesthetics", []))} | '
+            f'palette {", ".join(read.get("palette", []))}'
+        )
+    return lines
+
+
 def save_taste_version(
     profile_id: str,
     version: int,

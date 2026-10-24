@@ -122,7 +122,7 @@ def test_settle_profile_gates_new_likes_and_avoids_and_filters_changes():
     previous = _taste_profile(likes={}, avoids={})
 
     one_pass, blocked = taste.settle_profile(
-        _taste_profile(avoids={"quiet luxury": 0.9}),
+        _taste_profile(likes={}, avoids={"quiet luxury": 0.9}),
         previous,
         {"quiet luxury": {"kept": 0, "passed": 1}},
         "",
@@ -131,16 +131,17 @@ def test_settle_profile_gates_new_likes_and_avoids_and_filters_changes():
     assert blocked == {"quiet luxury"}
 
     two_passes, blocked = taste.settle_profile(
-        _taste_profile(avoids={"quiet luxury": 0.9}),
+        _taste_profile(likes={}, avoids={"quiet luxury": 0.9}),
         previous,
-        {"quiet luxury": {"kept": 1, "passed": 2}},
+        {"quiet luxury": {"kept": 5, "passed": 15}},
         "",
+        base_rate=0.45,
     )
     assert two_passes["avoids"] == {"quiet luxury": 0.5}
     assert blocked == set()
 
     equal_passes, blocked = taste.settle_profile(
-        _taste_profile(avoids={"quiet luxury": 0.9}),
+        _taste_profile(likes={}, avoids={"quiet luxury": 0.9}),
         previous,
         {"quiet luxury": {"kept": 2, "passed": 2}},
         "",
@@ -166,15 +167,16 @@ def test_settle_profile_gates_new_likes_and_avoids_and_filters_changes():
         previous,
         {"workwear": {"kept": 2, "passed": 0}},
         "",
+        base_rate=0.2,
     )
-    assert two_keeps["likes"] == {"aesthetic:workwear": 0.5}
+    assert two_keeps["likes"] == {"workwear": 0.5}
     assert blocked == set()
 
     unseen, blocked = taste.settle_profile(
-        _taste_profile(avoids={"logo": 0.9}), previous, {}, ""
+        _taste_profile(likes={}, avoids={"logo": 0.9}), previous, {}, ""
     )
-    assert unseen["avoids"] == {"logo": 0.5}
-    assert blocked == set()
+    assert unseen["avoids"] == {}
+    assert blocked == {"logo"}
 
 
 def test_settle_profile_steps_existing_weights_and_decays_dropped_keys():
@@ -186,14 +188,22 @@ def test_settle_profile_steps_existing_weights_and_decays_dropped_keys():
 
     settled, blocked = taste.settle_profile(new, previous, {}, "")
 
-    assert settled["likes"]["style:workwear"] == pytest.approx(0.6)
+    assert settled["likes"]["workwear"] == pytest.approx(0.1)
     assert settled["likes"]["heritage"] == pytest.approx(0.2)
     assert "quiet" not in settled["likes"]
-    assert blocked == set()
+    assert blocked == {"quiet"}
+
+
+def test_settle_profile_drops_gender_filter_keys_from_existing_profiles():
+    profile = _taste_profile(likes={"gender:both": 1.0}, avoids={})
+
+    settled, _blocked = taste.settle_profile(profile, profile, {}, "")
+
+    assert settled["likes"] == {}
 
 
 def test_settle_profile_explicit_text_bypasses_gates_and_allows_removal():
-    new = _taste_profile(avoids={"logos": 0.9})
+    new = _taste_profile(likes={}, avoids={"logos": 0.9})
     settled, blocked = taste.settle_profile(
         new,
         _taste_profile(likes={}, avoids={}),
@@ -212,7 +222,7 @@ def test_settle_profile_explicit_text_bypasses_gates_and_allows_removal():
         brief_text="",
     )
     assert removed["avoids"] == {}
-    assert blocked == set()
+    assert blocked == {"logos"}
 
 
 def test_normalised_prefixes_and_word_boundaries_match_evidence():
@@ -230,17 +240,18 @@ def test_normalised_prefixes_and_word_boundaries_match_evidence():
     assert blocked == {"dark grey"}
 
     red, blocked = taste.settle_profile(
-        _taste_profile(avoids={"red": 0.9}, changes=["Tailored trousers"]),
+        _taste_profile(likes={}, avoids={"red": 0.9}, changes=["Tailored trousers"]),
         previous,
         {"tailored trousers": {"kept": 0, "passed": 1}},
         "",
     )
-    assert red["avoids"] == {"red": 0.5}
+    assert red["avoids"] == {}
     assert red["changes"] == ["Tailored trousers"]
-    assert blocked == set()
+    assert blocked == {"red"}
 
     boundary, blocked = taste.settle_profile(
         _taste_profile(
+            likes={},
             avoids={"red": 0.9},
             changes=["Tailored trousers", "Red boots passed"],
         ),
@@ -256,7 +267,7 @@ def test_normalised_prefixes_and_word_boundaries_match_evidence():
 def test_brief_mention_skips_new_key_gate_but_not_caps_or_existing_step():
     previous = _taste_profile(likes={}, avoids={})
     new_avoid, blocked = taste.settle_profile(
-        _taste_profile(avoids={"quiet luxury": 0.9}),
+        _taste_profile(likes={}, avoids={"quiet luxury": 0.9}),
         previous,
         {},
         "",
@@ -272,7 +283,7 @@ def test_brief_mention_skips_new_key_gate_but_not_caps_or_existing_step():
         "",
         brief_text="Style vintage",
     )
-    assert existing_like["likes"]["style_vintage"] == pytest.approx(0.6)
+    assert existing_like["likes"]["vintage"] == pytest.approx(0.6)
     assert blocked == set()
 
 
@@ -281,7 +292,8 @@ def test_settle_profile_returns_new_unchanged_without_previous():
 
     settled, blocked = taste.settle_profile(new, None, {}, "")
 
-    assert settled is new
+    assert settled["likes"] == {"untested": 0.9}
+    assert settled is not new
     assert blocked == set()
 
 
@@ -488,9 +500,8 @@ def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, 
     assert version == 2
     assert profile["price_ceiling_gbp"] == 100
     assert profile["condition_preference"] == "second-hand"
-    assert len(profile["likes"]) == 15
-    assert set(profile["likes"].values()) == {0.5}
-    assert profile["avoids"] == {"avoid": 0.0}
+    assert profile["likes"] == {"casual": 0.5}
+    assert profile["avoids"] == {}
     assert profile["changes"] == []
     assert "Current profile (v1):" in prompts[0]
     assert "New signals:" in prompts[0]

@@ -1,6 +1,30 @@
 import json
 import random
+import re
 from typing import Any
+
+_KEY_PREFIX = re.compile(
+    r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
+    r"category|categories|material|materials|fit|era|brand|brands|slot|"
+    r"pattern|patterns|condition|gender)"
+    r"(?=[:_\-\s])[:_\-\s]+"
+)
+
+
+def norm_token(value: Any) -> str:
+    token = _KEY_PREFIX.sub("", str(value).strip().lower(), count=1)
+    return " ".join(token.replace("_", " ").replace("-", " ").split())
+
+
+def _whole_word_match(left: str, right: str) -> bool:
+    left = norm_token(left)
+    right = norm_token(right)
+    if not left or not right:
+        return False
+    return bool(
+        re.search(r"\b" + re.escape(left) + r"\b", right)
+        or re.search(r"\b" + re.escape(right) + r"\b", left)
+    )
 
 
 def tags_for(item: dict[str, Any]) -> dict[str, Any]:
@@ -32,17 +56,19 @@ def tokens(item: dict[str, Any]) -> set[str]:
 
 
 def score_item(item: dict[str, Any], profile: dict[str, Any]) -> float:
-    item_tokens = tokens(item)
+    item_tokens = {norm_token(token) for token in tokens(item)}
     likes = profile.get("likes") or {}
     avoids = profile.get("avoids") or {}
 
     def match_score(weights: dict[str, float]) -> float:
         total = 0.0
         for key, weight in weights.items():
-            token = str(key).lower()
+            token = norm_token(key)
+            if not token:
+                continue
             if token in item_tokens:
                 total += float(weight)
-            elif any(token in value or value in token for value in item_tokens):
+            elif any(_whole_word_match(token, value) for value in item_tokens):
                 total += 0.5 * float(weight)
         return total
 
