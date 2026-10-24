@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "cd frontend && npm ci",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
+  "framework": "vite",
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://club-decide-washington-commercial.trycloudflare.com/api/:path*" },
     { "source": "/img/:path*", "destination": "https://club-decide-washington-commercial.trycloudflare.com/img/:path*" },
