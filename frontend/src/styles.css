@@ -5,9 +5,11 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body,#root{height:100%}
+html{background:var(--bg)}
 body{background:var(--bg);color:var(--text);font:14px/1.4 "Hanken Grotesk",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,textarea{font:inherit;color:inherit}
 button{background:none;border:0;cursor:pointer}
+button{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 button:disabled{opacity:.45;cursor:default}
 a{color:inherit}
 img{display:block}
@@ -25,6 +27,12 @@ img{display:block}
   .phone .body{padding:2px 16px 20px}
   .phone .boards{padding:2px 16px 8px}
   .phone .h1{font-size:28px}
+  .phone .tabs{padding-bottom:max(10px,env(safe-area-inset-bottom))}
+}
+@media (display-mode:standalone){
+  html,body{background:var(--phone);overscroll-behavior:none}
+  .stage{padding:0}.phone{width:100vw;height:100dvh;border-radius:0;box-shadow:none}
+  .phone .top{padding-top:calc(12px + env(safe-area-inset-top))}
   .phone .tabs{padding-bottom:max(10px,env(safe-area-inset-bottom))}
 }
 input,textarea,select{font-size:16px!important}
