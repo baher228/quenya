@@ -11,6 +11,7 @@ export const DEFAULT_BRIEF: Brief = {
   text: "Autumn in London. Workwear but cleaner, Japanese labels, things that age well. No big logos.",
   looking_for: "outfits",
   pieces: ["outerwear", "knitwear", "bottom", "shoes"],
+  include_shoes: true,
   gender: "menswear",
   condition: "both",
   niche: 0.7,
@@ -18,8 +19,8 @@ export const DEFAULT_BRIEF: Brief = {
   sizes: { tops: "M", waist: "32", shoes: "9" },
 };
 
-export function BriefScreen({ initial, busy, onSubmit }: {
-  initial: Brief; busy: boolean; onSubmit: (b: Brief, photos: File[]) => void;
+export function BriefScreen({ initial, busy, onSubmit, hasBoards }: {
+  initial: Brief; busy: boolean; onSubmit: (b: Brief, photos: File[]) => void; hasBoards: boolean;
 }) {
   const [b, setB] = useState<Brief>(initial);
   const [photos, setPhotos] = useState<File[]>([]);
@@ -33,6 +34,7 @@ export function BriefScreen({ initial, busy, onSubmit }: {
     <section className="screen">
       <p className="eyebrow">New brief</p>
       <h1 className="h1">Tell us what you're after.</h1>
+      {hasBoards && <p className="small muted lede">We'll file it under the board it fits, or start a new one. Gym likes stay out of your city outfits.</p>}
 
       <label className="field">
         <span className="lbl">In your words</span>
@@ -46,6 +48,12 @@ export function BriefScreen({ initial, busy, onSubmit }: {
       <div className="group"><span className="lbl">Looking for</span>
         <Seg value={b.looking_for} onChange={v => set("looking_for", v)}
           options={[["outfits", "Outfits"], ["pieces", "Single pieces"]]} /></div>
+
+      {b.looking_for === "outfits" && (
+        <div className="group"><span className="lbl">Shoes</span>
+          <Seg value={b.include_shoes ? "yes" : "no"} onChange={v => set("include_shoes", v === "yes")}
+            options={[["yes", "Include shoes"], ["no", "Clothes only"]]} /></div>
+      )}
 
       {b.looking_for === "pieces" && (
         <div className="group"><span className="lbl">Pieces</span>

@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Loading } from "./ui";
-import type { TaskStats, TasteState } from "./types";
+import type { Board, TaskStats, TasteState } from "./types";
 
 const TASK_LABEL: Record<string, string> = {
-  tagger: "Listing tagger", taste: "Taste updater", stylist: "Outfit stylist", reader: "Photo reader",
+  tagger: "Listing tagger", taste: "Taste updater", stylist: "Outfit stylist", reader: "Photo reader", router: "Board router",
 };
 
-export function TasteScreen({ taste, refresh, onUpload, onReset }: {
-  taste: TasteState | null; refresh: () => void; onUpload: (f: File) => Promise<void>; onReset: () => void;
+export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
+  taste: TasteState | null; board: Board | null; refresh: () => void; onUpload: (f: File) => Promise<void>; onReset: () => void;
 }) {
   const [stats, setStats] = useState<TaskStats[] | null>(null);
   const [statsErr, setStatsErr] = useState<unknown>(null);
@@ -24,18 +24,32 @@ export function TasteScreen({ taste, refresh, onUpload, onReset }: {
     ...Object.entries(p.likes).map(([k, v]) => [k, v] as const),
     ...Object.entries(p.avoids).map(([k, v]) => [k, -v] as const),
   ].sort((a, b) => b[1] - a[1]) : [];
+  const core = taste?.core;
+  const coreLikes = core ? [
+    ...Object.entries(core.likes).map(([k, v]) => [k, v] as const),
+    ...Object.entries(core.avoids).map(([k, v]) => [k, -v] as const),
+  ].slice(0, 8) : [];
   const shown = bars.length > 10 ? [...bars.slice(0, 7), ...bars.slice(-3)] : bars;
 
   return (
     <section className="screen">
-      <p className="eyebrow">Your taste{taste?.current ? ` · v${taste.current.version}` : ""}</p>
+      <p className="eyebrow">{board ? board.label : "Your taste"}{taste?.current ? ` · v${taste.current.version}` : ""}</p>
       <h1 className="h1">What we've learned.</h1>
       {!taste && <Loading>Loading your profile</Loading>}
       {taste && !p && <p className="muted">No profile yet. Start with a brief.</p>}
       {p && (
         <>
           <p className="summary">{p.summary}</p>
-          <div className="panel"><span className="lbl">Weights</span>
+          {core && (core.rules.length > 0 || coreLikes.length > 0 || core.palette.length > 0) && (
+            <div className="panel core"><span className="lbl">Across your boards <em>applies everywhere</em></span>
+              {core.rules.length > 0 && <ul className="rules">{core.rules.map(r => <li key={r.rule}>{r.rule}<span className="from"> · {r.boards.join(", ")}</span></li>)}</ul>}
+              <div className="chips">
+                {coreLikes.map(([k, v]) => <span key={k} className={"chip static " + (v > 0 ? "pos" : "neg")}>{v > 0 ? "+" : "−"} {k}</span>)}
+                {core.palette.map(c => <span key={c} className="chip static">{c}</span>)}
+              </div>
+            </div>
+          )}
+          <div className="panel"><span className="lbl">This board</span>
             {shown.map(([k, v]) => (
               <div key={k} className={"bar" + (v < 0 ? " neg" : "")}><span>{k}</span><i style={{ width: `${Math.abs(v) * 100}%` }} /><em>{v > 0 ? "+" : "−"}{Math.abs(v).toFixed(1)}</em></div>
             ))}
@@ -92,7 +106,7 @@ export function TasteScreen({ taste, refresh, onUpload, onReset }: {
         <p className="small muted">Every call goes through Mubit with a fixed prompt per task, and your corrections are sent as calls of the same task.</p>
       </div>
 
-      <button className="btn ghost wide danger" onClick={onReset}>Reset demo profile</button>
+      <button className="btn ghost wide danger" onClick={onReset}>Reset all boards</button>
     </section>
   );
 }
