@@ -42,6 +42,7 @@ export default function App() {
   const activeBoard = boards.find(b => b.active) ?? null;
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
   useEffect(refreshBoards, [refreshBoards]);
+  useEffect(() => { if (tab === "swipe" && picking) refreshBoards(); }, [tab, picking, refreshBoards]);
   useEffect(() => { if (!routeNote) return; const h = window.setTimeout(() => setRouteNote(null), 15000); return () => window.clearTimeout(h); }, [routeNote]);
 
   const version = taste?.current?.version ?? null;
@@ -51,8 +52,8 @@ export default function App() {
   const announce = useCallback((t: TasteVersion | null | undefined, why: string) => {
     if (!t) return;
     setToast({ id: Date.now(), title: `Taste v${t.version} · ${why}`, lines: (t.changes ?? t.profile?.changes ?? []).slice(0, 3) });
-    refreshTaste();
-  }, [refreshTaste]);
+    refreshTaste(); refreshBoards();
+  }, [refreshTaste, refreshBoards]);
   useEffect(() => { if (!toast) return; const h = window.setTimeout(() => setToast(null), 6000); return () => window.clearTimeout(h); }, [toast]);
 
   const runUpdate = useCallback(async (why: string) => {
