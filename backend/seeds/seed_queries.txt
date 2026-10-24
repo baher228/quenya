@@ -1,0 +1,43 @@
+# gender|query  (m = menswear, w = womenswear, u = either)
+m|japanese chore jacket
+m|corduroy chore jacket
+m|carhartt double knee
+m|pleated wool trousers
+m|vintage fair isle jumper
+m|barbour wax jacket
+m|arcteryx shell jacket
+m|new balance 990
+m|dr martens loafers
+m|selvedge denim jeans
+m|vintage band tee
+m|linen overshirt
+m|oxford button down shirt
+m|ralph lauren cable knit
+m|suede chelsea boots
+m|fleece jacket patagonia
+m|cargo trousers
+m|vintage leather jacket
+m|stussy tee
+m|salomon trainers
+w|silk slip skirt
+w|mohair cardigan
+w|ballet flats
+w|vintage levis 501 women
+w|trench coat women
+w|knee high boots
+w|maxi skirt
+w|cropped cardigan
+w|wrap dress
+w|wide leg trousers women
+w|vintage leather jacket women
+w|cashmere jumper women
+w|mary jane shoes
+w|lace cami top
+w|wool coat women
+w|baggy jeans women
+w|western boots women
+w|shoulder bag leather
+u|oakley sunglasses vintage
+u|suede western boots
+u|beanie wool
+u|leather belt vintage

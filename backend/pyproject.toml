@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quenya-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "openai>=1.55",
+    "httpx>=0.27",
+    "pydantic>=2",
+    "pillow>=10",
+    "vinted-scraper>=5",
+    "scrapling[fetchers]>=0.2",
+    "tavily-python>=0.5",
+    "python-dotenv>=1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/prompts.py" = ["E501"]
