@@ -121,7 +121,8 @@ def _ensure_storage_bucket() -> tuple[str, str, dict[str, str]]:
     headers = _storage_headers(secret)
     bucket_url = f"{base_url}/storage/v1/bucket/{images.STORAGE_BUCKET}"
     response = httpx.get(bucket_url, headers=headers, timeout=15)
-    if response.status_code == 404:
+    # Supabase answers 400 "Bucket not found" rather than 404 for a missing bucket.
+    if response.status_code in (400, 404):
         response = httpx.post(
             f"{base_url}/storage/v1/bucket",
             headers={**headers, "Content-Type": "application/json"},
