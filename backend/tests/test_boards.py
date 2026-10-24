@@ -509,6 +509,62 @@ def test_swipes_and_deck_exclusions_are_board_local(monkeypatch, tmp_path):
     assert [entry["id"] for entry in phase2_api.deck(1)] == ["item-1"]
 
 
+def test_swipe_history_counts_all_board_swipes_and_sorts_tags(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    db.create_profile("board-a", _brief(), active=True)
+    db.create_profile("board-b", _brief(), active=False)
+    items = [
+        _item("kept-1", "top"),
+        _item("kept-2", "outerwear"),
+        _item("passed", "bottom"),
+        _item("other-board", "top"),
+    ]
+    items[0]["tags"].update(
+        category="shirt", aesthetics=["workwear", "heritage"], colours=["olive"]
+    )
+    items[1]["tags"].update(
+        category="jacket", aesthetics=["workwear"], colours=["brown", "olive"]
+    )
+    items[2]["tags"].update(
+        category="trousers", aesthetics=["ignored"], colours=["black"]
+    )
+    items[3]["tags"].update(
+        category="other", aesthetics=["other-board"], colours=["purple"]
+    )
+    db.insert_items(
+        [
+            {
+                    "id": item["id"],
+                    "source": "vinted",
+                    "source_url": f"https://vinted.test/{item['id']}",
+                    "title": item["id"],
+                "price_gbp": item["price_gbp"],
+                "image_url": f"https://image.test/{item['id']}.jpg",
+                "raw_json": {},
+            }
+            for item in items
+        ]
+    )
+    for item in items:
+        db.save_tags(item["id"], item["tags"], "mreq-tag")
+    db.insert_swipe("board-a", "kept-1", True)
+    db.insert_swipe("board-a", "kept-2", True)
+    db.insert_swipe("board-a", "passed", False)
+    db.insert_swipe("board-b", "other-board", True)
+    with db.db_connection() as connection:
+        connection.execute(
+            "UPDATE swipes SET consumed_version=1 WHERE profile_id='board-a'"
+        )
+
+    assert db.swipe_history("board-a") == {
+        "kept": 2,
+        "passed": 1,
+        "aesthetics": [("workwear", 2), ("heritage", 1)],
+        "categories": [("jacket", 1), ("shirt", 1)],
+        "colours": [("olive", 2), ("brown", 1)],
+    }
+
+
 def test_corrected_route_is_in_next_router_context(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     route_id = db.create_route(

@@ -52,6 +52,7 @@ def stylist_user_content(
     pool: list[dict[str, Any]],
     *,
     core_rules: list[str] | None = None,
+    history: dict[str, Any] | None = None,
     include_shoes: bool = True,
 ) -> str:
     lines = [
@@ -68,10 +69,27 @@ def stylist_user_content(
         if not include_shoes
         else f"Request: build {count} outfits. Locked piece ids: {json.dumps(locked_ids)}."
     )
+    profile_for_stylist = {
+        key: value for key, value in profile.items() if key != "changes"
+    }
     content = (
-        f"Profile:\n{json.dumps(profile, ensure_ascii=False, separators=(',', ':'))}\n\n"
-        f"{request}\n\nPool:\n" + "\n".join(lines)
+        f"Profile:\n{json.dumps(profile_for_stylist, ensure_ascii=False, separators=(',', ':'))}"
     )
+    if history is not None:
+        history_line = (
+            "Overall history for this style (all swipes): "
+            f"kept {history.get('kept', 0)}, passed {history.get('passed', 0)}."
+        )
+        most_kept = []
+        for key in ("aesthetics", "categories", "colours"):
+            entries = history.get(key) or []
+            if entries:
+                values = ", ".join(f"{name} {count}" for name, count in entries[:5])
+                most_kept.append(f"{key} {values}")
+        if most_kept:
+            history_line += " Most kept: " + "; ".join(most_kept)
+        content += "\n" + history_line
+    content += f"\n\n{request}\n\nPool:\n" + "\n".join(lines)
     if core_rules:
         content += (
             "\nShared rules across the shopper's boards: "
