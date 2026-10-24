@@ -471,6 +471,99 @@ def test_sport_search_does_not_refetch_cached_source_url(monkeypatch):
     assert report["nike.com"]["cached_url"] >= 1
 
 
+def test_sport_listing_harvester_filters_and_caps_links():
+    listing_url = "https://www.nike.com/gb/w/mens-running-jackets"
+    cached = {
+        sport._canonical("https://www.nike.com/gb/t/cached-shell-CACHED01")
+    }
+    links, skipped = sport._harvest_product_links(
+        (FIXTURES / "sport_listing.html").read_text(),
+        listing_url,
+        "nike.com",
+        cached,
+        set(),
+    )
+    assert len(links) == 6
+    assert links[0] == "https://www.nike.com/gb/t/running-jacket-100001"
+    assert links[-1] == "https://www.nike.com/gb/t/running-jacket-100006"
+    assert {
+        item["reason"] for item in skipped
+    } == {"cached_url", "cross_domain_link", "duplicate_url", "not_product_url"}
+    assert all("decathlon" not in link for link in links)
+
+
+def test_sport_search_rotates_domain_pairs(monkeypatch):
+    calls = []
+
+    class Tavily:
+        def search(self, **kwargs):
+            calls.append(kwargs["include_domains"])
+            return {"results": []}
+
+    monkeypatch.setattr(sport, "_tavily_client", lambda: Tavily())
+    records, report = sport.search_context(
+        [f"query {index}" for index in range(8)],
+        "gym",
+        "m",
+        max_searches=8,
+    )
+    assert records == []
+    assert calls == [
+        ["gymshark.com", "nike.com"],
+        ["underarmour.co.uk", "lululemon.co.uk"],
+        ["decathlon.co.uk", "sportsdirect.com"],
+        ["gymshark.com", "nike.com"],
+    ]
+    assert report["candidate_diagnostics"] == []
+
+
+def test_sport_search_caps_product_fetches(monkeypatch):
+    html = (FIXTURES / "sport_product.html").read_bytes()
+    urls = [
+        f"https://www.nike.com/gb/t/running-shell-{index:06d}"
+        for index in range(20)
+    ]
+
+    class Tavily:
+        def search(self, **_kwargs):
+            return {"results": [{"url": url} for url in urls]}
+
+    monkeypatch.setattr(sport, "_tavily_client", lambda: Tavily())
+    monkeypatch.setattr(
+        sport.Fetcher,
+        "get",
+        lambda url, **_kwargs: SimpleNamespace(status=200, body=html, url=url),
+    )
+    monkeypatch.setattr(sport, "_usable_image", lambda *_args: True)
+    records, report = sport.search_context(
+        ["running shell"], "gym", "m", max_products=99
+    )
+    assert len(records) == 12
+    assert report["nike.com"]["product_fetches"] == 12
+    assert report["nike.com"]["max_products"] == 8
+
+
+def test_sport_candidate_report_keeps_last_30(monkeypatch):
+    class Tavily:
+        def search(self, **_kwargs):
+            return {
+                "results": [
+                    {"url": f"https://example.test/category/{index}"}
+                    for index in range(35)
+                ]
+            }
+
+    monkeypatch.setattr(sport, "_tavily_client", lambda: Tavily())
+    _records, report = sport.search_context(
+        ["query"], "gym", "m", max_searches=1
+    )
+    diagnostics = report["candidate_diagnostics"]
+    assert len(diagnostics) == 30
+    assert diagnostics[0]["url"].endswith("/5")
+    assert diagnostics[-1]["url"].endswith("/34")
+    assert all(item["reason"] == "not_allowed_domain" for item in diagnostics)
+
+
 def test_context_source_selection():
     assert CONTEXT_SOURCES["gym"] == [
         "gymshark.com", "nike.com", "underarmour.co.uk", "lululemon.co.uk",

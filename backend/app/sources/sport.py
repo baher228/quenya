@@ -1,8 +1,9 @@
 import json
 import re
 from collections import defaultdict, deque
+from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from scrapling.fetchers import Fetcher
@@ -69,6 +70,57 @@ def _canonical(url: str) -> str:
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
     return urlunsplit(("https", host, parts.path.rstrip("/"), "", ""))
+
+
+class _AnchorParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "a":
+            self.links.extend(
+                value for name, value in attrs
+                if name.lower() == "href" and value
+            )
+
+
+def _harvest_product_links(
+    html: str,
+    listing_url: str,
+    domain: str,
+    cached_urls: set[str],
+    seen: set[str],
+    *,
+    limit: int = 6,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    parser = _AnchorParser()
+    parser.feed(html or "")
+    harvested = []
+    skipped = []
+    for href in parser.links:
+        absolute = urljoin(listing_url, href)
+        parts = urlsplit(absolute)
+        link_domain = _domain(absolute)
+        canonical = _canonical(absolute)
+        if parts.scheme not in {"http", "https"} or not parts.hostname:
+            reason = "invalid_url"
+        elif link_domain != domain:
+            reason = "cross_domain_link"
+        elif not _product_url(canonical, domain):
+            reason = "not_product_url"
+        elif canonical in cached_urls:
+            reason = "cached_url"
+        elif canonical in seen:
+            reason = "duplicate_url"
+        else:
+            seen.add(canonical)
+            harvested.append(canonical)
+            if len(harvested) >= limit:
+                break
+            continue
+        skipped.append({"url": canonical, "reason": reason})
+    return harvested, skipped
 
 
 def _type_is(value: Any, expected: str) -> bool:
@@ -307,7 +359,10 @@ def _tavily_client():
     return TavilyClient(api_key=TAVILY_API_KEY)
 
 
-def _round_robin(candidates: dict[str, deque[tuple[str, str, str]]], limit: int):
+def _round_robin(
+    candidates: dict[str, deque[tuple[str, str, str, str, str | None]]],
+    limit: int,
+):
     selected = []
     domains = list(candidates)
     while domains and len(selected) < limit:
@@ -329,7 +384,7 @@ def search_context(
     max_searches: int = 4,
     max_products: int = 12,
     cached_urls: set[str] | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     allowed = [
         domain for domain in CONTEXT_SOURCES.get(context, [])
         if domain in PRODUCT_DOMAINS
@@ -337,39 +392,167 @@ def search_context(
     if not allowed or not queries:
         return [], {}
     client = _tavily_client()
-    candidates: dict[str, deque[tuple[str, str, str]]] = {
+    candidates: dict[str, deque[tuple[str, str, str, str, str | None]]] = {
         domain: deque() for domain in allowed
     }
     seen: set[str] = set()
-    for query in queries[:max_searches]:
+    seen_listing_pages: set[str] = set()
+    listing_pages_by_domain: dict[str, int] = defaultdict(int)
+    normalized_cached = {_canonical(url) for url in cached_urls or set()}
+    job_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    candidate_diagnostics: list[dict[str, Any]] = []
+    search_limit = min(max_searches, 4)
+    product_limit = min(max_products, 12)
+
+    def count(domain: str, key: str) -> None:
+        job_counts[domain][key] += 1
+        _REPORT[domain][key] += 1
+
+    def note(
+        url: str,
+        domain: str | None,
+        reason: str | None,
+        source: str,
+        query: str,
+        *,
+        status: str | None = None,
+        listing_url: str | None = None,
+    ) -> None:
+        entry = {
+            "url": url,
+            "domain": domain,
+            "source": source,
+            "query": query,
+            "status": status or ("dropped" if reason else "accepted"),
+            "reason": reason,
+        }
+        if listing_url:
+            entry["listing_url"] = listing_url
+        candidate_diagnostics.append(entry)
+        if len(candidate_diagnostics) > 30:
+            del candidate_diagnostics[:-30]
+
+    def queue_candidate(
+        url: str,
+        domain: str,
+        title: str,
+        query: str,
+        source: str,
+        listing_url: str | None = None,
+    ) -> None:
+        canonical = _canonical(url)
+        if canonical in normalized_cached:
+            count(domain, "cached_url")
+            note(canonical, domain, "cached_url", source, query, listing_url=listing_url)
+        elif canonical in seen:
+            count(domain, "duplicate_url")
+            note(
+                canonical, domain, "duplicate_url", source, query,
+                listing_url=listing_url,
+            )
+        else:
+            seen.add(canonical)
+            candidates[domain].append((canonical, title, query, source, listing_url))
+
+    allowed_set = set(allowed)
+    for query_index, query in enumerate(queries[:search_limit]):
+        first = (query_index * 2) % len(allowed)
+        search_domains = [allowed[first]]
+        if len(allowed) > 1:
+            search_domains.append(allowed[(first + 1) % len(allowed)])
         try:
             result = client.search(
                 query=f"{query} UK",
-                include_domains=allowed,
+                include_domains=search_domains,
                 max_results=12,
                 search_depth="basic",
                 country="united kingdom",
             )
         except Exception:
-            for domain in allowed:
-                _REPORT[domain]["search_error"] += 1
+            for domain in search_domains:
+                count(domain, "search_error")
             continue
         for item in result.get("results", []):
             url = item.get("url") or ""
             domain = _domain(url)
-            if domain not in candidates or url in seen or not _product_url(url, domain):
-                if domain:
-                    _REPORT[domain]["not_product_url"] += 1
+            if not url:
                 continue
-            seen.add(url)
-            if _canonical(url) in (cached_urls or set()):
-                _REPORT[domain]["cached_url"] += 1
+            if domain not in allowed_set:
+                note(url, domain, "not_allowed_domain", "search", query)
                 continue
-            candidates[domain].append((url, item.get("title") or "", query))
-    selected = _round_robin(candidates, max_products)
+            if domain not in search_domains:
+                count(domain, "outside_search_pair")
+                note(url, domain, "outside_search_pair", "search", query)
+                continue
+            canonical = _canonical(url)
+            if _product_url(canonical, domain):
+                queue_candidate(
+                    canonical, domain, item.get("title") or "", query, "search"
+                )
+                continue
+            note(canonical, domain, "not_product_url", "search", query)
+            count(domain, "not_product_url")
+            if domain == "patagonia.com":
+                continue
+            if canonical in seen_listing_pages:
+                count(domain, "duplicate_listing_page")
+                note(
+                    canonical, domain, "duplicate_listing_page", "listing",
+                    query,
+                )
+                continue
+            if listing_pages_by_domain[domain] >= 3:
+                count(domain, "listing_page_cap")
+                note(canonical, domain, "listing_page_cap", "listing", query)
+                continue
+            seen_listing_pages.add(canonical)
+            listing_pages_by_domain[domain] += 1
+            count(domain, "listing_pages")
+            try:
+                page = Fetcher.get(canonical, timeout=18)
+                status = int(getattr(page, "status", 0) or 0)
+                body = getattr(page, "body", b"")
+                html = (
+                    body.decode("utf-8", errors="replace")
+                    if isinstance(body, bytes)
+                    else str(body)
+                )
+            except Exception:
+                count(domain, "listing_fetch_error")
+                note(canonical, domain, "listing_fetch_error", "listing", query)
+                continue
+            if status != 200:
+                reason = "http_404" if status == 404 else f"http_{status}"
+                count(domain, reason)
+                note(canonical, domain, reason, "listing", query)
+                continue
+            links, skipped_links = _harvest_product_links(
+                html, canonical, domain, normalized_cached, seen
+            )
+            for skipped in skipped_links:
+                count(domain, skipped["reason"])
+                note(
+                    skipped["url"], domain, skipped["reason"], "listing_link",
+                    query, listing_url=canonical,
+                )
+            for link in links:
+                count(domain, "harvested_links")
+                candidates[domain].append(
+                    (link, item.get("title") or "", query, "listing", canonical)
+                )
+    selected = _round_robin(candidates, product_limit)
+    selected_urls = {(domain, candidate[0]) for domain, *candidate in selected}
+    for domain, queued in candidates.items():
+        for url, _title, query, source, listing_url in queued:
+            if (domain, url) not in selected_urls:
+                count(domain, "max_products")
+                note(
+                    url, domain, "max_products", source, query,
+                    listing_url=listing_url,
+                )
     records = []
-    for domain, url, _search_title, query in selected:
-        _REPORT[domain]["product_fetches"] += 1
+    for domain, url, _search_title, query, source, listing_url in selected:
+        count(domain, "product_fetches")
         if domain == "patagonia.com":
             try:
                 response = client.extract(
@@ -406,10 +589,21 @@ def search_context(
             record, reason = None, "image_unavailable"
         if record:
             records.append(record)
-            _REPORT[domain]["accepted"] += 1
+            count(domain, "accepted")
+            note(
+                url, domain, None, source, query, listing_url=listing_url
+            )
         else:
-            _REPORT[domain][reason or "invalid"] += 1
-    return records, {domain: dict(counts) for domain, counts in _REPORT.items()}
+            count(domain, reason or "invalid")
+            note(
+                url, domain, reason or "invalid", source, query,
+                listing_url=listing_url,
+            )
+    job_report: dict[str, Any] = {
+        domain: dict(counts) for domain, counts in job_counts.items()
+    }
+    job_report["candidate_diagnostics"] = candidate_diagnostics
+    return records, job_report
 
 
 def report() -> dict[str, dict[str, int]]:
