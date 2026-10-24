@@ -31,7 +31,7 @@ img{display:block}
 }
 @media (display-mode:standalone){
   html,body{background:var(--phone);overscroll-behavior:none}
-  .stage{padding:0}.phone{position:fixed;inset:0;width:auto;height:auto;border-radius:0;box-shadow:none}
+  .stage{padding:0}.phone{position:fixed;top:0;left:0;right:0;width:auto;height:var(--app-h,100dvh);border-radius:0;box-shadow:none}
   .phone .top{padding-top:calc(12px + env(safe-area-inset-top))}
   .phone .tabs{padding-bottom:max(10px,env(safe-area-inset-bottom))}
 }
