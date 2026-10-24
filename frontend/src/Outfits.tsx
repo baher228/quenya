@@ -99,7 +99,7 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
               })()}
               <p className="why"><span>Why this</span>{o.why}</p>
               <ul className="srcs">{o.pieces.map(p => (
-                <li key={p.id}><a href={p.source_url} target="_blank" rel="noreferrer">{p.title}</a><Provenance source={p.source} origin={p.origin} /></li>
+                <li key={p.id}><a href={p.source_url} target="_blank" rel="noreferrer">{p.title}</a><Provenance source={p.source} /></li>
               ))}</ul>
               {!!rowErr[o.id] && <div className="pad"><ErrorBox error={rowErr[o.id]} /></div>}
               <footer>

@@ -129,8 +129,6 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 @keyframes pop{from{transform:scale(.85);opacity:0}}
 
 .prov{font-size:11px;color:var(--soft)}
-.prov em{font-style:normal;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(237,230,218,.1);color:var(--mute)}
-.prov em.live{background:rgba(185,196,168,.18);color:var(--sage)}
 
 .outfits{display:flex;flex-direction:column;gap:18px;margin-top:16px}
 .outfit{background:var(--surf);border-radius:24px;overflow:hidden;animation:rise .4s var(--ease) both}

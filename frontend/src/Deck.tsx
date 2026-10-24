@@ -173,7 +173,7 @@ function Card({ item, depth, onDecide, onOpen, kick, nudge, onTouch }: {
       <div className="meta">
         <div className="row1"><span className="brand">{item.brand || "Unbranded"}</span><span className="price">{gbp(item.price_gbp)}</span></div>
         <div className="name">{item.title}</div>
-        <div className="row3"><Provenance source={item.source} origin={item.origin} condition={t?.condition ?? item.condition} />{item.size ? ` · size ${item.size}` : ""}</div>
+        <div className="row3"><Provenance source={item.source} condition={t?.condition ?? item.condition} />{item.size ? ` · size ${item.size}` : ""}</div>
         {t && <div className="tags">{[t.category, ...t.aesthetics.slice(0, 2), t.era !== "unknown" ? t.era : null].filter(Boolean).map(x => <span key={x} className="tag">{x}</span>)}</div>}
       </div>
     </div>

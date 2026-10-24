@@ -33,7 +33,7 @@ export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
           {items.map(it => (
             <button key={it.id} className="tile" onClick={() => onOpenItem(it)}>
               <img src={img(it)} alt={it.title} loading="lazy" />
-              <span className="t-meta"><b>{gbp(it.price_gbp)}</b><span>{it.title}</span><Provenance source={it.source} origin={it.origin} /></span>
+              <span className="t-meta"><b>{gbp(it.price_gbp)}</b><span>{it.title}</span><Provenance source={it.source} /></span>
             </button>
           ))}
         </div>

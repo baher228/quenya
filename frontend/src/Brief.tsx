@@ -7,6 +7,26 @@ const SLOTS: [Slot, string][] = [
   ["dress", "Dresses"], ["shoes", "Shoes"], ["bag", "Bags"], ["accessory", "Accessories"],
 ];
 
+const range = (start: number, end: number, step: number) =>
+  Array.from({ length: (end - start) / step + 1 }, (_, index) => start + index * step);
+
+export const BUDGET_STEPS = [
+  ...range(50, 500, 10),
+  ...range(525, 1000, 25),
+  ...range(1100, 3000, 100),
+  ...range(3250, 10000, 250),
+];
+
+function budgetIndex(value: number) {
+  return BUDGET_STEPS.reduce(
+    (nearest, step, index) =>
+      Math.abs(step - value) < Math.abs(BUDGET_STEPS[nearest] - value)
+        ? index
+        : nearest,
+    0,
+  );
+}
+
 export const DEFAULT_BRIEF: Brief = {
   text: "Autumn in London. Workwear but cleaner, Japanese labels, things that age well. No big logos.",
   looking_for: "outfits",
@@ -76,9 +96,9 @@ export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew }
         <input type="range" className="range" min={0} max={100} value={Math.round(b.niche * 100)}
           onChange={e => set("niche", Number(e.target.value) / 100)} aria-label="How niche" /></div>
 
-      <div className="group"><span className="lbl">Budget per outfit <em>up to £{b.budget_gbp}</em></span>
-        <input type="range" className="range" min={50} max={1000} step={10} value={b.budget_gbp}
-          onChange={e => set("budget_gbp", Number(e.target.value))} aria-label="Budget per outfit" /></div>
+      <div className="group"><span className="lbl">Budget per outfit <em>up to £{b.budget_gbp.toLocaleString("en-GB")}</em></span>
+        <input type="range" className="range" min={0} max={BUDGET_STEPS.length - 1} step={1} value={budgetIndex(b.budget_gbp)}
+          onChange={e => set("budget_gbp", BUDGET_STEPS[Number(e.target.value)])} aria-label="Budget per outfit" /></div>
 
       <div className="group"><span className="lbl">Sizes</span>
         <div className="sizes">
