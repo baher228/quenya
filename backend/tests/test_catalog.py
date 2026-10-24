@@ -27,6 +27,20 @@ def test_catalog_parses_ssense_gbp_offer_and_image_template(monkeypatch):
     assert records[0]["condition_hint"] == "new"
 
 
+def test_optional_scrapling_sources_degrade_to_empty_results(monkeypatch):
+    monkeypatch.setattr(catalog, "_scrapling_fetchers", lambda: None)
+    records, report = catalog.crawl("ssense.com", "m", 4, set(), 0)
+    assert records == []
+    assert report["error"] == "scrapling_unavailable"
+
+    monkeypatch.setattr(catalog.sport, "_scrapling_fetcher", lambda: None)
+    records, report = catalog.sport.search_context(
+        ["running jacket"], "running", "m"
+    )
+    assert records == []
+    assert report == {}
+
+
 def test_catalog_product_group_uses_first_variant_and_aggregate_low_price(monkeypatch):
     monkeypatch.setattr(catalog, "_valid_image", lambda url, _page: url)
     records = catalog.parse_product_html(

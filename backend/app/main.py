@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request
 
@@ -14,7 +14,7 @@ from app.config import (
     PROMPT_VERSION,
     TAVILY_API_KEY,
 )
-from app.images import cached_image_path
+from app.images import cached_image_path, storage_enabled, storage_public_url
 from app.mubit import TaskError
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
@@ -171,6 +171,11 @@ def get_image(filename: str):
         path = cached_image_path(key)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Image not found") from exc
+    if storage_enabled():
+        return RedirectResponse(
+            storage_public_url(f"{key}.jpg"),
+            status_code=302,
+        )
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path, media_type="image/jpeg")

@@ -936,12 +936,14 @@ def test_sport_search_does_not_refetch_cached_source_url(monkeypatch):
             return {"results": [{"url": url, "title": "Trail Shell Jacket"}]}
 
     monkeypatch.setattr(sport, "_tavily_client", lambda: Tavily())
+
+    def fail_fetch(*_args, **_kwargs):
+        raise AssertionError("cached page should not be fetched")
+
     monkeypatch.setattr(
-        sport.Fetcher,
-        "get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("cached page should not be fetched")
-        ),
+        sport,
+        "_scrapling_fetcher",
+        lambda: SimpleNamespace(get=fail_fetch),
     )
     records, report = sport.search_context(
         ["trail shell"], "gym", "m", max_searches=1, cached_urls={sport._canonical(url)}
@@ -1008,10 +1010,14 @@ def test_sport_search_caps_product_fetches(monkeypatch):
             return {"results": [{"url": url} for url in urls]}
 
     monkeypatch.setattr(sport, "_tavily_client", lambda: Tavily())
+
+    def fake_fetch(url, **_kwargs):
+        return SimpleNamespace(status=200, body=html, url=url)
+
     monkeypatch.setattr(
-        sport.Fetcher,
-        "get",
-        lambda url, **_kwargs: SimpleNamespace(status=200, body=html, url=url),
+        sport,
+        "_scrapling_fetcher",
+        lambda: SimpleNamespace(get=fake_fetch),
     )
     monkeypatch.setattr(sport, "_usable_image", lambda *_args: True)
     records, report = sport.search_context(

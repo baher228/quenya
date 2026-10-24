@@ -601,3 +601,36 @@ def test_warmup_persona_uses_stubbed_calls_and_warmup_profile_kind(
     assert result["rounds"][-1]["version"] == 10
     assert len(taste_calls) == 10
     assert len(stylist_calls) == 3
+
+
+def test_fetch_job_state_persists_and_looks_up_latest_job_for_profile(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "fetch.sqlite")
+    db.init_db()
+    first = {
+        "id": "job-1",
+        "started_at": "2025-01-01T00:00:00+00:00",
+        "status": "done",
+        "fetched": 2,
+        "tagged": 2,
+        "failed": 0,
+        "errors": [],
+    }
+    second = {
+        "id": "job-2",
+        "started_at": "2025-01-02T00:00:00+00:00",
+        "status": "running",
+        "fetched": 0,
+        "tagged": 0,
+        "failed": 0,
+        "errors": [],
+    }
+    db.save_fetch_job("job-1", "board-1", first)
+    db.save_fetch_job("job-2", "board-1", second)
+    db.update_fetch_job("job-1", first)
+
+    assert not hasattr(phase2_api, "FETCH_JOBS")
+    assert phase2_api.fetch_job("job-1")["fetched"] == 2
+    assert phase2_api.fetch_job("board-1")["status"] == "running"
+    assert phase2_api.fetch_job("board-1")["fetched"] == 0

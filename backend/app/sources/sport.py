@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from collections import defaultdict, deque
 from html.parser import HTMLParser
@@ -6,9 +7,23 @@ from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
-from scrapling.fetchers import Fetcher
 
 from app.config import CONTEXT_SOURCES, SPORT_IMAGE_UA, TAVILY_API_KEY
+
+logger = logging.getLogger(__name__)
+_SCRAPLING_UNAVAILABLE_LOGGED = False
+
+
+def _scrapling_fetcher():
+    global _SCRAPLING_UNAVAILABLE_LOGGED
+    try:
+        from scrapling.fetchers import Fetcher
+    except ImportError:
+        if not _SCRAPLING_UNAVAILABLE_LOGGED:
+            logger.warning("Scrapling is unavailable; sport sources are disabled")
+            _SCRAPLING_UNAVAILABLE_LOGGED = True
+        return None
+    return Fetcher
 
 PRODUCT_DOMAINS = {
     "gymshark.com",
@@ -385,6 +400,9 @@ def search_context(
     max_products: int = 12,
     cached_urls: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    Fetcher = _scrapling_fetcher()
+    if Fetcher is None:
+        return [], {}
     allowed = [
         domain for domain in CONTEXT_SOURCES.get(context, [])
         if domain in PRODUCT_DOMAINS
