@@ -13,6 +13,17 @@ export class ApiError extends Error {
   }
 }
 
+export type ProfileResult = {
+  profile_id: string;
+  brief: Brief;
+  taste: { version: number; profile: TasteVersion["profile"] };
+  version: number;
+  request_id: string | null;
+  fetch_job_id?: string | null;
+  board: Board;
+  route: Route | null;
+};
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 90_000);
@@ -56,10 +67,15 @@ const post = <T>(path: string, data?: unknown) =>
 
 export const api = {
   health: () => req<{ items_total: number; items_tagged: number; models: Record<string, string> }>("/api/health"),
-  createProfile: (brief: Brief) =>
-    post<{ profile_id: string; taste: { version: number; profile: TasteVersion["profile"] }; fetch_job_id?: string | null; board: Board; route: Route }>(
-      "/api/profile", { brief },
+  createProfile: (brief: Brief, newBoard = false) =>
+    post<ProfileResult>(
+      "/api/profile", { brief, new_board: newBoard },
     ),
+  updateBrief: (boardId: string, brief: Brief) =>
+    req<ProfileResult>(`/api/boards/${encodeURIComponent(boardId)}/brief`, {
+      method: "PUT",
+      body: JSON.stringify({ brief }),
+    }),
   fetchJob: (id: string) => req<FetchJob>(`/api/fetch/${id}`),
   deck: (n = 10) => req<Item[] | { items: Item[] }>(`/api/deck?n=${n}`).then(r => (Array.isArray(r) ? r : r.items)),
   swipe: (item_id: string, liked: boolean) =>

@@ -18,6 +18,7 @@ from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYST
 from app.rank import make_deck, rank_items, tags_for
 from app.routing import route_input
 from app.schemas import (
+    BoardBriefRequest,
     BoardLabelRequest,
     BoardMergeRequest,
     CheckoutRequest,
@@ -127,6 +128,22 @@ def _taste(profile_id: str) -> dict[str, Any]:
     if not current:
         raise HTTPException(status_code=409, detail="Profile has no taste version")
     return current["profile"]
+
+
+def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
+    try:
+        version, updated, meta, _ = update_taste(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TaskError as exc:
+        raise _http_task_error(exc) from exc
+    return {
+        "version": version,
+        "profile": updated,
+        "changes": updated["changes"],
+        "request_id": meta.request_id,
+        "latency_ms": meta.latency_ms,
+    }
 
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -274,7 +291,7 @@ def create_profile(
         route_output, existing, route_meta, _content = route_input("brief", brief["text"])
     except TaskError as exc:
         raise _http_task_error(exc) from exc
-    if existing:
+    if existing and not body.new_board:
         profile_id = existing["id"]
         profile = db.activate_profile(profile_id)
         db.update_profile_brief(profile_id, brief)
@@ -311,9 +328,15 @@ def create_profile(
         db.create_profile(
             profile_id, brief, label=route_output.label, context=route_output.context
         )
+        route_output_data = route_output.model_dump() | {
+            "input_brief": brief,
+            "_routed": "new",
+        }
+        if body.new_board:
+            route_output_data["_forced_new"] = True
         route_id = db.create_route(
             "user", "brief", brief["text"],
-            route_output.model_dump() | {"input_brief": brief, "_routed": "new"},
+            route_output_data,
             route_meta.request_id, profile_id,
         )
         profile = db.get_profile(profile_id)
@@ -341,6 +364,54 @@ def create_profile(
 @router.get("/api/boards")
 def boards() -> list[dict[str, Any]]:
     return [_board_summary(board) for board in db.profile_boards()]
+
+
+@router.put("/api/boards/{board_id}/brief")
+def update_board_brief(
+    board_id: str, body: BoardBriefRequest, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
+    previous = db.get_profile(board_id, kind="user")
+    if not previous:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    brief = body.brief.model_dump(exclude_none=True)
+    profile = db.activate_profile(board_id, kind="user")
+    if not profile:
+        raise HTTPException(status_code=404, detail="Board not found")
+    db.update_profile_brief(board_id, brief)
+    db.add_correction(
+        board_id,
+        "brief",
+        board_id,
+        previous["brief"],
+        brief,
+        brief["text"],
+        None,
+    )
+
+    profile = db.get_profile(board_id, kind="user")
+    taste_result = _taste_update_result(profile)
+    taste = {
+        "version": taste_result["version"],
+        "profile": taste_result["profile"],
+    }
+    queries = list(
+        dict.fromkeys(
+            (taste["profile"].get("search_queries") or []) + [brief["text"]]
+        )
+    )
+    job_id = _start_fetch(profile, queries, background_tasks)
+    board = next(item for item in db.profile_boards() if item["id"] == board_id)
+    return {
+        "profile_id": board_id,
+        "brief": brief,
+        "taste": taste,
+        "version": taste["version"],
+        "request_id": taste_result["request_id"],
+        "fetch_job_id": job_id,
+        "board": _board_summary(board),
+        "route": None,
+    }
 
 
 @router.post("/api/boards/{board_id}/activate")
@@ -569,20 +640,7 @@ def swipe(body: SwipeRequest) -> dict[str, Any]:
 
 @router.post("/api/taste/update")
 def taste_update() -> dict[str, Any]:
-    active = _user_profile()
-    try:
-        version, profile, meta, _ = update_taste(active)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except TaskError as exc:
-        raise _http_task_error(exc) from exc
-    return {
-        "version": version,
-        "profile": profile,
-        "changes": profile["changes"],
-        "request_id": meta.request_id,
-        "latency_ms": meta.latency_ms,
-    }
+    return _taste_update_result(_user_profile())
 
 
 @router.get("/api/taste")

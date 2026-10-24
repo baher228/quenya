@@ -36,6 +36,11 @@ class ProfileBrief(StrictModel):
 
 class ProfileCreateRequest(StrictModel):
     brief: ProfileBrief
+    new_board: bool = False
+
+
+class BoardBriefRequest(StrictModel):
+    brief: ProfileBrief
 
 
 class ItemTags(StrictModel):
