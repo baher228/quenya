@@ -55,6 +55,7 @@ export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
 
   return (
     <section className="screen swipe">
+      <div className="swipe-main">
       <div className="deck-head">
         <div><p className="eyebrow">Calibrating{version ? ` · taste v${version}` : ""}</p><p className="h3">Keep or pass?</p></div>
         <span className="deck-count">{seen} swiped</span>
@@ -84,6 +85,7 @@ export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
           <span className="h-pass">← Pass</span><span className="h-keep">Keep →</span>
         </div>
       )}
+      </div>
 
       <div className="learned-wrap">
         <span className="lbl">Learned so far {version ? <em>taste v{version}</em> : null}</span>
