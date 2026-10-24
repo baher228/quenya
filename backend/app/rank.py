@@ -82,6 +82,31 @@ def eligible(
     return True
 
 
+def secondhand_share(brief: dict[str, Any], profile: dict[str, Any]) -> float:
+    condition = profile.get("condition_preference", brief.get("condition", "both"))
+    if condition == "second-hand":
+        return 1.0
+    if condition == "new":
+        return 0.0
+    niche = float(profile.get("niche_level", brief.get("niche", 0.5)))
+    per_piece = float(brief.get("budget_gbp") or 0) / (
+        1 if brief.get("looking_for") == "pieces" else 4
+    )
+    share = 0.5 + 0.6 * (niche - 0.5)
+    if per_piece and per_piece < 40:
+        share += 0.15
+    elif per_piece > 150:
+        share -= 0.15
+    return min(0.85, max(0.15, share))
+
+
+def _is_secondhand(item: dict[str, Any]) -> bool:
+    tags = tags_for(item)
+    return tags.get("condition") == "second-hand" or (
+        not tags.get("condition") and item.get("source") == "vinted"
+    )
+
+
 def rank_items(
     items: list[dict[str, Any]],
     brief: dict[str, Any],
@@ -116,6 +141,7 @@ def make_deck(
     brief: dict[str, Any] | None = None,
     *,
     include_shoes: bool = True,
+    secondhand_share: float = 0.5,
 ) -> list[dict[str, Any]]:
     brief = brief or {}
     shoe_cap = max(1, count // 8) if include_shoes and count else 0
@@ -154,11 +180,21 @@ def make_deck(
                     slots = []
             continue
         position = len(deck)
-        chosen = candidates[0]
+        secondhand_pool = [item for item in candidates if _is_secondhand(item)]
+        new_pool = [item for item in candidates if not _is_secondhand(item)]
+        target_secondhand = secondhand_share * (len(deck) + 1)
+        preferred = (
+            secondhand_pool
+            if sum(_is_secondhand(item) for item in deck) < target_secondhand
+            else new_pool
+        )
+        alternative = new_pool if preferred is secondhand_pool else secondhand_pool
+        choice_pool = preferred or alternative
+        chosen = choice_pool[0] if choice_pool else candidates[0]
         if position % 3 == 2:
             chosen = next(
                 (
-                    item for item in candidates
+                    item for item in choice_pool
                     if {
                         str(value).lower()
                         for value in tags_for(item).get("aesthetics", [])

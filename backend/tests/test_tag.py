@@ -44,6 +44,9 @@ def test_live_search_does_not_retag_previously_failed_items(monkeypatch, tmp_pat
         phase2_api.vinted, "search", lambda *_args, **_kwargs: [item]
     )
     monkeypatch.setattr(phase2_api.retail, "search", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        phase2_api.catalog, "crawl", lambda *_args, **_kwargs: ([], {"tavily_urls_used": 0})
+    )
     route = RouteOut(context="city", board_id=None, label="City", confidence=0.9, reason="test")
     monkeypatch.setattr(
         phase2_api,

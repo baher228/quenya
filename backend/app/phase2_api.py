@@ -9,13 +9,13 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
 from app import db
-from app.config import BACKEND_ROOT, CONTEXT_SOURCES, SPORT_CONTEXTS
+from app.config import BACKEND_ROOT, CONTEXT_SOURCES, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
 from app.images import image_key
 from app.mubit import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
-from app.rank import make_deck, rank_items, tags_for
+from app.rank import make_deck, rank_items, secondhand_share, tags_for
 from app.routing import route_input
 from app.schemas import (
     BoardBriefRequest,
@@ -33,7 +33,7 @@ from app.schemas import (
     UploadAssignRequest,
     VerdictRequest,
 )
-from app.sources import retail, sport, vinted
+from app.sources import catalog, retail, sport, vinted
 from app.tagging import tag_item
 from app.taste import create_taste, update_taste
 
@@ -208,7 +208,8 @@ def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_profile_items(
-    profile_id: str, queries: list[str], gender: str, context: str = "other"
+    profile_id: str, queries: list[str], gender: str, context: str = "other",
+    brief: dict[str, Any] | None = None,
 ) -> None:
     job = FETCH_JOBS[profile_id]
     job["status"] = "running"
@@ -216,10 +217,19 @@ def _fetch_profile_items(
         source_domains = CONTEXT_SOURCES.get(
             context, CONTEXT_SOURCES["other"]
         )
+        profile = db.get_profile(profile_id)
+        brief = brief or (profile.get("brief") if profile else {}) or {}
+        current_taste = db.latest_taste(profile_id)
+        taste_profile = current_taste["profile"] if current_taste else {}
         cached_urls = db.source_urls()
         records: list[dict[str, Any]] = []
         for query in queries[:4]:
             if "vinted" in source_domains:
+                records.extend(vinted.search(query, _gender_code(gender), per_page=5))
+        old_money_queries = []
+        if catalog.is_old_money(brief, taste_profile) and "vinted" in source_domains:
+            old_money_queries = catalog.old_money_queries(3)
+            for query in old_money_queries:
                 records.extend(vinted.search(query, _gender_code(gender), per_page=5))
         if context in SPORT_CONTEXTS:
             sport_records, sport_report = sport.search_context(
@@ -241,14 +251,37 @@ def _fetch_profile_items(
             for query in queries[:2]:
                 records.extend(
                     retail.search(
-                        query, 5, _gender_code(gender),
+                        query, 2, _gender_code(gender),
                         include_domains=[
                             domain for domain in source_domains
-                            if domain in retail.RETAIL_DOMAINS
+                            if domain in retail.RETAIL_DOMAINS and domain not in catalog.CATALOG
                         ],
                         cached_urls=cached_urls,
                     )
                 )
+            per_piece = float(brief.get("budget_gbp") or 0) / (
+                1 if brief.get("looking_for") == "pieces" else 4
+            )
+            pieces = brief.get("pieces") or []
+            tavily_left = 2
+            catalog_report = []
+            for domain in source_domains:
+                if domain not in catalog.CATALOG:
+                    continue
+                tier = SHOP_TIERS.get(domain)
+                if tier == "luxury" and per_piece < 150:
+                    continue
+                if tier == "premium" and per_piece < 40:
+                    continue
+                found, report = catalog.crawl(
+                    domain, _gender_code(gender), 4, cached_urls, tavily_left,
+                    pieces=pieces,
+                )
+                records.extend(found)
+                tavily_left = max(0, tavily_left - report.get("tavily_urls_used", 0))
+                catalog_report.append(report)
+            job["catalog_report"] = catalog_report
+        job["old_money_queries"] = old_money_queries
         for record in records:
             record["query"] = f"live:{profile_id}"
         inserted_sources: dict[str, int] = {}
@@ -619,6 +652,8 @@ def fetch_job(job_id: str) -> dict[str, Any]:
         "errors": job.get("errors", []),
         "domain_counts": job.get("domain_counts", {}),
         "sport_report": job.get("sport_report", {}),
+        "catalog_report": job.get("catalog_report", []),
+        "old_money_queries": job.get("old_money_queries", []),
     }
 
 
@@ -644,6 +679,7 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         exclude_ids=swiped,
         core_profile=as_profile(core),
     )
+    share = secondhand_share(active["brief"], taste)
     return [
         _public_item(item)
         for item in make_deck(
@@ -651,6 +687,7 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
             n,
             active["brief"],
             include_shoes=active["brief"].get("include_shoes", True),
+            secondhand_share=share,
         )
     ]
 
@@ -1105,13 +1142,34 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
         sport_report = {}
         retail_items = retail.search(
             body.q,
-            10,
+            2,
             gender,
             include_domains=[
-                domain for domain in domains if domain in retail.RETAIL_DOMAINS
+                domain for domain in domains
+                if domain in retail.RETAIL_DOMAINS and domain not in catalog.CATALOG
             ],
             cached_urls=cached_urls,
         )
+        per_piece = float(active["brief"].get("budget_gbp") or 0) / (
+            1 if active["brief"].get("looking_for") == "pieces" else 4
+        )
+        catalog_report = []
+        tavily_left = 4
+        for domain in domains:
+            if domain not in catalog.CATALOG:
+                continue
+            tier = SHOP_TIERS.get(domain)
+            if tier == "luxury" and per_piece < 150:
+                continue
+            if tier == "premium" and per_piece < 40:
+                continue
+            catalog_items, report = catalog.crawl(
+                domain, gender, 4, cached_urls, tavily_left,
+                pieces=active["brief"].get("pieces") or [],
+            )
+            retail_items.extend(catalog_items)
+            tavily_left = max(0, tavily_left - report.get("tavily_urls_used", 0))
+            catalog_report.append(report)
     items.extend(retail_items)
     for item in items:
         item["query"] = f"live:search:{active['id']}"
@@ -1157,6 +1215,7 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
             route_meta.request_id,
         ),
         "sport_report": sport_report,
+        "catalog_report": catalog_report if context not in SPORT_CONTEXTS else [],
     }
 
 
