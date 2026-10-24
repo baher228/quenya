@@ -24,6 +24,7 @@ class SizeProfile(StrictModel):
 
 class ProfileBrief(StrictModel):
     text: str = Field(min_length=1)
+    style_refs: list[str] | None = None
     looking_for: LookingFor
     pieces: list[Slot] = Field(default_factory=list)
     include_shoes: bool = True

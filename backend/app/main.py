@@ -19,6 +19,7 @@ from app.mubit import TaskError
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
 from app.prompts import (
+    DECODER_MODEL,
     READER_MODEL,
     ROUTER_MODEL,
     STYLIST_MODEL,
@@ -88,6 +89,7 @@ def health() -> dict:
             "stylist": STYLIST_MODEL,
             "reader": READER_MODEL,
             "router": ROUTER_MODEL,
+            "decoder": DECODER_MODEL,
         },
         "prompt_version": PROMPT_VERSION,
         "items_total": total,

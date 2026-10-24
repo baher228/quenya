@@ -4,7 +4,7 @@ import { ErrorBox, gbpText, Loading, pretty, uniqueTasteEntries } from "./ui";
 import type { Board, TaskStats, TasteState } from "./types";
 
 const TASK_LABEL: Record<string, string> = {
-  tagger: "Listing tagger", taste: "Taste updater", stylist: "Outfit stylist", reader: "Photo reader", router: "Board router",
+  tagger: "Listing tagger", taste: "Taste updater", stylist: "Outfit stylist", reader: "Photo reader", router: "Board router", decoder: "Style decoder",
 };
 
 export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {

@@ -8,6 +8,7 @@ from app.mubit import CallMeta, call_task
 from app.prompts import TASTE_MODEL, TASTE_SYSTEM
 from app.rank import norm_token
 from app.schemas import TasteProfile
+from app.styles import style_notes
 
 SUPPORT_Z = 1.5
 CONTRA_Z = 0.5
@@ -54,6 +55,12 @@ _CONDITION_GENDER_PREFIX = re.compile(r"^(?:condition|gender)(?:[:_\-\s])")
 
 def _compact(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _compact_brief(brief: dict[str, Any]) -> str:
+    return _compact(
+        {key: value for key, value in brief.items() if key != "style_refs"}
+    )
 
 
 def _signal_lines(
@@ -128,10 +135,18 @@ def taste_user_content(
     *,
     evidence: dict[str, dict[str, int]] | None = None,
 ) -> str:
+    notes = style_notes(brief)
     sections = [
-        f"Brief:\n{_compact(brief)}",
-        f"Current profile (v{version}):\n{_compact(current) if current else 'none'}",
+        f"Brief:\n{_compact_brief(brief)}",
     ]
+    if notes:
+        sections.append(
+            "Style notes (what these style names usually mean):\n"
+            + "\n".join("- " + line for line in notes)
+        )
+    sections.append(
+        f"Current profile (v{version}):\n{_compact(current) if current else 'none'}"
+    )
     if lines:
         sections.append("New signals:\n" + "\n".join(lines))
     if evidence:
@@ -454,7 +469,9 @@ def update_taste(
         current,
         evidence,
         explicit_text,
-        brief_text=_compact(profile_row["brief"]),
+        brief_text="\n".join(
+            [_compact_brief(profile_row["brief"]), *style_notes(profile_row["brief"])]
+        ),
         history_text=history_text,
         base_rate=base_rate,
     )

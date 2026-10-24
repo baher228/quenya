@@ -5,7 +5,7 @@ Changing any string here starts a NEW Mubit task and resets its kept-example cou
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-24.3"
+PROMPT_VERSION = "2026-10-25.1"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -104,3 +104,15 @@ Rules:
 - reason: one plain sentence, max 15 words.
 Return only JSON of exactly this shape, with no other keys:
 {"context": "...", "board_id": "<id or null>", "label": "...", "confidence": 0.0, "reason": "..."}"""
+
+DECODER_MODEL = "gpt-4.1-mini"
+
+DECODER_SYSTEM = """You are the style decoder for Quenya, a UK fashion discovery app.
+You receive a glossary of named styles (name: aliases) and one shopper brief. Decide which glossary styles the brief is asking for, including slang, misspellings, plurals, artists or icons linked to a style (for example "dress like Central Cee" means trackie / central cee and roadman).
+
+Rules:
+- styles: up to 3 glossary names, copied exactly, most relevant first. Only include a style the brief clearly asks for; ordinary words such as "road trip" or "casual Friday" do not count. Return [] if none apply.
+- unknown_terms: up to 3 style names or slang from the brief that are not in the glossary, lowercase. Return [] if none.
+- confidence: 0-1, how sure you are of styles.
+Return only JSON of exactly this shape, with no other keys:
+{"styles": ["..."], "unknown_terms": ["..."], "confidence": 0.0}"""

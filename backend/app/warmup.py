@@ -11,6 +11,7 @@ from app.prompts import STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import make_deck, rank_items, tokens
 from app.routing import route_input
 from app.schemas import ProfileBrief, StylistOutput
+from app.styles import style_notes
 from app.taste import create_taste, update_taste
 
 PERSONAS_PATH = Path(__file__).resolve().parents[1] / "seeds" / "personas.json"
@@ -79,7 +80,12 @@ def run_persona(persona: dict[str, Any], *, router: bool = False) -> dict[str, A
         version, taste, _, _ = update_taste(profile_row)
         pool = build_pool(snapshot_items, brief, taste, [], [])
         content = stylist_user_content(
-            taste, 3, [], pool, include_shoes=brief.get("include_shoes", True)
+            taste,
+            3,
+            [],
+            pool,
+            include_shoes=brief.get("include_shoes", True),
+            style_notes=style_notes(brief),
         )
         result, meta = call_task("stylist", STYLIST_SYSTEM, STYLIST_MODEL, content, StylistOutput)
         valid, errors = validate_outfits(
