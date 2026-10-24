@@ -88,6 +88,13 @@ _PRODUCT_PATHS = {
     "mango.com": re.compile(r"/gb/en/p/[^?#]+", re.I),
     "burberry.com": re.compile(r"/[^/?#]+-p\d+", re.I),
     "ralphlauren.co.uk": re.compile(r"/en/(?!rlmag/|discover/)[^?#]+\.html", re.I),
+    "hugoboss.com": re.compile(r"/uk/[^/?#]+/hbeu[a-z0-9_-]+\.html", re.I),
+    "thenorthface.com": re.compile(
+        r"/en-gb/p/[^/?#]+/[^/?#]+-nf0[a-z0-9]+/?$", re.I
+    ),
+    "stoneisland.com": re.compile(
+        r"/en-gb/collection/[^/?#]+/[^/?#]+-l2s[a-z0-9]+\.html", re.I
+    ),
     "uniqlo.com": re.compile(r"^/uk/en/products?/[^/?#]+(?:/\d{2})?/?$", re.I),
     "urbanoutfitters.com": re.compile(r"/(?:en-gb/)?shop/[^/?#]+", re.I),
 }
