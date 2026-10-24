@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from app.config import SHOP_TIERS
 from app.sources import catalog
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -53,6 +54,34 @@ def test_catalog_rejects_uniqlo_reviews_as_product_urls():
     assert catalog._product_url(
         "https://www.uniqlo.com/uk/en/products/E486078-000/00", "uniqlo.com"
     )
+
+
+def test_catalog_accepts_imported_shop_urls_and_tiers():
+    examples = (
+        (
+            "hugoboss.com",
+            "https://www.hugoboss.com/uk/equestrian-polo-shirt/"
+            "hbeuB8M0601_001.html",
+        ),
+        (
+            "thenorthface.com",
+            "https://www.thenorthface.com/en-gb/p/men-211701/"
+            "men-s-summit-nuptse-jacket-NF0A8H3D",
+        ),
+        (
+            "stoneisland.com",
+            "https://www.stoneisland.com/en-gb/collection/coats-and-jackets/"
+            "tear-resistant-down-jacket-L2S154100013S0483V0049.html",
+        ),
+    )
+    for domain, url in examples:
+        assert catalog._product_url(url, domain)
+    assert SHOP_TIERS["burberry.com"] == "luxury"
+    assert SHOP_TIERS["stoneisland.com"] == "luxury"
+    assert SHOP_TIERS["hugoboss.com"] == "premium"
+    assert SHOP_TIERS["ralphlauren.co.uk"] == "premium"
+    assert SHOP_TIERS["lacoste.com"] == "premium"
+    assert SHOP_TIERS["thenorthface.com"] == "high_street"
 
 
 def test_catalog_filters_categories_by_requested_piece_slots():
