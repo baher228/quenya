@@ -16,6 +16,7 @@ if (standalone) {
       : Math.min(screen.width, screen.height);
     document.documentElement.style.setProperty("--app-h", `${Math.max(innerHeight, screenH)}px`);
   };
+  document.documentElement.classList.add("standalone");
   fit();
   addEventListener("resize", fit);
   addEventListener("orientationchange", fit);
