@@ -8,16 +8,19 @@ const standalone =
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 if (standalone) {
-  // iOS home-screen apps can get a viewport that stops above the home indicator,
-  // in which case the bottom safe-area padding would be wasted space.
+  // iOS black-translucent bug: viewport = screen − status bar, so the bottom strip is unpaintable and the home-indicator padding is dead space.
   const root = document.documentElement;
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none";
+  document.documentElement.appendChild(probe);
   const fit = () => {
     const portrait = innerHeight >= innerWidth;
     const screenH = portrait
       ? Math.max(screen.width, screen.height)
       : Math.min(screen.width, screen.height);
     root.style.setProperty("--app-h", `${innerHeight}px`);
-    root.classList.toggle("short-view", screenH - innerHeight > 20);
+    const topInset = probe.offsetHeight;
+    root.classList.toggle("short-view", topInset > 0 && screenH - innerHeight > 20);
   };
   root.classList.add("standalone");
   fit();
