@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, gbp, img } from "./api";
-import { ErrorBox, Loading, Provenance, pretty } from "./ui";
+import { ErrorBox, Loading, Provenance, pretty, uniqueTasteEntries } from "./ui";
 import type { Item, TasteProfile } from "./types";
 
 export function DeckScreen({ profile, version, board, onChange, onSignal, onDone, onOpenItem }: {
@@ -52,8 +52,16 @@ export function DeckScreen({ profile, version, board, onChange, onSignal, onDone
     setNudge(false);
   }
 
-  const likes = profile ? Object.entries(profile.likes).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
-  const avoids = profile ? Object.entries(profile.avoids).sort((a, b) => b[1] - a[1]).slice(0, 3) : [];
+  const likes = profile ? uniqueTasteEntries(
+    Object.entries(profile.likes).sort((a, b) => b[1] - a[1]),
+    5,
+  ) : [];
+  const avoids = profile ? uniqueTasteEntries(
+    Object.entries(profile.avoids)
+      .map(([key, value]) => [key, -value] as [string, number])
+      .sort((a, b) => a[1] - b[1]),
+    3,
+  ) : [];
 
   return (
     <section className="screen swipe">
