@@ -9,6 +9,7 @@ from app.sources import catalog
 DOMAINS = {
     "cos.com", "arket.com", "stories.com", "barbour.com",
     "charlestyrwhitt.com", "johnsmedley.com", "asos.com", "mango.com",
+    "burberry.com", "ralphlauren.co.uk",
 }
 PRODUCT_PATHS = {
     "cos.com": re.compile(r"/en-gb/.*/product/[^/?#]+", re.I),
@@ -19,6 +20,8 @@ PRODUCT_PATHS = {
     "johnsmedley.com": re.compile(r"/uk/(?!mens(?:/|$)|womens(?:/|$))[^/?#]+", re.I),
     "asos.com": re.compile(r"/[^/?#]+/[^/?#]+/prd/\d+", re.I),
     "mango.com": re.compile(r"/gb/en/p/[^?#]+", re.I),
+    "burberry.com": re.compile(r"/[^/?#]+-p\d+", re.I),
+    "ralphlauren.co.uk": re.compile(r"/en/(?!rlmag/|discover/)[^?#]+\.html", re.I),
 }
 PRICE = re.compile(r"£\s*([\d,]+(?:\.\d{1,2})?)")
 
@@ -178,7 +181,7 @@ def _script_payloads(html: str):
             except json.JSONDecodeError:
                 continue
         for pattern in (
-            r"(?:window\.)?(?:__INITIAL_STATE__|__NEXT_DATA__)\s*=\s*({.*?});",
+            r"(?:window\.)?(?:__INITIAL_STATE__|__NEXT_DATA__|__PRELOADED_STATE__)\s*=\s*({.*?});",
         ):
             for found in re.finditer(pattern, body, re.S):
                 try:
@@ -354,6 +357,10 @@ def _structured_metadata(payloads, page_url, domain):
                 "title": str(title),
                 "brand": item.get("brandName") or item.get("brand"),
                 "salePrice": item.get("salePrice"),
+                "color": (
+                    item.get("color") or item.get("colour")
+                    or item.get("colorName") or item.get("colourName")
+                ),
             }
             raw_url = (
                 item.get("url") or item.get("href") or item.get("canonical")
@@ -367,6 +374,94 @@ def _structured_metadata(payloads, page_url, domain):
                 if value not in (None, ""):
                     by_id[str(value)] = metadata
     return by_url, by_id
+
+
+def _burberry_products(payloads, page_url, gender):
+    records = []
+    for payload in payloads:
+        if "__nuxt_flat" in payload:
+            continue
+        for item in _walk(payload):
+            content = item.get("content")
+            price = item.get("price")
+            if not isinstance(content, dict) or not isinstance(price, dict):
+                continue
+            current = price.get("current")
+            if not isinstance(current, dict) or current.get("currency") != "GBP":
+                continue
+            media = item.get("media")
+            image = media.get("defaults", {}).get("image") if isinstance(media, dict) else None
+            if isinstance(image, dict):
+                image = image.get("imageDefault") or image.get("key")
+            records.append(
+                _record(
+                    content.get("title") or content.get("defaultTitle"),
+                    current.get("value"),
+                    image,
+                    item.get("url"),
+                    page_url,
+                    "burberry.com",
+                    gender,
+                    "Burberry",
+                )
+            )
+    return [record for record in records if record]
+
+
+def _append_color(title, color):
+    if isinstance(color, dict):
+        color = color.get("name") or color.get("label") or color.get("value")
+    if isinstance(color, list):
+        color = next((item for item in color if isinstance(item, str)), "")
+    color = str(color or "").strip()
+    if color and color.casefold() not in title.casefold():
+        return f"{title} – {color}"
+    return title
+
+
+def _tile_field(node, class_token):
+    for tag in ("div", "span", "p", "a"):
+        for child in node.descendants(tag):
+            if class_token in (child.attrs.get("class") or "").split():
+                value = child.text().strip()
+                if value:
+                    return value
+    return ""
+
+
+def _tile_image(node, page_url):
+    for tag in ("img", "source"):
+        for image in node.descendants(tag):
+            for key in (
+                "src", "data-src", "data-lazy-src", "data-original",
+                "srcset", "data-srcset",
+            ):
+                value = image.attrs.get(key)
+                if value:
+                    candidate = value.split(",")[0].strip().split(" ")[0]
+                    absolute = _image(candidate, page_url)
+                    if absolute:
+                        return absolute
+    return None
+
+
+def _ralph_listing_anchor(anchor):
+    if not any(
+        token in (anchor.attrs.get("class") or "").split()
+        for token in ("js-pdp-link", "product-name-link")
+    ):
+        return False
+    node = anchor
+    for _ in range(9):
+        classes = (node.attrs.get("class") or "").split()
+        if "pdp-simple-product-tile" in classes:
+            return False
+        if "js-product-tile" in classes:
+            return True
+        if not node.parent:
+            break
+        node = node.parent
+    return False
 
 
 def _product_id(url):
@@ -424,24 +519,34 @@ def _tile_records(html, page_url, domain, gender, names, metadata_by_url, metada
     tree.feed(html)
     records = []
     for anchor in tree.root.descendants("a"):
+        if domain == "ralphlauren.co.uk" and not _ralph_listing_anchor(anchor):
+            continue
         url = _canonical(anchor.attrs.get("href") or "", page_url, domain)
         if not url:
             continue
         node = anchor
         tile = None
+        tile_brand = ""
         for _ in range(7):
             text = node.text()
             images = node.descendants("img")
             image = next(
                 (img.attrs.get("src") or img.attrs.get("data-src") or
-                 (img.attrs.get("srcset") or "").split(" ")[0]
+                 img.attrs.get("data-lazy-src") or img.attrs.get("data-original") or
+                 (img.attrs.get("srcset") or img.attrs.get("data-srcset") or "").split(" ")[0]
                  for img in images
-                 if img.attrs.get("src") or img.attrs.get("data-src") or img.attrs.get("srcset")),
+                 if any(img.attrs.get(key) for key in (
+                     "src", "data-src", "data-lazy-src", "data-original",
+                     "srcset", "data-srcset",
+                 ))),
                 None,
             )
+            if not image and domain == "ralphlauren.co.uk":
+                image = _tile_image(node, page_url)
             price = PRICE.search(text)
             if image and price:
                 tile = (text, price.group(1), image)
+                tile_brand = _tile_field(node, "product-brand")
                 break
             if not node.parent:
                 break
@@ -451,7 +556,7 @@ def _tile_records(html, page_url, domain, gender, names, metadata_by_url, metada
         text, price, image = tile
         metadata = metadata_by_url.get(url) or metadata_by_id.get(_product_id(url), {})
         title = metadata.get("title") or names.get(url)
-        brand = metadata.get("brand")
+        brand = metadata.get("brand") or tile_brand
         price = metadata.get("salePrice") or price
         if not title and domain == "mango.com":
             title = _mango_title(url, text)
@@ -483,6 +588,26 @@ def _tile_records(html, page_url, domain, gender, names, metadata_by_url, metada
             title = _clean_stories_title(title)
         else:
             title = _clean_tile_title(title)
+        if domain in {"arket.com", "cos.com", "stories.com"}:
+            title = _append_color(title, metadata.get("color"))
+        if domain == "ralphlauren.co.uk":
+            brand = brand or _tile_field(node, "product-brand")
+            brand = brand or _tile_field(node, "product-brand-name")
+            if not brand:
+                text_lower = node.text().lower()
+                brand = next(
+                    (
+                        candidate for candidate in
+                        ("Polo Ralph Lauren", "Purple Label", "Lauren", "RRL")
+                        if candidate.lower() in text_lower
+                    ),
+                    None,
+                )
+            title = (
+                _tile_field(node, "product-name")
+                or _tile_field(node, "product-name-link")
+                or title
+            )
         if domain == "barbour.com":
             title_words = set(re.findall(r"[a-z]+", title.lower()))
             url_words = set(re.findall(r"[a-z]+", urlsplit(url).path.lower()))
@@ -535,6 +660,10 @@ def _next_products(
                 "title": str(item.get("name") or item.get("title")),
                 "brand": item.get("brandName") or item.get("brand"),
                 "salePrice": item.get("salePrice"),
+                "color": (
+                    item.get("color") or item.get("colour")
+                    or item.get("colorName") or item.get("colourName")
+                ),
             }
             if canonical:
                 metadata_by_url[canonical] = metadata
@@ -546,8 +675,11 @@ def _next_products(
                 item.get("primaryImage") or item.get("images") or item.get("mediaObjects")
                 or item.get("image") or item.get("imageUrl")
             )
+            title = str(item.get("name") or item.get("title"))
+            if domain in {"arket.com", "cos.com", "stories.com"}:
+                title = _append_color(title, metadata.get("color"))
             record = _record(
-                item.get("name") or item.get("title"),
+                title,
                 price,
                 image,
                 url,
@@ -569,10 +701,11 @@ def parse_listing(html: str, page_url: str, domain: str, gender: str) -> list[di
     names = _itemlist_names(payloads, page_url, domain)
     metadata_by_url, metadata_by_id = _structured_metadata(payloads, page_url, domain)
     gender_mismatch_urls = set()
-    records = _next_products(
+    records = _burberry_products(payloads, page_url, gender) if domain == "burberry.com" else []
+    records.extend(_next_products(
         payloads, page_url, domain, gender, metadata_by_url, metadata_by_id,
         gender_mismatch_urls,
-    )
+    ))
     records.extend(
         _tile_records(
             html, page_url, domain, gender, names, metadata_by_url, metadata_by_id

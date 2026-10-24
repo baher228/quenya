@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -68,6 +69,17 @@ EXPECTED = [
         "https://shop.mango.com/gb/en/p/women/trousers/party/"
         "faux-leather-flared-trousers/37045163/32/00",
     ),
+    (
+        "burberry", "burberry.com", "m", 5, "Check Cashmere Sweater", 955.0,
+        "https://assets.burberry.com/is/image/Burberryltd/0D7B70CA-576A-42FA-9201-B419BB018D21",
+        "https://uk.burberry.com/check-cashmere-sweater-p81317811",
+    ),
+    (
+        "ralphlauren", "ralphlauren.co.uk", "m", 5, "Fair Isle Wool Jumper", 265.0,
+        "https://dtcralphlauren.scene7.com/is/image/PoloGSI/"
+        "s7-AI710B26783001_alternate10?$plpDeskRF$",
+        "https://www.ralphlauren.co.uk/en/fair-isle-wool-jumper-100101445.html",
+    ),
 ]
 
 
@@ -132,6 +144,8 @@ def test_listing_reader_ignores_unknown_domains():
         ("charlestyrwhitt.com", EXPECTED[4][7], "Charles Tyrwhitt"),
         ("asos.com", EXPECTED[6][7], "ASOS"),
         ("mango.com", EXPECTED[7][7], "Mango"),
+        ("burberry.com", EXPECTED[8][7], "Burberry"),
+        ("ralphlauren.co.uk", EXPECTED[9][7], "Ralph Lauren"),
     ],
 )
 def test_catalog_record_uses_shop_brand_fallback(monkeypatch, domain, url, expected):
@@ -212,6 +226,100 @@ def test_stories_uses_structured_title_by_product_id(monkeypatch):
     assert len(records) == 1
     assert records[0]["title"] == "Boxy Knit Jumper"
     assert records[0]["brand"] == "& Other Stories"
+
+
+def test_arket_appends_structured_color_to_variant_title(monkeypatch):
+    monkeypatch.setattr(catalog, "_valid_image", lambda image, _page: image)
+    html = """
+    <script id="__NEXT_DATA__" type="application/json">
+    {"props":{"pageProps":{"products":[{"name":"Heavy Knit Wool Jumper",
+    "id":"1296629004","uri":"heavy-knit-wool-jumper-dark-blue-1296629004",
+    "priceAsNumber":75,"images":["https://media.arket.com/item.jpg"],
+    "color":{"name":"Dark Blue"}}]}}}
+    </script>
+    """
+    records = parse_listing(
+        html, "https://www.arket.com/en-gb/men/clothing/knitwear/",
+        "arket.com", "m",
+    )
+    assert len(records) == 1
+    assert records[0]["title"] == "Heavy Knit Wool Jumper – Dark Blue"
+
+
+@pytest.mark.parametrize(
+    "price",
+    [
+        {"current": {"value": 85, "currency": "USD"}},
+        {},
+    ],
+)
+def test_burberry_drops_non_gbp_or_missing_price(monkeypatch, price):
+    monkeypatch.setattr(catalog, "_valid_image", lambda image, _page: image)
+    payload = {
+        "pages": {
+            "entities": {
+                "/l/mens-clothing/knitwear/": {
+                    "components": {
+                        "products": [
+                            {
+                                "products": [
+                                    {
+                                        "items": [
+                                            {
+                                                "content": {"title": "Wool Jumper"},
+                                                "price": price,
+                                                "url": "/wool-jumper-p12345",
+                                                "media": {
+                                                    "defaults": {
+                                                        "image": {
+                                                            "imageDefault":
+                                                                "https://img.example/j.jpg"
+                                                        }
+                                                    }
+                                                },
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+    html = f"<script>window.__PRELOADED_STATE__ = {json.dumps(payload)};</script>"
+    assert parse_listing(
+        html, "https://uk.burberry.com/l/mens-clothing/knitwear/",
+        "burberry.com", "m",
+    ) == []
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        """
+        <div class="product-tile js-product-tile">
+          <a class="thumb-link js-pdp-link" href="/en/wool-jumper-123456.html">
+            Wool Jumper $85.00 <img data-src="https://img.example/j.jpg">
+          </a>
+        </div>
+        """,
+        """
+        <div class="product-tile js-product-tile">
+          <a class="thumb-link js-pdp-link" href="/en/wool-jumper-123456.html">
+            Wool Jumper <img data-src="https://img.example/j.jpg">
+          </a>
+        </div>
+        """,
+    ],
+)
+def test_ralph_lauren_rejects_non_gbp_and_missing_price(monkeypatch, html):
+    monkeypatch.setattr(catalog, "_valid_image", lambda url, _page: url)
+    assert parse_listing(
+        html, "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206",
+        "ralphlauren.co.uk", "m",
+    ) == []
 
 
 def test_barbour_itemlist_excludes_non_listing_product_links(monkeypatch):

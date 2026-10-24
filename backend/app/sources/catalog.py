@@ -86,6 +86,8 @@ _PRODUCT_PATHS = {
     "charlestyrwhitt.com": re.compile(r"/uk/[^/?#]+/[^/?#]+\.html", re.I),
     "asos.com": re.compile(r"/[^/?#]+/[^/?#]+/prd/\d+", re.I),
     "mango.com": re.compile(r"/gb/en/p/[^?#]+", re.I),
+    "burberry.com": re.compile(r"/[^/?#]+-p\d+", re.I),
+    "ralphlauren.co.uk": re.compile(r"/en/(?!rlmag/|discover/)[^?#]+\.html", re.I),
     "uniqlo.com": re.compile(r"^/uk/en/products?/[^/?#]+(?:/\d{2})?/?$", re.I),
     "urbanoutfitters.com": re.compile(r"/(?:en-gb/)?shop/[^/?#]+", re.I),
 }
@@ -98,6 +100,8 @@ _HOUSE_BRANDS = {
     "charlestyrwhitt.com": "Charles Tyrwhitt",
     "asos.com": "ASOS",
     "mango.com": "Mango",
+    "burberry.com": "Burberry",
+    "ralphlauren.co.uk": "Ralph Lauren",
 }
 _MAX_PER_DOMAIN = {domain: threading.BoundedSemaphore(2) for domain in CATALOG}
 _TAVILY_DISABLED = False
@@ -110,7 +114,10 @@ OLD_MONEY_BRANDS = (
     "Ralph Lauren", "Barbour", "John Smedley", "Hackett", "Sunspel",
     "Charles Tyrwhitt", "Brooks Brothers", "Lacoste",
 )
-OLD_MONEY_SHOPS = ("barbour.com", "johnsmedley.com", "charlestyrwhitt.com")
+OLD_MONEY_SHOPS = (
+    "barbour.com", "johnsmedley.com", "charlestyrwhitt.com",
+    "burberry.com", "ralphlauren.co.uk",
+)
 OLD_MONEY_SLOT_WORDS = (
     "cable knit", "oxford shirt", "wax jacket", "chinos", "loafers",
 )

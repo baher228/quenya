@@ -90,6 +90,30 @@ CATEGORY_PAGES = {
         ("w", "https://shop.mango.com/gb/en/c/women/dresses-and-jumpsuits_d0c8fdc1"),
         ("w", "https://shop.mango.com/gb/en/c/women/jackets_0d4b5eb2"),
     ],
+    "burberry.com": [
+        ("m", "https://uk.burberry.com/l/mens-clothing/knitwear/"),
+        ("m", "https://uk.burberry.com/l/mens-clothing/shirts/"),
+        ("m", "https://uk.burberry.com/l/mens-clothing/trousers-shorts/"),
+        ("m", "https://uk.burberry.com/l/mens-coats-jackets/"),
+        ("m", "https://uk.burberry.com/l/mens-clothing/blazers-tailored-trousers/"),
+        ("w", "https://uk.burberry.com/l/womens-clothing/knitwear/"),
+        ("w", "https://uk.burberry.com/l/womens-clothing/shirts-tops/"),
+        ("w", "https://uk.burberry.com/l/womens-clothing/trousers-shorts/"),
+        ("w", "https://uk.burberry.com/l/womens-clothing/dresses/"),
+        ("w", "https://uk.burberry.com/l/womens-coats-jackets/"),
+    ],
+    "ralphlauren.co.uk": [
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206?start=0&sz=30"),
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/casual-shirts/10202?start=0&sz=30"),
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/polo-shirts/10201?start=0&sz=30"),
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/trousers/102015?start=0&sz=30"),
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/jackets-coats/10205?start=0&sz=30"),
+        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/blazers/10209?start=0&sz=30"),
+        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/jumpers-cardigans/202025?start=0&sz=30"),
+        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/shirts-blouses/20204?start=0&sz=30"),
+        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/dresses-jumpsuits/20201?start=0&sz=30"),
+        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/trousers/20209?start=0&sz=30"),
+    ],
 }
 
 
@@ -110,7 +134,28 @@ def _scroll_listing(page):
         page.wait_for_timeout(350)
 
 
-def _fetch(url, timeout_seconds=45):
+def _fetch(url, timeout_seconds=45, shop=""):
+    if shop == "burberry.com":
+        deadline = time.monotonic() + max(1, timeout_seconds)
+        last_error = None
+        for attempt in range(2):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                response = httpx.get(
+                    url, timeout=remaining, follow_redirects=True,
+                    headers={"User-Agent": UA},
+                )
+                response.raise_for_status()
+                return response.text, str(response.url)
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt == 0 and time.monotonic() < deadline:
+                    time.sleep(min(3, deadline - time.monotonic()))
+        if last_error:
+            raise last_error
+        return "", url
     last_error = None
     deadline = time.monotonic() + max(1, timeout_seconds)
     for attempt in range(2):
@@ -118,11 +163,24 @@ def _fetch(url, timeout_seconds=45):
         if remaining <= 0:
             break
         try:
+            options = {
+                "headless": True,
+                "load_dom": True,
+                "network_idle": False,
+                "wait": 3000,
+                "page_action": _scroll_listing,
+                "timeout": max(1000, int(remaining * 1000)),
+                "locale": "en-GB",
+                "timezone_id": "Europe/London",
+            }
+            if shop == "ralphlauren.co.uk":
+                options.update(
+                    google_search=False,
+                    extra_headers={"Referer": "https://www.ralphlauren.co.uk/"},
+                    wait_selector=".js-product-tile",
+                )
             page = StealthyFetcher.fetch(
-                url, headless=True, load_dom=True, wait=3000,
-                page_action=_scroll_listing, timeout=max(1000, int(remaining * 1000)),
-                locale="en-GB",
-                timezone_id="Europe/London",
+                url, **options,
             )
             body = getattr(page, "body", b"")
             html = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else str(body)
@@ -223,7 +281,7 @@ def run(args):
                     try:
                         last_request = time.monotonic()
                         html, final_url = _fetch(
-                            url, timeout_seconds=min(45, deadline - page_started)
+                            url, timeout_seconds=min(45, deadline - page_started), shop=shop
                         )
                         records = parse_listing(html, final_url, shop, gender)
                         parsed_count = len(records)

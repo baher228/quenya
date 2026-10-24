@@ -24,6 +24,8 @@ SHOP_TIERS = {
     "barbour.com": "premium",
     "charlestyrwhitt.com": "premium",
     "johnsmedley.com": "luxury",
+    "burberry.com": "luxury",
+    "ralphlauren.co.uk": "premium",
     "mango.com": "high_street",
     "uniqlo.com": "high_street",
     "urbanoutfitters.com": "high_street",
