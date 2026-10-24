@@ -1,0 +1,31 @@
+# expected_context<TAB>phrase
+gym	need squat-proof leggings and a couple of lifting tops
+gym	oversized pump cover tees for the gym, nothing neon
+running	half marathon in spring, want light shorts and a breathable singlet
+running	winter running layers for dark mornings, reflective details
+outdoor	going to the Alps in July, need a proper waterproof shell and trekking trousers
+outdoor	Scottish highlands hiking weekend, wool base layers and a fleece
+outdoor	gorpcore but actually functional for Lake District walks
+city	everyday autumn outfits in London, relaxed and clean
+city	90s skate look, baggy jeans and washed hoodies
+workwear	chore jackets and double-knee trousers that age well
+workwear	japanese workwear, indigo and sashiko details
+smart	first job in the City, two suits and shirts
+smart	wedding guest in September, linen suit maybe
+evening	going out in Shoreditch, black flared trousers and a corset top
+evening	christmas party dress, velvet or satin
+lounge	soft cosy homewear for winter evenings
+swim	holiday in Greece, swim shorts and linen shirts
+swim	black one-piece and a beach cover-up
+city	balletcore wrap cardigans and ballet flats
+city	minimal womenswear capsule, cream and grey knitwear
+outdoor	via ferrata in the Dolomites, need technical trousers
+gym	pilates set in muted colours
+running	trail running shoes and a light windproof
+smart	interview outfit for a design agency, smart but not stiff
+city	y2k going-for-coffee looks, low rise jeans and baby tees
+workwear	carpenter trousers and canvas jackets for weekends
+evening	date night outfit, dark tailoring without a tie
+outdoor	winter camping kit, insulated jacket and thermal layers
+gym	boxing training, shorts and breathable tops
+city	vintage western shirts and bootcut jeans

@@ -18,7 +18,13 @@ from app.images import cached_image_path
 from app.mubit import TaskError
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
-from app.prompts import READER_MODEL, STYLIST_MODEL, TAGGER_MODEL, TASTE_MODEL
+from app.prompts import (
+    READER_MODEL,
+    ROUTER_MODEL,
+    STYLIST_MODEL,
+    TAGGER_MODEL,
+    TASTE_MODEL,
+)
 from app.tagging import tag_item
 from app.taste import update_taste
 
@@ -81,6 +87,7 @@ def health() -> dict:
             "taste": TASTE_MODEL,
             "stylist": STYLIST_MODEL,
             "reader": READER_MODEL,
+            "router": ROUTER_MODEL,
         },
         "prompt_version": PROMPT_VERSION,
         "items_total": total,

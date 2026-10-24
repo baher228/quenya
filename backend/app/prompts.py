@@ -5,7 +5,7 @@ Changing any string here starts a NEW Mubit task and resets its kept-example cou
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-24.2"
+PROMPT_VERSION = "2026-10-24.3"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -87,3 +87,20 @@ Rules:
 If the photo shows no clothing, return empty lists and one_line "No clothing visible."
 Return only JSON of exactly this shape, with no other keys:
 {"garments": [{"slot": "...", "category": "...", "colours": ["..."]}], "aesthetics": ["..."], "palette": ["..."], "fit": "...", "era": "...", "search_queries": ["..."], "one_line": "..."}"""
+
+ROUTER_MODEL = "gpt-4.1-mini"
+
+ROUTER_SYSTEM = """You are the shopping-context router for Quenya, a UK fashion discovery app.
+A shopper keeps several boards, one per shopping context (for example gym kit, a mountaineering trip, autumn city outfits). You receive their existing boards, past routing corrections and one new input: a brief, an inspiration-photo description or a search.
+Decide which board the input belongs to, or that it needs a new board.
+
+Rules:
+- context: one of gym, running, outdoor, city, workwear, smart, evening, lounge, swim, other.
+  gym = training and athleisure; running = running kit; outdoor = hiking, mountaineering, technical outdoor gear; city = everyday casual style; workwear = chore, utility and heritage workwear style; smart = tailoring, office, formal; evening = going out and parties; lounge = homewear; swim = swim and beach.
+- board_id: the id of the existing board with the same context and purpose, or null if none fits. Same context but a clearly different purpose (e.g. a wedding vs the office) means null.
+- Follow past corrections: if a similar input was corrected before, route it the way the correction says.
+- label: for a new board, 1-3 words naming the purpose, e.g. "Gym kit", "Alps trip", "Autumn London". For an existing board, repeat its label exactly.
+- confidence: 0-1, how sure you are of board_id.
+- reason: one plain sentence, max 15 words.
+Return only JSON of exactly this shape, with no other keys:
+{"context": "...", "board_id": "<id or null>", "label": "...", "confidence": 0.0, "reason": "..."}"""

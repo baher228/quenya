@@ -88,9 +88,14 @@ def rank_items(
     profile: dict[str, Any],
     *,
     exclude_ids: set[str] | None = None,
+    core_profile: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     ranked = [
-        (score_item(item, profile), item)
+        (
+            score_item(item, profile)
+            + (0.3 * score_item(item, core_profile) if core_profile else 0.0),
+            item,
+        )
         for item in items
         if tags_for(item) and eligible(item, brief, profile, exclude_ids=exclude_ids)
     ]
@@ -105,26 +110,71 @@ def rank_items(
     return [item for _, item in ranked]
 
 
-def make_deck(ranked: list[dict[str, Any]], count: int) -> list[dict[str, Any]]:
-    remaining = list(ranked)
+def make_deck(
+    ranked: list[dict[str, Any]],
+    count: int,
+    brief: dict[str, Any] | None = None,
+    *,
+    include_shoes: bool = True,
+) -> list[dict[str, Any]]:
+    brief = brief or {}
+    shoe_cap = max(1, count // 8) if include_shoes and count else 0
+    shoes = [item for item in ranked if tags_for(item).get("slot") == "shoes"]
+    available_shoes = min(shoe_cap, len(shoes), count)
+    remaining = [
+        item for item in ranked if tags_for(item).get("slot") != "shoes"
+    ]
+    slots = list(dict.fromkeys(
+        slot for slot in brief.get("pieces", []) if slot != "shoes"
+    ))
+    if not slots:
+        slots = list(dict.fromkeys(
+            str(tags_for(item).get("slot"))
+            for item in remaining
+            if tags_for(item).get("slot") not in (None, "shoes")
+        ))
     deck: list[dict[str, Any]] = []
-    seen_slots: set[str] = set()
     seen_aesthetics: set[str] = set()
-    for position in range(count):
-        explore = position % 3 == 2
-        chosen_index = 0
-        if explore:
-            for index, item in enumerate(remaining):
-                tags = tags_for(item)
-                aesthetics = {str(value).lower() for value in tags.get("aesthetics", [])}
-                if tags.get("slot") not in seen_slots or aesthetics - seen_aesthetics:
-                    chosen_index = index
-                    break
-        item = remaining.pop(chosen_index)
-        tags = tags_for(item)
-        seen_slots.add(str(tags.get("slot", "")).lower())
-        seen_aesthetics.update(str(value).lower() for value in tags.get("aesthetics", []))
-        deck.append(item)
-        if not remaining:
-            break
-    return deck
+    next_slot = 0
+    non_shoe_goal = max(0, count - available_shoes)
+    while len(deck) < non_shoe_goal and remaining:
+        candidates = [
+            item for item in remaining
+            if tags_for(item).get("slot") == slots[next_slot % len(slots)]
+        ] if slots else list(remaining)
+        next_slot += 1
+        if not candidates:
+            if slots and next_slot >= len(slots) * (len(deck) + len(slots) + 1):
+                slots = [
+                    slot for slot in slots
+                    if any(tags_for(item).get("slot") == slot for item in remaining)
+                ]
+                next_slot = 0
+                if not slots:
+                    slots = []
+            continue
+        position = len(deck)
+        chosen = candidates[0]
+        if position % 3 == 2:
+            chosen = next(
+                (
+                    item for item in candidates
+                    if {
+                        str(value).lower()
+                        for value in tags_for(item).get("aesthetics", [])
+                    } - seen_aesthetics
+                ),
+                chosen,
+            )
+        remaining.remove(chosen)
+        deck.append(chosen)
+        seen_aesthetics.update(
+            str(value).lower() for value in tags_for(chosen).get("aesthetics", [])
+        )
+    if len(deck) < non_shoe_goal:
+        for item in remaining:
+            deck.append(item)
+            if len(deck) >= non_shoe_goal:
+                break
+    deck.extend(shoes[: max(0, min(shoe_cap, count - len(deck)))])
+    return deck[:count]

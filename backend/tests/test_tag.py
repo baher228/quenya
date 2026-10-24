@@ -1,5 +1,7 @@
+from types import SimpleNamespace
+
 from app import db, phase2_api
-from app.schemas import LiveSearchRequest
+from app.schemas import LiveSearchRequest, RouteOut
 
 
 def _record(item_id):
@@ -42,6 +44,12 @@ def test_live_search_does_not_retag_previously_failed_items(monkeypatch, tmp_pat
         phase2_api.vinted, "search", lambda *_args, **_kwargs: [item]
     )
     monkeypatch.setattr(phase2_api.retail, "search", lambda *_args, **_kwargs: [])
+    route = RouteOut(context="city", board_id=None, label="City", confidence=0.9, reason="test")
+    monkeypatch.setattr(
+        phase2_api,
+        "route_input",
+        lambda *_args: (route, None, SimpleNamespace(request_id="mreq-test"), "content"),
+    )
 
     def unexpected_tag(*_args, **_kwargs):
         raise AssertionError("previously failed item was sent to Mubit again")
