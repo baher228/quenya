@@ -1,4 +1,5 @@
 import type {
+  Board, Core, Route, UploadResult,
   Brief, Checkout, FetchJob, Item, Outfit, OutfitsResponse, TaskStats, TasteState, TasteVersion,
 } from "./types";
 
@@ -56,7 +57,7 @@ const post = <T>(path: string, data?: unknown) =>
 export const api = {
   health: () => req<{ items_total: number; items_tagged: number; models: Record<string, string> }>("/api/health"),
   createProfile: (brief: Brief) =>
-    post<{ profile_id: string; taste: { version: number; profile: TasteVersion["profile"] }; fetch_job_id?: string | null }>(
+    post<{ profile_id: string; taste: { version: number; profile: TasteVersion["profile"] }; fetch_job_id?: string | null; board: Board; route: Route }>(
       "/api/profile", { brief },
     ),
   fetchJob: (id: string) => req<FetchJob>(`/api/fetch/${id}`),
@@ -76,10 +77,17 @@ export const api = {
   upload: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return req<{ read: { one_line: string; aesthetics: string[]; palette: string[] }; taste?: TasteVersion | null }>(
-      "/api/uploads", { method: "POST", body: fd },
-    );
+    return req<UploadResult>("/api/uploads", { method: "POST", body: fd });
   },
+  assignUpload: (uploadId: string, board_id: string | null, label?: string) =>
+    post<{ board: Board; taste?: TasteVersion | null }>(`/api/uploads/${uploadId}/assign`, { board_id, label }),
+  boards: () => req<Board[]>("/api/boards"),
+  activate: (id: string) => post<{ board: Board }>(`/api/boards/${id}/activate`),
+  rename: (id: string, label: string) =>
+    req<{ board: Board }>(`/api/boards/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+  correctRoute: (routeId: string, board_id: string | null, label?: string) =>
+    post<{ board: Board; route: Route; taste?: TasteVersion | null }>(`/api/route/${routeId}/correct`, { board_id, label }),
+  core: () => req<Core>("/api/core"),
   search: (q: string) =>
     req<Item[] | { items: Item[] }>(`/api/search?q=${encodeURIComponent(q)}&limit=20`).then(r => (Array.isArray(r) ? r : r.items)),
   searchLive: (q: string) =>

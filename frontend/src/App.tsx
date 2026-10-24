@@ -6,13 +6,17 @@ import { FindScreen } from "./Find";
 import { OutfitsScreen, REASONS } from "./Outfits";
 import { TasteScreen } from "./Taste";
 import { ErrorBox, Loading, Provenance } from "./ui";
-import type { Brief, Checkout, Item, Outfit, TasteState, TasteVersion } from "./types";
+import type { Board, Brief, Checkout, Item, Outfit, Route, TasteState, TasteVersion, UploadResult } from "./types";
 
 type Tab = "brief" | "swipe" | "outfits" | "find" | "taste";
 type Sheet =
   | { kind: "reject"; outfit: Outfit }
   | { kind: "item"; item: Item }
-  | { kind: "checkout"; outfit: Outfit; result?: Checkout; error?: unknown };
+  | { kind: "checkout"; outfit: Outfit; result?: Checkout; error?: unknown }
+  | { kind: "move"; route: Route; board: Board }
+  | { kind: "photo"; up: UploadResult };
+
+interface RouteNote { route: Route; board: Board }
 
 interface Toast { id: number; title: string; lines: string[] }
 
@@ -30,6 +34,13 @@ export default function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [deckKey, setDeckKey] = useState(0);
   const [updating, setUpdating] = useState(false);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [routeNote, setRouteNote] = useState<RouteNote | null>(null);
+  const [briefKey, setBriefKey] = useState(0);
+  const activeBoard = boards.find(b => b.active) ?? null;
+  const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
+  useEffect(refreshBoards, [refreshBoards]);
+  useEffect(() => { if (!routeNote) return; const h = window.setTimeout(() => setRouteNote(null), 15000); return () => window.clearTimeout(h); }, [routeNote]);
 
   const version = taste?.current?.version ?? null;
   const refreshTaste = useCallback(() => { api.taste().then(setTaste).catch(() => setTaste({ current: null, history: [], counts: {} })); }, []);
@@ -49,14 +60,52 @@ export default function App() {
     finally { setUpdating(false); }
   }, [announce]);
 
+  const boardChanged = useCallback(() => {
+    setOutfits([]); setDeckKey(k => k + 1); refreshTaste(); refreshBoards();
+  }, [refreshTaste, refreshBoards]);
+
+  const handleUpload = useCallback(async (f: File) => {
+    const r = await api.upload(f);
+    if (r.pending) setSheet({ kind: "photo", up: r });
+    else announce(r.taste, "read your photo");
+  }, [announce]);
+
+  const switchBoard = async (b: Board) => {
+    if (b.active) return;
+    try { await api.activate(b.id); setBrief({ ...DEFAULT_BRIEF, ...b.brief }); setBriefKey(k => k + 1); boardChanged(); setRouteNote(null); }
+    catch (e) { setToast({ id: Date.now(), title: "Couldn't switch board", lines: [errText(e)] }); }
+  };
+
+  const newBoard = () => { setBrief({ ...DEFAULT_BRIEF, text: "" }); setBriefKey(k => k + 1); setTab("brief"); };
+
+  const moveRoute = async (route: Route, boardId: string | null) => {
+    setSheet(null);
+    try {
+      const r = await api.correctRoute(route.id, boardId);
+      setRouteNote({ route: { ...r.route, routed: "corrected" }, board: r.board });
+      boardChanged();
+      if (r.taste && "changes" in r.taste && r.taste.changes?.length) announce(r.taste, "routing fixed");
+    } catch (e) { setToast({ id: Date.now(), title: "Couldn't move it", lines: [errText(e)] }); }
+  };
+
+  const assignPhoto = async (up: UploadResult, boardId: string | null, label?: string) => {
+    setSheet(null);
+    try {
+      const r = await api.assignUpload(up.upload_id, boardId, label);
+      if (!activeBoard || r.board.id !== activeBoard.id) boardChanged(); else refreshBoards();
+      announce(r.taste, `photo added to ${r.board.label}`);
+    } catch (e) { setToast({ id: Date.now(), title: "Couldn't file that photo", lines: [errText(e)] }); }
+  };
+
   const submitBrief = async (b: Brief, photos: File[]) => {
     setCreating(true); setCreateErr(null); setBrief(b);
     try {
       const r = await api.createProfile(b);
       setOutfits([]);
-      refreshTaste();
+      refreshTaste(); refreshBoards();
+      if (r.route && r.board) setRouteNote({ route: r.route, board: r.board });
       for (const f of photos) {
-        try { announce((await api.upload(f)).taste, "read your photo"); } catch (e) { setToast({ id: Date.now(), title: "Couldn't read a photo", lines: [errText(e)] }); }
+        try { await handleUpload(f); } catch (e) { setToast({ id: Date.now(), title: "Couldn't read a photo", lines: [errText(e)] }); }
       }
       if (r.fetch_job_id) void pollFetch(r.fetch_job_id);
       setDeckKey(k => k + 1);
@@ -103,8 +152,9 @@ export default function App() {
   };
 
   const reset = async () => {
-    if (!window.confirm("Reset the demo profile? Swipes, outfits and taste versions are deleted.")) return;
+    if (!window.confirm("Reset the demo? All boards, swipes, outfits and taste versions are deleted.")) return;
     await api.reset().catch(() => undefined);
+    setBoards([]); setRouteNote(null); setBriefKey(k => k + 1);
     setOutfits([]); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setTab("brief");
   };
 
@@ -114,12 +164,32 @@ export default function App() {
       <div className="phone">
         <header className="top">
           <span className="logo">quenya<i>.</i></span>
-          <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? (version ? `taste v${version}` : "Vinted · ASOS")}</span>
+          <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? (version ? `taste v${version}` : "")}</span>
         </header>
+        {boards.length > 0 && (
+          <div className="boards" role="tablist" aria-label="Boards">
+            {boards.map(b => (
+              <button key={b.id} role="tab" aria-selected={b.active} className={"board" + (b.active ? " on" : "")} onClick={() => switchBoard(b)}>
+                {b.label}{b.version ? <em>v{b.version}</em> : null}
+              </button>
+            ))}
+            <button className="board add" onClick={newBoard} aria-label="New brief">+</button>
+          </div>
+        )}
+        {routeNote && (
+          <div className="route" role="status">
+            <p>
+              <b>{routeNote.route.routed === "new" ? `New board · ${routeNote.board.label}` : routeNote.route.routed === "existing" ? `Added to ${routeNote.board.label}` : `Moved to ${routeNote.board.label}`}</b>
+              <span>{routeNote.route.routed === "corrected" ? "Saved as a routing correction. Next time the router sees a brief like this, it gets this example." : routeNote.route.reason}</span>
+            </p>
+            {routeNote.route.routed !== "corrected" && <button className="btn ghost sm" onClick={() => setSheet({ kind: "move", route: routeNote.route, board: routeNote.board })}>Move</button>}
+            <button className="x" onClick={() => setRouteNote(null)} aria-label="Dismiss">×</button>
+          </div>
+        )}
         <main className="body">
           {tab === "brief" && (
             <>
-              <BriefScreen initial={brief} busy={creating} onSubmit={submitBrief} />
+              <BriefScreen key={briefKey} initial={brief} busy={creating} onSubmit={submitBrief} hasBoards={boards.length > 0} />
               {createErr !== null && <ErrorBox error={createErr} />}
             </>
           )}
@@ -134,8 +204,7 @@ export default function App() {
                 onCheckout={checkout} onOpenItem={item => setSheet({ kind: "item", item })} />
             : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "find" && <FindScreen onOpenItem={item => setSheet({ kind: "item", item })} />}
-          {tab === "taste" && <TasteScreen taste={taste} refresh={refreshTaste} onReset={reset}
-            onUpload={async f => { announce((await api.upload(f)).taste, "read your photo"); }} />}
+          {tab === "taste" && <TasteScreen taste={taste} board={activeBoard} refresh={refreshTaste} onReset={reset} onUpload={handleUpload} />}
         </main>
 
         {toast && (
@@ -156,6 +225,8 @@ export default function App() {
             {sheet?.kind === "reject" && <RejectSheet onPick={r => reject(sheet.outfit, r)} onClose={() => setSheet(null)} />}
             {sheet?.kind === "item" && <ItemSheet item={sheet.item} onClose={() => setSheet(null)} onCorrected={t => announce(t, "tag correction")} />}
             {sheet?.kind === "checkout" && <CheckoutSheet s={sheet} onClose={() => setSheet(null)} />}
+            {sheet?.kind === "move" && <MoveSheet route={sheet.route} current={sheet.board} boards={boards} onPick={id => moveRoute(sheet.route, id)} onClose={() => setSheet(null)} />}
+            {sheet?.kind === "photo" && <PhotoSheet up={sheet.up} boards={boards} active={activeBoard} onPick={(id, label) => assignPhoto(sheet.up, id, label)} onClose={() => setSheet(null)} />}
           </div>
         </div>
       </div>
@@ -250,6 +321,42 @@ function CheckoutSheet({ s, onClose }: { s: Extract<Sheet, { kind: "checkout" }>
         </>
       )}
       <button className="close" onClick={onClose}>Done</button>
+    </>
+  );
+}
+
+function MoveSheet({ route, current, boards, onPick, onClose }: {
+  route: Route; current: Board; boards: Board[]; onPick: (id: string | null) => void; onClose: () => void;
+}) {
+  const others = boards.filter(b => b.id !== current.id);
+  return (
+    <>
+      <p className="h3">Where does this belong?</p>
+      <p className="small muted">The router filed it under {current.label}. Your answer is a routing correction: it's stored and shown to the router with every later brief.</p>
+      {others.map(b => (
+        <button key={b.id} className="reason" onClick={() => onPick(b.id)}>{b.label}<span className="ctx">{b.context}</span></button>
+      ))}
+      {route.routed === "existing" && <button className="reason" onClick={() => onPick(null)}>Its own new board</button>}
+      {others.length === 0 && route.routed !== "existing" && <p className="small muted">No other boards yet.</p>}
+      <button className="close" onClick={onClose}>Cancel</button>
+    </>
+  );
+}
+
+function PhotoSheet({ up, boards, active, onPick, onClose }: {
+  up: UploadResult; boards: Board[]; active: Board | null; onPick: (id: string | null, label?: string) => void; onClose: () => void;
+}) {
+  const match = boards.find(b => b.label.toLowerCase() === up.route.label.toLowerCase() && !b.active);
+  return (
+    <>
+      <p className="h3">This looks like {up.route.label}.</p>
+      <p className="small muted">{up.read.one_line}</p>
+      <p className="small muted">{up.route.reason}</p>
+      {match
+        ? <button className="reason" onClick={() => onPick(match.id)}>Add to {match.label}</button>
+        : <button className="reason" onClick={() => onPick(null, up.route.label)}>Start a “{up.route.label}” board</button>}
+      {active && <button className="reason" onClick={() => onPick(active.id)}>Keep it on {active.label}</button>}
+      <button className="close" onClick={onClose}>Decide later</button>
     </>
   );
 }

@@ -4,6 +4,7 @@ export interface Brief {
   text: string;
   looking_for: "outfits" | "pieces";
   pieces: Slot[];
+  include_shoes: boolean;
   gender: "menswear" | "womenswear" | "both";
   condition: "second-hand" | "new" | "both";
   niche: number;
@@ -75,6 +76,7 @@ export interface TasteState {
     signal_counts?: Record<string, number>;
   }[];
   counts: Record<string, number>;
+  core?: Core;
 }
 
 export interface Outfit {
@@ -122,4 +124,40 @@ export interface FetchJob {
   tagged: number;
   failed: number;
   errors: string[];
+}
+
+export interface Board {
+  id: string;
+  label: string;
+  context: string;
+  active: boolean;
+  brief: Brief;
+  version: number | null;
+  counts: { swipes: number; outfits: number; uploads: number };
+}
+
+export interface Route {
+  id: string;
+  routed: "existing" | "new" | "pending" | "corrected";
+  context: string;
+  label: string;
+  confidence: number;
+  reason: string;
+  request_id: string | null;
+}
+
+export interface Core {
+  rules: { rule: string; boards: string[] }[];
+  likes: Record<string, number>;
+  avoids: Record<string, number>;
+  palette: string[];
+  sizes: Record<string, string>;
+}
+
+export interface UploadResult {
+  upload_id: string;
+  read: { one_line: string; aesthetics: string[]; palette: string[] };
+  pending: boolean;
+  route: Route;
+  taste?: TasteVersion | null;
 }

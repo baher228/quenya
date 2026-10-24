@@ -61,8 +61,11 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
                 <div><div className="o-name">{o.title}</div><div className="o-mood">{o.mood}</div></div>
                 <div className="o-total">{gbp(o.total_gbp)}<span>{o.pieces.length} pieces</span></div>
               </header>
-              <div className="pieces">
-                {o.pieces.map(p => (
+              {(["major", "minor"] as const).map(group => {
+                const ps = o.pieces.filter(p => isMinor(p) === (group === "minor"));
+                return ps.length ? (
+              <div key={group} className={"pieces" + (group === "minor" ? " minor" : "")}>
+                {ps.map(p => (
                   <figure key={p.id} className={"piece" + (keep.includes(p.id) ? " locked" : "")}>
                     <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><img src={img(p)} alt={p.title} loading="lazy" /></button>
                     <figcaption><b>{p.brand || p.tags?.category || "Piece"}</b><span>{gbp(p.price_gbp)}</span></figcaption>
@@ -72,6 +75,8 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
                   </figure>
                 ))}
               </div>
+                ) : null;
+              })}
               <p className="why"><span>Why this</span>{o.why}</p>
               <ul className="srcs">{o.pieces.map(p => (
                 <li key={p.id}><a href={p.source_url} target="_blank" rel="noreferrer">{p.title}</a><Provenance source={p.source} origin={p.origin} /></li>
@@ -96,3 +101,6 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
     </section>
   );
 }
+
+const MINOR_SLOTS = new Set(["shoes", "bag", "accessory"]);
+function isMinor(p: Item) { return MINOR_SLOTS.has(p.tags?.slot ?? ""); }
