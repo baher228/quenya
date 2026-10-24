@@ -5,7 +5,7 @@
     "api/index.py": {
       "maxDuration": 300,
       "regions": ["dub1"],
-      "includeFiles": ["app/data/style_glossary.json"]
+      "includeFiles": "app/data/**"
     }
   },
   "rewrites": [
