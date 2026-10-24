@@ -45,3 +45,7 @@ export function Provenance({ source, origin, condition }: { source: string; orig
     </span>
   );
 }
+
+export function pretty(k: string) {
+  return k.replace(/^(color|colour|aesthetic|style|category|material|pattern|fit|era|brand|slot)_/, "").replace(/_/g, " ");
+}

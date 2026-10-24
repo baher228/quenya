@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import { ErrorBox, Loading } from "./ui";
+import { ErrorBox, Loading, pretty } from "./ui";
 import type { Board, TaskStats, TasteState } from "./types";
 
 const TASK_LABEL: Record<string, string> = {
@@ -44,14 +44,14 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
             <div className="panel core"><span className="lbl">Across your boards <em>applies everywhere</em></span>
               {core.rules.length > 0 && <ul className="rules">{core.rules.map(r => <li key={r.rule}>{r.rule}<span className="from"> · {r.boards.join(", ")}</span></li>)}</ul>}
               <div className="chips">
-                {coreLikes.map(([k, v]) => <span key={k} className={"chip static " + (v > 0 ? "pos" : "neg")}>{v > 0 ? "+" : "−"} {k}</span>)}
+                {coreLikes.map(([k, v]) => <span key={k} className={"chip static " + (v > 0 ? "pos" : "neg")}>{v > 0 ? "+" : "−"} {pretty(k)}</span>)}
                 {core.palette.map(c => <span key={c} className="chip static">{c}</span>)}
               </div>
             </div>
           )}
           <div className="panel"><span className="lbl">This board</span>
             {shown.map(([k, v]) => (
-              <div key={k} className={"bar" + (v < 0 ? " neg" : "")}><span>{k}</span><i style={{ width: `${Math.abs(v) * 100}%` }} /><em>{v > 0 ? "+" : "−"}{Math.abs(v).toFixed(1)}</em></div>
+              <div key={k} className={"bar" + (v < 0 ? " neg" : "")}><span>{pretty(k)}</span><i style={{ width: `${Math.abs(v) * 100}%` }} /><em>{v > 0 ? "+" : "−"}{Math.abs(v).toFixed(1)}</em></div>
             ))}
           </div>
           {(p.rules.length > 0 || p.palette.length > 0) && (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, gbp, img } from "./api";
-import { ErrorBox, Loading, Provenance } from "./ui";
+import { ErrorBox, Loading, Provenance, pretty } from "./ui";
 import type { Item, TasteProfile } from "./types";
 
 export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
@@ -42,7 +42,7 @@ export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
   const avoids = profile ? Object.entries(profile.avoids).sort((a, b) => b[1] - a[1]).slice(0, 3) : [];
 
   return (
-    <section className="screen">
+    <section className="screen swipe">
       <div className="deck-head">
         <div><p className="eyebrow">Calibrating{version ? ` · taste v${version}` : ""}</p><p className="h3">Keep or pass?</p></div>
         <span className="deck-count">{seen} swiped</span>
@@ -74,8 +74,8 @@ export function DeckScreen({ profile, version, onSignal, onDone, onOpenItem }: {
         <span className="lbl">Learned so far {version ? <em>taste v{version}</em> : null}</span>
         <div className="learned">
           {likes.length + avoids.length === 0 && <span className="muted small">Every swipe is a label. Your taste updates every 8 swipes.</span>}
-          {likes.map(([k]) => <span key={"l" + k} className="sig pos">+ {k}</span>)}
-          {avoids.map(([k]) => <span key={"a" + k} className="sig neg">− {k}</span>)}
+          {likes.map(([k]) => <span key={"l" + k} className="sig pos">+ {pretty(k)}</span>)}
+          {avoids.map(([k]) => <span key={"a" + k} className="sig neg">− {pretty(k)}</span>)}
         </div>
       </div>
     </section>
