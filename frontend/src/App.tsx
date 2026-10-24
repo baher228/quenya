@@ -18,7 +18,7 @@ type Sheet =
 
 interface RouteNote { route: Route; board: Board }
 
-interface Toast { id: number; title: string; lines: string[] }
+interface Toast { id: number; title: string; lines: string[]; pill?: boolean }
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("brief");
@@ -53,12 +53,12 @@ export default function App() {
   const refreshTaste = useCallback(() => { api.taste().then(setTaste).catch(() => setTaste({ current: null, history: [], counts: {} })); }, []);
   useEffect(refreshTaste, [refreshTaste]);
 
-  const announce = useCallback((t: TasteVersion | null | undefined, why: string) => {
+  const announce = useCallback((t: TasteVersion | null | undefined, _why: string) => {
     if (!t) return;
-    setToast({ id: Date.now(), title: `Taste v${t.version} · ${why}`, lines: (t.changes ?? t.profile?.changes ?? []).slice(0, 3) });
+    setToast({ id: Date.now(), title: `Taste v${t.version}`, lines: [], pill: true });
     refreshTaste(); refreshBoards();
   }, [refreshTaste, refreshBoards]);
-  useEffect(() => { if (!toast) return; const h = window.setTimeout(() => setToast(null), 6000); return () => window.clearTimeout(h); }, [toast]);
+  useEffect(() => { if (!toast) return; const h = window.setTimeout(() => setToast(null), toast.pill ? 3200 : 6000); return () => window.clearTimeout(h); }, [toast]);
 
   const runUpdate = useCallback(async (why: string) => {
     setUpdating(true);
@@ -239,8 +239,10 @@ export default function App() {
         </main>
 
         {toast && (
-          <div className="toast" key={toast.id} role="status" onClick={() => { setToast(null); setTab("taste"); }}>
+          <div className={"toast" + (toast.pill ? " pill" : "")} key={toast.id} role="status" onClick={() => { setToast(null); setTab("taste"); }}>
+            {toast.pill && <span className="mb">Mubit</span>}
             <b>{toast.title}</b>
+            {toast.pill && <em>updated</em>}
             {toast.lines.map((l, i) => <span key={i}>{l}</span>)}
           </div>
         )}
