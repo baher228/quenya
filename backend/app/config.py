@@ -19,6 +19,11 @@ DB_PATH = Path(os.getenv("DB_PATH", str(BACKEND_ROOT / "data" / "quenya.db"))).e
 SHOP_TIERS = {
     "ssense.com": "luxury",
     "arket.com": "premium",
+    "cos.com": "premium",
+    "stories.com": "premium",
+    "barbour.com": "premium",
+    "charlestyrwhitt.com": "premium",
+    "johnsmedley.com": "luxury",
     "mango.com": "high_street",
     "uniqlo.com": "high_street",
     "urbanoutfitters.com": "high_street",

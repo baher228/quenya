@@ -78,8 +78,14 @@ CATALOG: dict[str, dict[str, Any]] = {
 
 _PRODUCT_PATHS = {
     "ssense.com": re.compile(r"/en-gb/(?:men|women)/product/[^/?#]+", re.I),
+    "cos.com": re.compile(r"/en-gb/.*/product/[^/?#]+", re.I),
     "arket.com": re.compile(r"/en-gb/product/[^/?#]+", re.I),
-    "mango.com": re.compile(r"/gb/en/p/[^/?#]+", re.I),
+    "stories.com": re.compile(r"/en-gb/product/[^/?#]+", re.I),
+    "barbour.com": re.compile(r"/gb/[^/?#]+\.html", re.I),
+    "johnsmedley.com": re.compile(r"/uk/(?!mens(?:/|$)|womens(?:/|$))[^/?#]+", re.I),
+    "charlestyrwhitt.com": re.compile(r"/uk/[^/?#]+/[^/?#]+\.html", re.I),
+    "asos.com": re.compile(r"/[^/?#]+/[^/?#]+/prd/\d+", re.I),
+    "mango.com": re.compile(r"/gb/en/p/[^?#]+", re.I),
     "uniqlo.com": re.compile(r"^/uk/en/products?/[^/?#]+(?:/\d{2})?/?$", re.I),
     "urbanoutfitters.com": re.compile(r"/(?:en-gb/)?shop/[^/?#]+", re.I),
 }
@@ -94,6 +100,7 @@ OLD_MONEY_BRANDS = (
     "Ralph Lauren", "Barbour", "John Smedley", "Hackett", "Sunspel",
     "Charles Tyrwhitt", "Brooks Brothers", "Lacoste",
 )
+OLD_MONEY_SHOPS = ("barbour.com", "johnsmedley.com", "charlestyrwhitt.com")
 OLD_MONEY_SLOT_WORDS = (
     "cable knit", "oxford shirt", "wax jacket", "chinos", "loafers",
 )
@@ -118,7 +125,10 @@ class _Anchors(HTMLParser):
 def _root(url: str) -> str | None:
     host = (urlsplit(url).hostname or "").lower()
     return next(
-        (domain for domain in CATALOG if host == domain or host.endswith(f".{domain}")),
+        (
+            domain for domain in _PRODUCT_PATHS
+            if host == domain or host.endswith(f".{domain}")
+        ),
         None,
     )
 

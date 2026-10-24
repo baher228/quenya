@@ -217,17 +217,23 @@ def _fetch_profile_items(
         source_domains = CONTEXT_SOURCES.get(
             context, CONTEXT_SOURCES["other"]
         )
+        source_domains = list(source_domains)
         profile = db.get_profile(profile_id)
         brief = brief or (profile.get("brief") if profile else {}) or {}
         current_taste = db.latest_taste(profile_id)
         taste_profile = current_taste["profile"] if current_taste else {}
+        old_money_style = catalog.is_old_money(brief, taste_profile)
+        if old_money_style:
+            source_domains.extend(
+                shop for shop in catalog.OLD_MONEY_SHOPS if shop not in source_domains
+            )
         cached_urls = db.source_urls()
         records: list[dict[str, Any]] = []
         for query in queries[:4]:
             if "vinted" in source_domains:
                 records.extend(vinted.search(query, _gender_code(gender), per_page=5))
         old_money_queries = []
-        if catalog.is_old_money(brief, taste_profile) and "vinted" in source_domains:
+        if old_money_style and "vinted" in source_domains:
             old_money_queries = catalog.old_money_queries(3)
             for query in old_money_queries:
                 records.extend(vinted.search(query, _gender_code(gender), per_page=5))
