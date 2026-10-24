@@ -35,7 +35,7 @@ export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
       </form>
       <p className="small muted">Ranked by your taste. Search Vinted live to fetch fresh listings, which get tagged as they arrive.</p>
       {items === null && !mode && (
-        <div className="chips" role="group" aria-label="Example searches">
+        <div className="chips find-ex" role="group" aria-label="Example searches">
           {EXAMPLE_QUERIES.map(query => (
             <button key={query} type="button" className="chip" onClick={() => void go(false, query)}>{query}</button>
           ))}

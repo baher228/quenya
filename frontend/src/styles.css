@@ -263,3 +263,4 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 ::-webkit-scrollbar-button{display:none}
+.find-ex{margin-top:14px}
