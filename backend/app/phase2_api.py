@@ -759,6 +759,7 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
         body.locked_ids,
         pool,
         core_rules=[item["rule"] for item in core["rules"]],
+        history=db.swipe_history(active["id"]),
         include_shoes=active["brief"].get("include_shoes", True),
     )
     request_ids: list[str | None] = []

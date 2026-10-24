@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -106,10 +107,42 @@ def test_ranking_applies_preferences_and_hard_filters():
     ]
 
 
-def test_stylist_repair_retries_once_with_original_and_invalid_reply(monkeypatch):
+def test_stylist_repair_retries_once_with_original_and_invalid_reply(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "outfits.sqlite")
+    db.init_db()
     brief = _brief()
-    profile = _taste_profile()
+    profile = _taste_profile(changes=["Recent swipe: statement shoes"])
     items = [_item("top", "top"), _item("bottom", "bottom"), _item("shoes", "shoes")]
+    other_board_item = _item("other-board-item", "outerwear")
+    items[0]["tags"].update(
+        category="shirt", aesthetics=["workwear", "heritage"], colours=["olive"]
+    )
+    items[1]["tags"].update(
+        category="trousers", aesthetics=["workwear"], colours=["brown", "olive"]
+    )
+    items[2]["tags"].update(
+        category="boots", aesthetics=["ignored"], colours=["black"]
+    )
+    other_board_item["tags"].update(
+        category="parka", aesthetics=["other-board-only"], colours=["purple"]
+    )
+    db.create_profile("profile-1", brief)
+    db.create_profile("other-board", brief, active=False)
+    history_items = [*items, other_board_item]
+    db.insert_items(
+        [
+            {key: value for key, value in item.items() if key != "tags"}
+            for item in history_items
+        ]
+    )
+    for item in history_items:
+        db.save_tags(item["id"], item["tags"], "mreq-tag")
+    db.insert_swipe("profile-1", "top", True)
+    db.insert_swipe("profile-1", "bottom", True)
+    db.insert_swipe("profile-1", "shoes", False)
+    db.insert_swipe("other-board", "other-board-item", True)
     monkeypatch.setattr(
         phase2_api.db,
         "active_profile",
@@ -146,6 +179,15 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(monkeypatch
     assert calls[0][3] == calls[1][3][0]["content"]
     assert calls[1][3][1]["role"] == "assistant"
     assert calls[1][3][2]["role"] == "user"
+    stylist_profile = json.loads(calls[0][3].splitlines()[1])
+    assert "changes" not in stylist_profile
+    assert profile["changes"] == ["Recent swipe: statement shoes"]
+    assert (
+        "Overall history for this style (all swipes): kept 2, passed 1. "
+        "Most kept: aesthetics workwear 2, heritage 1; "
+        "categories shirt 1, trousers 1; colours olive 2, brown 1"
+    ) in calls[0][3]
+    assert "other-board-only" not in calls[0][3]
     assert response["request_ids"] == ["mreq-1", "mreq-2"]
     assert [piece["id"] for piece in response["outfits"][0]["pieces"]] == [
         "top",

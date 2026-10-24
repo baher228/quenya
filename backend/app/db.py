@@ -2,12 +2,14 @@ import json
 import math
 import statistics
 import uuid
+from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
 from app.config import DB_PATH
+from app.rank import tags_for
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -747,6 +749,58 @@ def insert_swipe(profile_id: str, item_id: str, liked: bool) -> None:
         connection.execute(
             "UPDATE profiles SET updated_at=? WHERE id=?", (now_iso(), profile_id)
         )
+
+
+def swipe_history(profile_id: str) -> dict[str, Any]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT s.liked, i.tags_json FROM swipes s
+               LEFT JOIN items i ON i.id=s.item_id
+               WHERE s.profile_id=?""",
+            (profile_id,),
+        ).fetchall()
+
+    kept = sum(bool(row["liked"]) for row in rows)
+    counts = {
+        "aesthetics": Counter(),
+        "categories": Counter(),
+        "colours": Counter(),
+    }
+    for row in rows:
+        if not row["liked"]:
+            continue
+        tags = tags_for({"tags_json": row["tags_json"]})
+        category = tags.get("category")
+        if (
+            isinstance(category, str)
+            and category.strip()
+            and category.strip().lower() != "unknown"
+        ):
+            counts["categories"][category.strip()] += 1
+        for key in ("aesthetics", "colours"):
+            values = tags.get(key) or []
+            if isinstance(values, str):
+                values = [values]
+            if not isinstance(values, (list, tuple, set)):
+                continue
+            names = {
+                value.strip()
+                for value in values
+                if isinstance(value, str)
+                and value.strip()
+                and value.strip().lower() != "unknown"
+            }
+            counts[key].update(names)
+
+    return {
+        "kept": kept,
+        "passed": len(rows) - kept,
+        **{
+            key: sorted(counter.items(), key=lambda entry: (-entry[1], entry[0]))
+            for key, counter in counts.items()
+        },
+    }
 
 
 def save_outfit(
