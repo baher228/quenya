@@ -16,7 +16,18 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 MUBIT_BASE_URL = os.getenv("MUBIT_BASE_URL", "https://api.mubit.ai/openai/v1")
 DB_PATH = Path(os.getenv("DB_PATH", str(BACKEND_ROOT / "data" / "quenya.db"))).expanduser()
 
-_DEFAULT_CONTEXT_SOURCES = ["vinted", "asos.com", "uniqlo.com"]
+SHOP_TIERS = {
+    "ssense.com": "luxury",
+    "arket.com": "premium",
+    "mango.com": "high_street",
+    "uniqlo.com": "high_street",
+    "urbanoutfitters.com": "high_street",
+    "asos.com": "high_street",
+}
+_DEFAULT_CONTEXT_SOURCES = [
+    "vinted", "asos.com", "uniqlo.com", "arket.com", "mango.com",
+    "urbanoutfitters.com", "ssense.com",
+]
 CONTEXT_SOURCES = {
     "gym": [
         "gymshark.com", "nike.com", "underarmour.co.uk", "lululemon.co.uk",
@@ -33,8 +44,8 @@ CONTEXT_SOURCES = {
     ],
     "city": _DEFAULT_CONTEXT_SOURCES,
     "workwear": _DEFAULT_CONTEXT_SOURCES,
-    "smart": _DEFAULT_CONTEXT_SOURCES,
-    "evening": _DEFAULT_CONTEXT_SOURCES,
+    "smart": ["vinted", "ssense.com", "arket.com", "mango.com", "asos.com"],
+    "evening": ["vinted", "ssense.com", "arket.com", "mango.com", "asos.com"],
     "lounge": _DEFAULT_CONTEXT_SOURCES,
     "other": _DEFAULT_CONTEXT_SOURCES,
 }

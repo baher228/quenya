@@ -61,22 +61,42 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
                 <div><div className="o-name">{o.title}</div><div className="o-mood">{o.mood}</div></div>
                 <div className="o-total">{gbp(o.total_gbp)}<span>{o.pieces.length} pieces</span></div>
               </header>
-              {(["major", "minor"] as const).map(group => {
-                const ps = o.pieces.filter(p => isMinor(p) === (group === "minor"));
-                return ps.length ? (
-              <div key={group} className={"pieces" + (group === "minor" ? " minor" : "")}>
-                {ps.map(p => (
-                  <figure key={p.id} className={"piece" + (keep.includes(p.id) ? " locked" : "")}>
-                    <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><img src={img(p)} alt={p.title} loading="lazy" /></button>
-                    <figcaption><b>{p.brand || p.tags?.category || "Piece"}</b><span>{gbp(p.price_gbp)}</span></figcaption>
-                    <button className="pbtn lock" onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
-                    <button className="pbtn swap" disabled={!!busy} onClick={() => run(o, "swap" + p.id, () => api.swap(o.id, p.id))}>
-                      {busy === o.id + "swap" + p.id ? "…" : "Swap"}</button>
-                  </figure>
-                ))}
-              </div>
-                ) : null;
-              })}
+              {(() => {
+                const major = o.pieces.filter(p => !isMinor(p));
+                const minor = o.pieces.filter(isMinor);
+                return <>
+                  {!!major.length && <div className="pieces">
+                    {major.map((p, index) => (
+                      <figure key={p.id} className={"piece" + (keep.includes(p.id) ? " locked" : "") + (major.length % 2 === 1 && index === 0 ? " wide" : "")}>
+                        <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><img src={img(p)} alt={p.title} loading="lazy" /></button>
+                        <figcaption><b>{p.brand || p.tags?.category || "Piece"}</b><span>{gbp(p.price_gbp)}</span></figcaption>
+                        <button className="pbtn lock" onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
+                        <button className="pbtn swap" disabled={!!busy} onClick={() => run(o, "swap" + p.id, () => api.swap(o.id, p.id))}>
+                          {busy === o.id + "swap" + p.id ? "…" : "Swap"}</button>
+                      </figure>
+                    ))}
+                  </div>}
+                  {!!minor.length && <div className="minor-list">
+                    {minor.map(p => (
+                      <div key={p.id} className={"minor-row" + (keep.includes(p.id) ? " locked" : "")}>
+                        <button className="minor-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}>
+                          <img src={img(p)} alt={p.title} loading="lazy" />
+                        </button>
+                        <button className="minor-copy" onClick={() => onOpenItem(p)}>
+                          <span>{p.brand ? `${p.brand} · ` : ""}{p.title}</span>
+                          <small>{gbp(p.price_gbp)}</small>
+                        </button>
+                        <div className="minor-actions">
+                          <button onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
+                          <button disabled={!!busy} onClick={() => run(o, "swap" + p.id, () => api.swap(o.id, p.id))}>
+                            {busy === o.id + "swap" + p.id ? "…" : "Swap"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                </>;
+              })()}
               <p className="why"><span>Why this</span>{o.why}</p>
               <ul className="srcs">{o.pieces.map(p => (
                 <li key={p.id}><a href={p.source_url} target="_blank" rel="noreferrer">{p.title}</a><Provenance source={p.source} origin={p.origin} /></li>

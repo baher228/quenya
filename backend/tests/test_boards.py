@@ -848,4 +848,10 @@ def test_context_source_selection():
     ]
     assert "patagonia.com" in CONTEXT_SOURCES["outdoor"]
     assert "adidas.co.uk" not in sum(CONTEXT_SOURCES.values(), [])
-    assert CONTEXT_SOURCES["city"] == ["vinted", "asos.com", "uniqlo.com"]
+    assert CONTEXT_SOURCES["city"] == [
+        "vinted", "asos.com", "uniqlo.com", "arket.com", "mango.com",
+        "urbanoutfitters.com", "ssense.com",
+    ]
+    assert CONTEXT_SOURCES["smart"] == [
+        "vinted", "ssense.com", "arket.com", "mango.com", "asos.com",
+    ]
