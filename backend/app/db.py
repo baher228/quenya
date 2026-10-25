@@ -794,6 +794,69 @@ def item_embedding_map() -> dict[str, dict[str, Any]]:
     }
 
 
+def item_mix_vectors(item_ids: list[str]) -> dict[str, dict[str, Any]]:
+    init_db()
+    item_ids = list(dict.fromkeys(item_ids))
+    if not item_ids:
+        return {}
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+    vectors = {}
+    with db_connection() as connection:
+        if postgres:
+            rows = connection.execute(
+                """SELECT item_id, mix::text AS mix FROM item_embeddings
+                   WHERE model='clip32' AND item_id = ANY(?) AND mix IS NOT NULL""",
+                (item_ids,),
+            ).fetchall()
+            batches = [rows]
+        else:
+            batches = []
+            for start in range(0, len(item_ids), 900):
+                batch = item_ids[start : start + 900]
+                placeholders = ",".join("?" for _ in batch)
+                batches.append(connection.execute(
+                    f"""SELECT item_id, mix FROM item_embeddings
+                        WHERE model='clip32' AND item_id IN ({placeholders})
+                        AND mix IS NOT NULL""",
+                    tuple(batch),
+                ).fetchall())
+        for rows in batches:
+            vectors.update({
+                row["item_id"]: {"mix": _vector_value(row["mix"])}
+                for row in rows
+            })
+    return vectors
+
+
+def nearest_item_mix(
+    query, eligible_ids: list[str], k: int = 400
+) -> list[tuple[str, Any]]:
+    init_db()
+    eligible_ids = list(dict.fromkeys(eligible_ids))
+    if not eligible_ids or k < 1:
+        return []
+    if os.getenv("QUENYA_DATABASE_URL"):
+        with db_connection() as connection:
+            rows = connection.execute(
+                """SELECT item_id, mix::text AS mix FROM item_embeddings
+                   WHERE model='clip32' AND item_id = ANY(?) AND mix IS NOT NULL
+                   ORDER BY mix <#> ?::vector LIMIT ?""",
+                (eligible_ids, _vector_string(query), k),
+            ).fetchall()
+        return [(row["item_id"], _vector_value(row["mix"])) for row in rows]
+
+    import numpy as np
+
+    vectors = item_mix_vectors(eligible_ids)
+    if not vectors:
+        return []
+    ids = list(vectors)
+    matrix = np.asarray([vectors[item_id]["mix"] for item_id in ids], dtype=np.float32)
+    similarities = matrix @ np.asarray(query, dtype=np.float32)
+    indexes = np.argsort(-similarities, kind="stable")[:k]
+    return [(ids[index], matrix[index]) for index in indexes]
+
+
 def random_item_mix_vectors(limit: int = 3000):
     init_db()
     order = "RANDOM()" if not os.getenv("QUENYA_DATABASE_URL") else "random()"

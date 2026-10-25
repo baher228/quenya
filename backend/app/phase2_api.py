@@ -18,6 +18,7 @@ from app.embedding_ranker import (
     catalogue_sample,
     choose_bootdiv,
     fallback_arm,
+    history_query,
     rank_candidates,
 )
 from app.mubit import TaskError, call_task
@@ -727,8 +728,27 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
     )
     swipes = db.profile_swipes(active["id"])
-    embeddings = db.item_embedding_map() if arm == "embed" else {}
+    recent_item_ids = db.recent_deck_item_ids(active["id"]) if arm == "embed" else []
+    if arm == "embed":
+        vector_ids = [
+            *[swipe["item_id"] for swipe in swipes],
+            *[item["id"] for item in tag_ranked[:100]],
+            *recent_item_ids,
+        ]
+        embeddings = db.item_mix_vectors(vector_ids)
+    else:
+        embeddings = {}
     brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
+    history = history_query(swipes, embeddings) if arm == "embed" else None
+    query = history if history is not None else brief_vector
+    nearest_rows = (
+        db.nearest_item_mix(query, [item["id"] for item in tag_ranked], k=400)
+        if arm == "embed" and query is not None
+        else []
+    )
+    for item_id, vector in nearest_rows:
+        embeddings.setdefault(item_id, {})["mix"] = vector
+    nearest_ids = [item_id for item_id, _vector in nearest_rows]
     sample = None
     scores = {}
     use_embed = arm == "embed" and any(
@@ -738,7 +758,14 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     if use_embed:
         sample = catalogue_sample()
         ranked, scores, _history = rank_candidates(
-            tag_ranked, active["id"], taste, brief_vector, swipes, embeddings, sample
+            tag_ranked,
+            active["id"],
+            taste,
+            brief_vector,
+            swipes,
+            embeddings,
+            sample,
+            nearest_ids=nearest_ids,
         )
         seed_text = f"{active['id']}:{swipe_count}:{request_number}"
         rng = np.random.default_rng(
@@ -746,7 +773,7 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         )
         recent_vectors = [
             (embeddings.get(item_id) or {}).get("mix")
-            for item_id in db.recent_deck_item_ids(active["id"])
+            for item_id in recent_item_ids
         ]
 
         def selector(pool, selected):

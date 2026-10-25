@@ -71,6 +71,10 @@ def _history_query(swipes: list[dict], embeddings: dict[str, dict]) -> np.ndarra
     return query
 
 
+def history_query(swipes: list[dict], embeddings: dict[str, dict]) -> np.ndarray | None:
+    return _history_query(swipes, embeddings)
+
+
 def catalogue_sample() -> np.ndarray:
     global _catalogue_cache
     now = time.monotonic()
@@ -90,6 +94,7 @@ def rank_candidates(
     swipes: list[dict],
     embeddings: dict[str, dict],
     sample: np.ndarray | None = None,
+    nearest_ids: list[str] | None = None,
 ) -> tuple[list[dict], dict[str, float], np.ndarray | None]:
     sample = catalogue_sample() if sample is None else sample
     history = _history_query(swipes, embeddings)
@@ -116,20 +121,27 @@ def rank_candidates(
                 weight * brief_z + (1.0 - weight) * history_z
                 + PRODUCTION_WEIGHT * score_item(item, taste) / 2.0
             )
-    vector_candidates = [
-        item for item in ranked_tags
-        if (embeddings.get(item["id"]) or {}).get("mix") is not None
-    ]
-    query = history
-    if query is None and brief_vector is not None:
-        query = brief_vector
-    if query is not None:
-        vector_candidates.sort(
-            key=lambda item: float(
-                embeddings[item["id"]]["mix"] @ query
-            ),
-            reverse=True,
-        )
+    item_by_id = {item["id"]: item for item in ranked_tags}
+    if nearest_ids is None:
+        vector_candidates = [
+            item for item in ranked_tags
+            if (embeddings.get(item["id"]) or {}).get("mix") is not None
+        ]
+        query = history if history is not None else brief_vector
+        if query is not None:
+            vector_candidates.sort(
+                key=lambda item: float(
+                    embeddings[item["id"]]["mix"] @ query
+                ),
+                reverse=True,
+            )
+    else:
+        vector_candidates = [
+            item_by_id[item_id]
+            for item_id in nearest_ids
+            if item_id in item_by_id
+            and (embeddings.get(item_id) or {}).get("mix") is not None
+        ]
     candidates = {item["id"]: item for item in ranked_tags[:100]}
     candidates.update({item["id"]: item for item in vector_candidates[:400]})
     ordered = sorted(

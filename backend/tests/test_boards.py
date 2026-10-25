@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from fastapi import HTTPException
 
@@ -1050,6 +1051,41 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
         for item in result
         if item["explore"]
     )
+
+
+def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    brief = _brief(budget_gbp=100)
+    db.create_profile("board", brief, active=True)
+    profile = _profile(price_ceiling_gbp=100)
+    item = _item("embedded-item", "top")
+    item["price_gbp"] = 20
+    vector = np.zeros(512, dtype=np.float32)
+    vector[0] = 1
+    db.store_item_embedding("embedded-item", "clip32", None, None, vector)
+    db.store_profile_embedding("board", "clip32", vector, "brief-hash")
+    monkeypatch.setenv("QUENYA_RANKER", "embed")
+    monkeypatch.setattr(
+        phase2_api, "_user_profile", lambda: {"id": "board", "brief": brief}
+    )
+    monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
+    monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
+    monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: [item])
+    monkeypatch.setattr(
+        phase2_api, "catalogue_sample",
+        lambda: np.asarray([vector, -vector], dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        phase2_api.db,
+        "item_embedding_map",
+        lambda: (_ for _ in ()).throw(AssertionError("full embedding load used")),
+    )
+
+    result = phase2_api.deck(1)
+
+    assert [entry["id"] for entry in result] == ["embedded-item"]
 
 
 @pytest.mark.parametrize(

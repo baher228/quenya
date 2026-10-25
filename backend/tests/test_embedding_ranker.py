@@ -119,10 +119,16 @@ def test_swipes_and_brief_vectors_are_loaded_per_board(monkeypatch, tmp_path):
         "board-b", "clip32", vector_b, "b"
     )
     db.store_item_embedding("item-a", "clip32", vector_a, vector_a, vector_a)
+    db.store_item_embedding("item-b", "clip32", vector_b, vector_b, vector_b)
     assert db.profile_swipes("board-a") == [{"item_id": "item-a", "liked": True}]
     np.testing.assert_array_equal(db.profile_embedding("board-a"), vector_a)
     np.testing.assert_array_equal(db.profile_embedding("board-b"), vector_b)
     np.testing.assert_array_equal(db.item_embedding_map()["item-a"]["mix"], vector_a)
+    mix_vectors = db.item_mix_vectors(["item-a", "missing"])
+    np.testing.assert_array_equal(mix_vectors["item-a"]["mix"], vector_a)
+    nearest = db.nearest_item_mix(vector_a, ["item-b", "item-a"], k=1)
+    assert nearest[0][0] == "item-a"
+    np.testing.assert_array_equal(nearest[0][1], vector_a)
     assert len(db.random_item_mix_vectors(1)) == 1
     db._INITIALIZED_DATABASES.clear()
 
