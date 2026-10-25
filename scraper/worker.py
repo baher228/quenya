@@ -11,8 +11,9 @@ import psycopg
 from scrapling.fetchers import StealthyFetcher
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from app.sources.listing_readers import infer_category, parse_listing
 from store import _ensure_bucket, upload_row
+
+from app.sources.listing_readers import infer_category, parse_listing
 
 ROOT = Path(__file__).resolve().parent
 UA = (

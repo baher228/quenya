@@ -230,7 +230,7 @@ def is_clothing(value: str) -> bool:
             r"underwear|socks?|gift\s*wrap(?:ping)?|gift\s*box(?:es)?|gift.?cards?|e.?gift|vouchers?|"
             r"membership|subscription|unlimited|donation|insurance|repair|service|"
             r"shipping|sample|bundle.?fee|protector|homeware|home goods|"
-            r"skateboard|hardware|grips?|bolts?|"
+            r"skateboard|grips?|bolts?|"
             r"wallets?|purses?|belts?|watch(?:es)?|sunglasses|key.?ring|"
             r"infant|baby|toddler|kids?|kid['’]s|junior|girls?|boys?|youth|children|"
             r"age\s*\d{1,2}|\d{1,2}\s*yrs?|archive\s*[-–:]\s*vests?|"
