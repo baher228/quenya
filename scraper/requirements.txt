@@ -2,3 +2,4 @@ scrapling[fetchers]>=0.2
 psycopg[binary]>=3.2
 httpx>=0.27
 Pillow>=10
+lxml>=5.3

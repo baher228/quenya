@@ -1,22 +1,18 @@
 import argparse
-import hashlib
 import json
 import os
 import sys
 import time
 from datetime import UTC, datetime
-from io import BytesIO
 from pathlib import Path
-from urllib.parse import quote
 
 import httpx
 import psycopg
-from PIL import Image, ImageOps
-from psycopg.types.json import Jsonb
 from scrapling.fetchers import StealthyFetcher
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from app.sources.listing_readers import infer_category, parse_listing
+from store import _ensure_bucket, upload_row
 
 ROOT = Path(__file__).resolve().parent
 UA = (
@@ -103,15 +99,24 @@ CATEGORY_PAGES = {
         ("w", "https://uk.burberry.com/l/womens-coats-jackets/"),
     ],
     "ralphlauren.co.uk": [
-        ("m", "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206?start=0&sz=30"),
+        (
+            "m",
+            "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206?start=0&sz=30",
+        ),
         ("m", "https://www.ralphlauren.co.uk/en/men/clothing/casual-shirts/10202?start=0&sz=30"),
         ("m", "https://www.ralphlauren.co.uk/en/men/clothing/polo-shirts/10201?start=0&sz=30"),
         ("m", "https://www.ralphlauren.co.uk/en/men/clothing/trousers/102015?start=0&sz=30"),
         ("m", "https://www.ralphlauren.co.uk/en/men/clothing/jackets-coats/10205?start=0&sz=30"),
         ("m", "https://www.ralphlauren.co.uk/en/men/clothing/blazers/10209?start=0&sz=30"),
-        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/jumpers-cardigans/202025?start=0&sz=30"),
+        (
+            "w",
+            "https://www.ralphlauren.co.uk/en/women/clothing/jumpers-cardigans/202025?start=0&sz=30",
+        ),
         ("w", "https://www.ralphlauren.co.uk/en/women/clothing/shirts-blouses/20204?start=0&sz=30"),
-        ("w", "https://www.ralphlauren.co.uk/en/women/clothing/dresses-jumpsuits/20201?start=0&sz=30"),
+        (
+            "w",
+            "https://www.ralphlauren.co.uk/en/women/clothing/dresses-jumpsuits/20201?start=0&sz=30",
+        ),
         ("w", "https://www.ralphlauren.co.uk/en/women/clothing/trousers/20209?start=0&sz=30"),
     ],
 }
@@ -144,7 +149,9 @@ def _fetch(url, timeout_seconds=45, shop=""):
                 break
             try:
                 response = httpx.get(
-                    url, timeout=remaining, follow_redirects=True,
+                    url,
+                    timeout=remaining,
+                    follow_redirects=True,
                     headers={"User-Agent": UA},
                 )
                 response.raise_for_status()
@@ -180,7 +187,8 @@ def _fetch(url, timeout_seconds=45, shop=""):
                     wait_selector=".js-product-tile",
                 )
             page = StealthyFetcher.fetch(
-                url, **options,
+                url,
+                **options,
             )
             body = getattr(page, "body", b"")
             html = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else str(body)
@@ -195,44 +203,6 @@ def _fetch(url, timeout_seconds=45, shop=""):
     return "", url
 
 
-def _jpeg(data: bytes) -> bytes:
-    with Image.open(BytesIO(data)) as original:
-        image = ImageOps.exif_transpose(original).convert("RGB")
-        output = BytesIO()
-        image.save(output, format="JPEG", quality=88, optimize=True)
-    return output.getvalue()
-
-
-def _upload_image(client, record, shop, supabase_url, secret):
-    original = record["image_url"]
-    response = client.get(original, headers={"User-Agent": UA, "Referer": record["source_url"]})
-    response.raise_for_status()
-    content = _jpeg(response.content)
-    key = hashlib.sha1(record["source_url"].encode()).hexdigest()[:16]
-    path = f"{shop}/{key}.jpg"
-    headers = {
-        "Authorization": f"Bearer {secret}", "apikey": secret,
-        "x-upsert": "true", "Content-Type": "image/jpeg",
-    }
-    result = client.post(
-        f"{supabase_url.rstrip('/')}/storage/v1/object/quenya-listings/{quote(path, safe='/')}",
-        headers=headers, content=content,
-    )
-    result.raise_for_status()
-    return path
-
-
-def _ensure_bucket(client, supabase_url, secret):
-    headers = {"Authorization": f"Bearer {secret}", "apikey": secret}
-    response = client.post(
-        f"{supabase_url.rstrip('/')}/storage/v1/bucket",
-        headers={**headers, "Content-Type": "application/json"},
-        json={"id": "quenya-listings", "name": "quenya-listings", "public": False},
-    )
-    if response.status_code not in {200, 201, 409}:
-        response.raise_for_status()
-
-
 def _category(title, url):
     return infer_category(title, url)
 
@@ -242,7 +212,7 @@ def run(args):
     deadline = time.monotonic() + max(0, args.time_budget) * 60
     selected = set(filter(None, (args.shops or "").split(",")))
     pages = {
-        shop: entries[:args.max_pages] if args.max_pages else entries
+        shop: entries[: args.max_pages] if args.max_pages else entries
         for shop, entries in CATEGORY_PAGES.items()
         if not selected or shop in selected
     }
@@ -252,12 +222,15 @@ def run(args):
     secret = os.getenv("SUPABASE_SECRET_KEY", "")
     db_url = os.getenv("SUPABASE_DB_URL", "")
     counts = {shop: {"fetched": 0, "inserted": 0, "skipped": 0, "errors": 0} for shop in pages}
-    with httpx.Client(timeout=30, follow_redirects=True) as client, out.open(
-        "w", encoding="utf-8", newline="\n"
-    ) as output:
+    with (
+        httpx.Client(timeout=30, follow_redirects=True) as client,
+        out.open("w", encoding="utf-8", newline="\n") as output,
+    ):
         if not args.dry_run:
             if not supabase_url or not secret or not db_url:
-                raise RuntimeError("SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_DB_URL are required")
+                raise RuntimeError(
+                    "SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_DB_URL are required"
+                )
             _ensure_bucket(client, supabase_url, secret)
         connection = psycopg.connect(db_url) if not args.dry_run else None
         try:
@@ -288,9 +261,12 @@ def run(args):
                         counts[shop]["fetched"] += len(records)
                         for record in records:
                             row = {
-                                "url": record["source_url"], "source": shop,
-                                "title": record["title"], "brand": record.get("brand"),
-                                "price_gbp": record["price_gbp"], "gender": gender,
+                                "url": record["source_url"],
+                                "source": shop,
+                                "title": record["title"],
+                                "brand": record.get("brand"),
+                                "price_gbp": record["price_gbp"],
+                                "gender": gender,
                                 "category": _category(record.get("title"), url),
                                 "condition": "new",
                                 "image_url_original": record["image_url"],
@@ -301,25 +277,9 @@ def run(args):
                                 counts[shop]["skipped"] += 1
                                 continue
                             try:
-                                row["image_path"] = _upload_image(
-                                    client, record, shop, supabase_url, secret
+                                inserted = upload_row(
+                                    client, connection, row, shop, supabase_url, secret
                                 )
-                                record["image_path"] = row["image_path"]
-                                with connection.cursor() as cursor:
-                                    cursor.execute(
-                                        """INSERT INTO quenya.listings
-                                           (url, source, title, brand, price_gbp, gender,
-                                            category, condition, image_path,
-                                            image_url_original, record)
-                                           VALUES (%(url)s, %(source)s, %(title)s, %(brand)s,
-                                            %(price_gbp)s, %(gender)s, %(category)s,
-                                            %(condition)s, %(image_path)s,
-                                            %(image_url_original)s, %(record)s)
-                                           ON CONFLICT (url) DO NOTHING""",
-                                        {**row, "record": Jsonb(record)},
-                                    )
-                                    inserted = cursor.rowcount
-                                connection.commit()
                                 counts[shop]["inserted" if inserted else "skipped"] += 1
                             except psycopg.Error:
                                 connection.rollback()
@@ -346,7 +306,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--shops", help="comma-separated shop domains")
     parser.add_argument("--max-pages", type=int, default=0, help="maximum pages per shop")
-    parser.add_argument("--time-budget", type=float, default=12, help="overall time budget in minutes")
+    parser.add_argument(
+        "--time-budget", type=float, default=12, help="overall time budget in minutes"
+    )
     run(parser.parse_args())
 
 
