@@ -103,6 +103,27 @@ def test_jsonld_rejects_beauty_products_even_if_they_have_a_clothing_category():
     assert reason == "non_apparel"
 
 
+def test_jsonld_rejects_home_products_even_if_they_have_a_clothing_category():
+    product = {
+        "@type": "Product",
+        "name": "Set Of Four White Marble Coasters With Brass Holder",
+        "category": "Accessories",
+        "image": ["https://cdn.example.test/coasters.jpg"],
+        "offers": {
+            "@type": "Offer", "price": "27.99", "priceCurrency": "GBP",
+            "availability": "https://schema.org/InStock",
+        },
+    }
+    html = f'<script type="application/ld+json">{json.dumps(product)}</script>'
+
+    record, reason = bulk_job.parse_product_page(
+        html, "https://shop.example/coasters", "shop.example"
+    )
+
+    assert record is None
+    assert reason == "non_apparel"
+
+
 def test_sitemap_discovery_prefers_uk_product_sitemaps():
     class Response:
         status_code = 200

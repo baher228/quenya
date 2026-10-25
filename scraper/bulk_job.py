@@ -51,7 +51,8 @@ APPAREL_WORDS = re.compile(
 NON_APPAREL_WORDS = re.compile(
     r"\b(beauty|skincare|make[- ]?up|cosmetic|lipstick|mascara|foundation|"
     r"concealer|eyeliner|eyeshadow|nail polish|fragrance|perfume|haircare|"
-    r"homeware|furniture|kitchenware|kitchen|decor|candle|bedding|bathroom|"
+    r"homeware|furniture|kitchenware|kitchen|tableware|drinkware|glassware|"
+    r"coasters?|mugs?|plates?|bowls?|cutlery|decor|candles?|bedding|bathroom|"
     r"cushion|pillow|ornament|vase|rug|toy|food)\b",
     re.IGNORECASE,
 )
