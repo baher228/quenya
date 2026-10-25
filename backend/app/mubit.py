@@ -77,9 +77,11 @@ def _call_task(
     model: str,
     user_content: str | list[dict[str, Any]],
     out_model: type[BaseModel],
+    log_attempts: bool = True,
 ) -> tuple[BaseModel, CallMeta]:
     """Call one frozen Mubit task, validate its JSON, and log each attempt."""
-    db.init_db()
+    if log_attempts:
+        db.init_db()
     client = OpenAI(
         api_key=MUBIT_API_KEY,
         base_url=MUBIT_BASE_URL,
@@ -132,13 +134,14 @@ def _call_task(
                         prompt_tokens, completion_tokens
                     )
                     request_ids.append(response_id)
-                    _log_attempt(
-                        task_name=task_name,
-                        model=model,
-                        meta=meta,
-                        ok=False,
-                        error=f"{type(exc).__name__}: {exc}",
-                    )
+                    if log_attempts:
+                        _log_attempt(
+                            task_name=task_name,
+                            model=model,
+                            meta=meta,
+                            ok=False,
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
                     if validation_retries < 1:
                         validation_retries += 1
                         continue
@@ -151,9 +154,10 @@ def _call_task(
                     prompt_tokens, completion_tokens
                 )
                 request_ids.append(response_id)
-                _log_attempt(
-                    task_name=task_name, model=model, meta=meta, ok=True, error=None
-                )
+                if log_attempts:
+                    _log_attempt(
+                        task_name=task_name, model=model, meta=meta, ok=True, error=None
+                    )
                 return parsed, meta
             except APIStatusError as exc:
                 response_headers = exc.response.headers if exc.response is not None else None
@@ -167,9 +171,10 @@ def _call_task(
                 )
                 request_ids.append(response_id)
                 message = f"HTTP {exc.status_code}: {exc}"
-                _log_attempt(
-                    task_name=task_name, model=model, meta=meta, ok=False, error=message
-                )
+                if log_attempts:
+                    _log_attempt(
+                        task_name=task_name, model=model, meta=meta, ok=False, error=message
+                    )
                 if exc.status_code in (429, 503) and busy_retries < 2:
                     busy_retries += 1
                     time.sleep(_retry_delay(response_headers))
@@ -189,9 +194,10 @@ def _call_task(
                 )
                 request_ids.append(response_id)
                 message = f"{type(exc).__name__}: {exc}"
-                _log_attempt(
-                    task_name=task_name, model=model, meta=meta, ok=False, error=message
-                )
+                if log_attempts:
+                    _log_attempt(
+                        task_name=task_name, model=model, meta=meta, ok=False, error=message
+                    )
                 raise TaskError(f"{task_name} failed: {message}", request_ids) from exc
     finally:
         client.close()
@@ -203,6 +209,8 @@ def call_task(
     model: str,
     user_content: str | list[dict[str, Any]],
     out_model: type[BaseModel],
+    *,
+    log_attempts: bool = True,
 ) -> tuple[BaseModel, CallMeta]:
     with _CALL_SEMAPHORE:
-        return _call_task(task_name, system, model, user_content, out_model)
+        return _call_task(task_name, system, model, user_content, out_model, log_attempts)

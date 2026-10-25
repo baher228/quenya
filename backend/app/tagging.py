@@ -28,8 +28,13 @@ def user_content(item: dict[str, Any], note: str | None = None) -> list[dict[str
 
 
 def tag_item(
-    item: dict[str, Any], note: str | None = None
+    item: dict[str, Any], note: str | None = None, *, log_attempts: bool = True
 ) -> tuple[ItemTags, CallMeta]:
     content = user_content(item, note)
-    parsed, meta = call_task("tagger", TAGGER_SYSTEM, TAGGER_MODEL, content, ItemTags)
+    if log_attempts:
+        parsed, meta = call_task("tagger", TAGGER_SYSTEM, TAGGER_MODEL, content, ItemTags)
+    else:
+        parsed, meta = call_task(
+            "tagger", TAGGER_SYSTEM, TAGGER_MODEL, content, ItemTags, log_attempts=False
+        )
     return ItemTags.model_validate(parsed), meta
