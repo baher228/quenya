@@ -1,6 +1,7 @@
 import argparse
 import io
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -13,6 +14,8 @@ from app import db, images
 from app.sources import STOCK_PHRASE, is_unavailable
 from app.tagging import tag_item
 
+LOG = logging.getLogger(__name__)
+
 
 def _connect():
     import psycopg
@@ -21,7 +24,7 @@ def _connect():
     dsn = os.getenv("SUPABASE_DB_URL")
     if not dsn:
         raise RuntimeError("SUPABASE_DB_URL is required")
-    return psycopg.connect(dsn, row_factory=dict_row)
+    return psycopg.connect(dsn, row_factory=dict_row, prepare_threshold=None)
 
 
 def _pending_rows(limit: int | None) -> list[dict[str, Any]]:
@@ -222,28 +225,41 @@ def run_insert_only_file_import(
                 raw_json = record.get("raw_json", record)
                 if not isinstance(raw_json, str):
                     raw_json = json.dumps(raw_json, ensure_ascii=False)
-                cursor = connection.execute(
-                    """INSERT INTO quenya.items (
-                        id, source, source_url, title, brand, price_gbp, size,
-                        description, image_url, image_path, gender_hint, condition_hint,
-                        availability, query, fetched_at, raw_json, tags_json,
-                        tags_request_id, tagged_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
-                    ) ON CONFLICT (source_url) DO NOTHING RETURNING source_url""",
-                    (
-                        item["id"], item["source"], item["source_url"], item["title"],
-                        item.get("brand"), item["price_gbp"], item.get("size"),
-                        item.get("description"), item["image_url"], item["image_path"],
-                        item.get("gender_hint"), item.get("condition_hint"),
-                        item.get("availability"), item.get("query"), item["fetched_at"],
-                        raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
-                        meta.request_id, datetime.now(UTC).isoformat(),
-                    ),
-                )
-                inserted_row = cursor.fetchone()
-                connection.commit()
+                try:
+                    cursor = connection.execute(
+                        """INSERT INTO quenya.items (
+                            id, source, source_url, title, brand, price_gbp, size,
+                            description, image_url, image_path, gender_hint, condition_hint,
+                            availability, query, fetched_at, raw_json, tags_json,
+                            tags_request_id, tagged_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s
+                        ) ON CONFLICT (source_url) DO NOTHING RETURNING source_url""",
+                        (
+                            item["id"], item["source"], item["source_url"], item["title"],
+                            item.get("brand"), item["price_gbp"], item.get("size"),
+                            item.get("description"), item["image_url"], item["image_path"],
+                            item.get("gender_hint"), item.get("condition_hint"),
+                            item.get("availability"), item.get("query"), item["fetched_at"],
+                            raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
+                            meta.request_id, datetime.now(UTC).isoformat(),
+                        ),
+                    )
+                    inserted_row = cursor.fetchone()
+                    connection.commit()
+                except Exception as exc:
+                    try:
+                        connection.rollback()
+                    except Exception:
+                        LOG.exception("Rollback failed after item insert error url=%s", url)
+                        raise
+                    failed += 1
+                    LOG.error(
+                        "Item insert failed source=%s url=%s reason=%s: %s",
+                        item["source"], url, type(exc).__name__, exc,
+                    )
+                    continue
                 known_urls.add(url)
                 if inserted_row:
                     inserted += 1

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import logging
 import sys
 import threading
 from pathlib import Path
@@ -264,6 +265,45 @@ def test_source_families_run_concurrently():
     assert sorted(completed) == ["shopify", "sitemaps", "vinted"]
 
 
+def test_bulk_database_connection_disables_prepared_statements(monkeypatch):
+    import psycopg
+
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def execute(self, _sql):
+            pass
+
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+    def connect(dsn, **kwargs):
+        calls.append((dsn, kwargs))
+        return Connection()
+
+    monkeypatch.setenv("QUENYA_DATABASE_URL", "postgresql://pooler")
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://pooler")
+    monkeypatch.setattr(psycopg, "connect", connect)
+
+    bulk_job.connect_database()
+    supabase_import._connect()
+
+    assert len(calls) == 2
+    assert calls[0] == ("postgresql://pooler", {"prepare_threshold": None})
+    assert calls[1][0] == "postgresql://pooler"
+    assert calls[1][1]["prepare_threshold"] is None
+
+
 class _Cursor:
     def __init__(self, inserted):
         self.inserted = inserted
@@ -276,6 +316,7 @@ class _Connection:
     def __init__(self):
         self.sql = []
         self.commits = 0
+        self.rollbacks = 0
 
     def execute(self, sql, params):
         self.sql.append(sql)
@@ -283,6 +324,9 @@ class _Connection:
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 def _import_row():
@@ -296,6 +340,50 @@ def _import_row():
         "url": record["source_url"], "source": "shop.example", "title": "Jacket",
         "brand": "Example", "price_gbp": 30, "currency": "GBP",
         "image_url_original": record["image_url"], "record": record,
+    }
+
+
+def _vinted_import_row():
+    url = "https://www.vinted.co.uk/items/9152397037-new-season-nike-tech-fleece"
+    image_url = (
+        "https://images1.vinted.net/t/04_00fb1_7quX3uXKN7o3FVoxFJ1t6bfr/"
+        "f800/dbeb6ad8.webp?s=a21276ece4e79f4d08f976a221bd906d6f048dc7"
+    )
+    title = "New Season Nike Tech Fleece"
+    record = {
+        "id": "vinted:9152397037",
+        "source": "vinted",
+        "source_url": url,
+        "title": title,
+        "brand": None,
+        "price_gbp": 150.0,
+        "size": None,
+        "description": None,
+        "image_url": image_url,
+        "gender_hint": "mens",
+        "condition_hint": "second-hand",
+        "availability": "https://schema.org/InStock",
+        "query": "nike tech fleece tracksuit",
+        "raw_json": {
+            "json_data": {
+                "id": 9152397037,
+                "title": title,
+                "price": {"amount": "150.00", "currency_code": "GBP"},
+            }
+        },
+    }
+    return {
+        "url": url,
+        "source": "vinted",
+        "title": title,
+        "brand": None,
+        "price_gbp": 150.0,
+        "currency": "GBP",
+        "gender": "mens",
+        "category": None,
+        "condition": "second-hand",
+        "image_url_original": image_url,
+        "record": record,
     }
 
 
@@ -325,6 +413,82 @@ def test_insert_only_import_tags_before_a_single_items_insert(tmp_path, monkeypa
     assert len(connection.sql) == connection.commits == 1
     assert "INSERT INTO quenya.items" in connection.sql[0]
     assert "UPDATE " not in connection.sql[0]
+
+
+def test_insert_only_import_counts_and_continues_after_vinted_insert_error(
+    tmp_path, monkeypatch, caplog
+):
+    import psycopg
+
+    first_row = _vinted_import_row()
+    second_row = _import_row()
+    second_row["url"] = "https://shop.example/second"
+    second_row["record"]["id"] = "item-2"
+    second_row["record"]["source_url"] = second_row["url"]
+
+    class FailingConnection(_Connection):
+        def execute(self, sql, params):
+            if params[0] == "vinted:9152397037":
+                self.sql.append(sql)
+                raise psycopg.errors.DuplicatePreparedStatement(
+                    'prepared statement "_pg3_0" already exists'
+                )
+            return super().execute(sql, params)
+
+    monkeypatch.setattr(supabase_import, "_download_original_image", lambda _url: b"bytes")
+    monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: "/tmp/image.jpg")
+    monkeypatch.setattr(supabase_import.images, "storage_enabled", lambda: False)
+    monkeypatch.setattr(
+        supabase_import,
+        "tag_item",
+        lambda *_args, **_kwargs: (
+            SimpleNamespace(model_dump=lambda mode: {"category": "clothing"}),
+            SimpleNamespace(request_id="req-1"),
+        ),
+    )
+    connection = FailingConnection()
+    root = tmp_path
+    source_path = root / "vinted.jsonl"
+    source_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in (first_row, second_row))
+    )
+    state_path = root / "state.json"
+    state = {
+        "counts": {
+            "vinted": {
+                "scraped": 2,
+                "skipped_out_of_stock": 0,
+                "skipped_by_reason": {},
+                "imported": 0,
+                "tag_errors": 0,
+                "failed": 0,
+                "pending": 2,
+            }
+        }
+    }
+    pending = {"vinted": [first_row, second_row]}
+    monkeypatch.setattr(bulk_job, "_ACTIVE_CONNECTION", connection)
+
+    with caplog.at_level(logging.ERROR, logger="app.supabase_import"):
+        bulk_job.import_pending(
+            root, "vinted", pending, set(), state, state_path,
+            chunk_size=2, tag_streak=0,
+        )
+
+    assert state["counts"]["vinted"]["failed"] == 1
+    assert state["counts"]["vinted"]["imported"] == 1
+    assert state["counts"]["vinted"]["pending"] == 0
+    assert pending["vinted"] == []
+    assert connection.rollbacks == 1
+    assert connection.commits == 1
+    assert first_row["url"] in caplog.text
+    assert "DuplicatePreparedStatement" in caplog.text
+    assert 'prepared statement "_pg3_0" already exists' in caplog.text
+    resumed_seen, resumed_pending = bulk_job.load_seen_and_pending(
+        root, {second_row["url"]}
+    )
+    assert first_row["url"] in resumed_seen
+    assert resumed_pending["vinted"] == [first_row]
 
 
 def test_insert_only_import_never_inserts_out_of_stock(tmp_path, monkeypatch):

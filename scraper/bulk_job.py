@@ -147,6 +147,7 @@ def count_for(state: dict, source: str) -> dict:
                 "skipped_by_reason": {},
                 "imported": 0,
                 "tag_errors": 0,
+                "failed": 0,
                 "pending": 0,
             },
         )
@@ -155,6 +156,7 @@ def count_for(state: dict, source: str) -> dict:
         stats.setdefault("scraped", 0)
         stats.setdefault("imported", 0)
         stats.setdefault("tag_errors", 0)
+        stats.setdefault("failed", 0)
         stats.setdefault("pending", 0)
         return stats
 
@@ -301,11 +303,14 @@ def import_pending(
             stats = count_for(state, source)
             stats["imported"] += result["inserted"]
             stats["tag_errors"] += result["tag_failed"]
+            stats["failed"] += result["failed"]
             add_skip(state, source, "out_of_stock", result["skipped_out_of_stock"])
             duplicate_skips = result["skipped"] - result["skipped_out_of_stock"]
             add_skip(state, source, "already_exists", duplicate_skips)
             stats["pending"] = max(
-                0, stats["pending"] - result["inserted"] - result["skipped"]
+                0,
+                stats["pending"] - result["inserted"] - result["skipped"]
+                - result["failed"],
             )
             state["tag_failure_streak"] = result["tag_failure_streak"]
             pending[source] = pending[source][len(records):]
@@ -970,7 +975,7 @@ def connect_database():
     dsn = os.environ.get("QUENYA_DATABASE_URL")
     if not dsn:
         raise RuntimeError("QUENYA_DATABASE_URL is required")
-    connection = psycopg.connect(dsn)
+    connection = psycopg.connect(dsn, prepare_threshold=None)
     with connection.cursor() as cursor:
         cursor.execute("SELECT source_url FROM quenya.items")
         known = {row[0] for row in cursor.fetchall()}
