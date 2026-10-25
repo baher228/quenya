@@ -11,7 +11,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "represent"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "corteiz"
@@ -26,7 +27,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "trapstar"
@@ -41,7 +43,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "sunspel"
@@ -56,7 +59,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "sunspel"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "selfportrait"
@@ -71,7 +75,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "selfportrait"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "belstaff"
@@ -87,7 +92,8 @@ note = "Probe 2026-10-25: 200 GBP Shopify; /en-gb product URLs accepted."
 gender_rule = "belstaff"
 product_base = "https://belstaff.com/en-gb"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "oliverspencer"
@@ -102,7 +108,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "montirex"
@@ -118,7 +125,8 @@ note = "Probe 2026-10-25: 200 GBP Shopify; /en-gb product URLs accepted."
 gender_rule = "men"
 product_base = "https://montirex.com/en-gb"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "waxlondon"
@@ -133,7 +141,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "percival"
@@ -148,7 +157,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "universalworks"
@@ -163,7 +173,8 @@ status = "empty"
 note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "folk"
@@ -178,7 +189,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "kestin"
@@ -193,7 +205,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "finisterre"
@@ -208,7 +221,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "pangaia"
@@ -223,7 +237,8 @@ status = "non_gbp"
 note = "Probe 2026-10-25: meta.json currency USD."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "nfd"
@@ -238,7 +253,8 @@ status = "empty"
 note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "rixo"
@@ -253,7 +269,8 @@ status = "empty"
 note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "kitri"
@@ -268,7 +285,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "damsonmadder"
@@ -283,7 +301,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "hush"
@@ -298,7 +317,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "gymshark"
@@ -313,7 +333,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "nicce"
@@ -328,7 +349,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "dailypaper"
@@ -343,7 +365,8 @@ status = "non_gbp"
 note = "Probe 2026-10-25: meta.json currency EUR."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "unknownlondon"
@@ -358,7 +381,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "colebuxton"
@@ -373,7 +397,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "elevendegrees"
@@ -388,7 +413,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "gymking"
@@ -403,7 +429,8 @@ status = "error"
 note = "Probe 2026-10-25: meta.json request failed."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "drakes"
@@ -418,7 +445,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "privatewhite"
@@ -433,7 +461,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "albam"
@@ -448,7 +477,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "men"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "communityclothing"
@@ -463,7 +493,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "omnes"
@@ -478,7 +509,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "nobodyschild"
@@ -493,7 +525,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "adanola"
@@ -508,7 +541,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "women"
 default_gender = "w"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "aries"
@@ -523,7 +557,8 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "default"
 default_gender = "m"
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "ganni"
@@ -639,7 +674,7 @@ enabled = false
 where = "any"
 group = "outdoor"
 status = "challenge"
-note = "Probe 2026-10-25: challenge page on first UK category request."
+note = "Probe 2026-10-25: px-captcha challenge on the first UK category request."
 browser = true
 
 [[shop.pages]]
@@ -675,11 +710,11 @@ brand = "Burberry"
 host = "uk.burberry.com"
 domain = "burberry.com"
 adapter = "burberry"
-enabled = false
+enabled = true
 where = "any"
 group = "premium"
-status = "challenge"
-note = "Probe 2026-10-25: challenge page on first UK category request."
+status = "ok"
+note = "Probe 2026-10-25: 20 GBP clothing rows from the UK product API."
 max_pages = 2
 
 [[shop.pages]]
@@ -831,11 +866,11 @@ brand = "BOSS"
 host = "www.hugoboss.com"
 domain = "hugoboss.com"
 adapter = "jsonld"
-enabled = false
+enabled = true
 where = "any"
 group = "premium"
-status = "challenge"
-note = "Probe 2026-10-25: challenge page on the first UK category request."
+status = "ok"
+note = "Probe 2026-10-25: 44 GBP clothing rows from UK category listings."
 
 [[shop.pages]]
 gender = "m"
@@ -1022,7 +1057,8 @@ where = "any"
 group = "streetwear"
 status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify meta and clothing rows."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "aimeleondore"
@@ -1035,7 +1071,8 @@ where = "uk"
 group = "streetwear"
 status = "non_gbp"
 note = "US storefront / currency; do not enable without GBP meta."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "tedbaker"
@@ -1048,7 +1085,8 @@ where = "uk"
 group = "highstreet"
 status = "non_gbp"
 note = "US storefront / currency; do not enable without GBP meta."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "meandem"
@@ -1061,7 +1099,8 @@ where = "uk"
 group = "women"
 status = "error"
 note = "Probe 2026-10-25: meta.json response was not valid JSON."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "canadagoose"
@@ -1074,7 +1113,8 @@ where = "uk"
 group = "outdoor"
 status = "non_gbp"
 note = "US storefront / currency; do not enable without GBP meta."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "sp5der"
@@ -1087,7 +1127,8 @@ where = "uk"
 group = "streetwear"
 status = "error"
 note = "Probe 2026-10-25: meta.json connection failed."
-max_pages = 8
+max_pages = 20
+max_requests = 30
 
 [[shop]]
 key = "ssense"

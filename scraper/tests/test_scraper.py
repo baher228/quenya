@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -5,7 +6,7 @@ import pytest
 import store
 from adapters import burberry, common, jsonld, nike, sfcc, shopify, ssense, tiles
 from adapters.common import ShopSession, make_row, unique_rows
-from scrape import split_batches
+from scrape import _images_broken, split_batches
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WORKER_KEYS = {
@@ -103,6 +104,24 @@ def test_shopify_requires_gbp_and_reads_available_minimum_with_pagination():
     assert_worker_row(row)
 
 
+def test_shopify_reads_three_pages_without_reusing_product_handle():
+    pages = json.loads(fixture("shopify-products-pages.json"))
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-gbp.json"),
+            *(json.dumps(page) for page in pages),
+        ]
+    )
+    config = shop("test", "Test", "shopify", "example-shop.test", max_pages=20)
+
+    rows = shopify.scrape(config, fake)
+
+    assert len(rows) == 2
+    feed_urls = [request["url"] for request in fake.requests[1:]]
+    assert all("/products.json?" in url for url in feed_urls)
+    assert len(feed_urls) == 3
+
+
 def test_shopify_rejects_non_gbp_before_products_request():
     fake = FakeSession([fixture("shopify-meta-usd.json")])
     config = shop("test", "Test", "shopify", "example-shop.test")
@@ -124,6 +143,22 @@ def test_shopify_gender_clothing_and_variant_availability():
     assert not common.is_clothing("Gold hoop earrings")
     assert not common.is_clothing("Silver chain necklace")
     assert not common.is_clothing("Luxury watch")
+    for title in (
+        "Gift wrapping",
+        "Gift Box",
+        "Gift voucher",
+        "Skateboard Hardware",
+        "PALACE MOB GRIP",
+        "PALACE BOLTS",
+        "MTX Unlimited",
+        "Repair service",
+        "Infant Girls Core Legging",
+        "Infant Boys Frame T-Shirt",
+        "Girls Icon Cycling Short",
+        "Archive - vests",
+        "3yrs Junior Hoodie",
+    ):
+        assert not common.is_clothing(title)
     assert (
         shopify._available_variant(
             {
@@ -374,9 +409,49 @@ def test_ssense_keeps_product_brand_from_jsonld():
     assert_worker_row(rows[0])
 
 
+def test_ssense_image_template_is_substituted_and_placeholders_are_rejected():
+    image = jsonld._image_url("https://img.ssense.com/__IMAGE_PARAMS__/coat.jpg", {"key": "ssense"})
+    assert "b_white,c_lpad,g_center,h_960,w_960" in image
+    config = shop(domain="example.test")
+    page = "https://example.test/category"
+    assert (
+        make_row(
+            config,
+            "Coat",
+            25,
+            "https://images.example.test/__IMAGE_PARAMS__/coat.jpg",
+            "https://example.test/p/coat",
+            "m",
+            page,
+        )
+        is None
+    )
+    assert (
+        make_row(
+            config,
+            "Coat",
+            25,
+            "https://images.example.test/{width}/coat.jpg",
+            "https://example.test/p/coat",
+            "m",
+            page,
+        )
+        is None
+    )
+
+
 @pytest.mark.parametrize(
     ("status", "body", "classification"),
-    [(403, "", "blocked"), (200, "cf-chl captcha", "challenge")],
+    [
+        (403, "", "blocked"),
+        (200, "<html>/cdn-cgi/challenge-platform</html>", "challenge"),
+        (
+            200,
+            '<html><script src="https://captcha-delivery.com/a.js"></script></html>',
+            "challenge",
+        ),
+        (200, "<div id='px-captcha'>Hold</div>", "challenge"),
+    ],
 )
 def test_block_detection_stops_after_one_request(monkeypatch, status, body, classification):
     calls = []
@@ -392,8 +467,18 @@ def test_block_detection_stops_after_one_request(monkeypatch, status, body, clas
         session.get("https://example.test/listing")
 
     assert error.value.status == classification
+    if classification == "challenge":
+        assert error.value.marker
+        assert "matched marker" in str(error.value)
     assert len(calls) == 1
     assert session.count == 1
+
+
+def test_challenge_detection_ignores_normal_recaptcha_and_json_text():
+    body = '<html><article class="product-card">' + ("clothing " * 2500)
+    body += '<script src="https://www.google.com/recaptcha/api.js"></script></article></html>'
+    assert common.body_has_challenge(body, "jsonld") is None
+    assert common.body_has_challenge('{"description":"captcha newsletter form"}', "shopify") is None
 
 
 def test_robots_disallow_skips_listing_without_request(monkeypatch):
@@ -447,6 +532,12 @@ def test_url_dedupe_and_batch_splitting():
     ]
     assert len(unique_rows([rows[0], rows[0], rows[1]])) == 2
     assert [len(batch) for batch in split_batches(rows, 2)] == [2, 1]
+
+
+def test_all_failed_sampled_images_mark_shop_broken():
+    assert _images_broken([{"status": 404}, {"status": "TimeoutException"}])
+    assert not _images_broken([{"status": 404}, {"status": 200}])
+    assert not _images_broken([])
 
 
 def test_sfcc_pagination_uses_site_next_link():

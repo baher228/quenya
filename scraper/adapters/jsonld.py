@@ -66,6 +66,16 @@ def _title_from_url(brand: str, url: str) -> str:
     return title.title()
 
 
+def _image_url(image, shop):
+    if isinstance(image, list):
+        image = image[0] if image else ""
+    if isinstance(image, dict):
+        image = image.get("url") or image.get("contentUrl") or ""
+    if shop.get("key") == "ssense":
+        image = str(image).replace("__IMAGE_PARAMS__", "b_white,c_lpad,g_center,h_960,w_960")
+    return image
+
+
 def _tile_rows(body: str, shop: dict, page_url: str, gender: str):
     try:
         root = lxml_html.fromstring(body)
@@ -146,11 +156,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
         found = []
         for product in jsonld_products(body):
             price, offer = _price(product)
-            image = product.get("image") or ""
-            if isinstance(image, list):
-                image = image[0] if image else ""
-            if isinstance(image, dict):
-                image = image.get("url") or image.get("contentUrl") or ""
+            image = _image_url(product.get("image") or "", shop)
             product_url = product.get("url") or offer.get("url") or product.get("@id") or ""
             title = str(product.get("name") or "").strip()
             availability = str(offer.get("availability") or "")

@@ -185,6 +185,10 @@ def split_batches(rows, batch_size):
     return [rows[index : index + batch_size] for index in range(0, len(rows), batch_size)]
 
 
+def _images_broken(checks):
+    return bool(checks) and all(check.get("status") != 200 for check in checks)
+
+
 def _run(shops, args):
     _load_env()
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -231,35 +235,21 @@ def _run(shops, args):
         shop_path = out_dir / f"{shop['key']}.jsonl"
         shop_path.touch()
         shop_rows = []
+        shop_urls = set()
 
         def save_rows(rows):
             accepted = []
-            with output_lock:
-                for row in rows:
-                    if row["url"] in global_urls:
-                        continue
-                    global_urls.add(row["url"])
-                    accepted.append(row)
-                    shop_rows.append(row)
-                    all_rows.append(row)
-                if accepted:
-                    with shop_path.open("a", encoding="utf-8", newline="\n") as stream:
-                        for row in accepted:
-                            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
-                        stream.flush()
-                    with all_path.open("a", encoding="utf-8", newline="\n") as stream:
-                        for row in accepted:
-                            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
-                        stream.flush()
-            if args.upload and accepted:
-                upload_rows(
-                    client,
-                    connection,
-                    accepted,
-                    shop,
-                    os.environ["SUPABASE_URL"],
-                    os.environ["SUPABASE_SECRET_KEY"],
-                )
+            for row in rows:
+                if row["url"] in shop_urls:
+                    continue
+                shop_urls.add(row["url"])
+                accepted.append(row)
+                shop_rows.append(row)
+            if accepted:
+                with shop_path.open("a", encoding="utf-8", newline="\n") as stream:
+                    for row in accepted:
+                        stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    stream.flush()
 
         session.on_emit = save_rows
         status, reason = "ok", ""
@@ -293,6 +283,33 @@ def _run(shops, args):
                     )
                 except httpx.HTTPError as exc:
                     checks.append({"url": row["image_url_original"], "status": type(exc).__name__})
+        images_broken = _images_broken(checks)
+        if images_broken:
+            status = "images_broken"
+            reason = "Every sampled image check failed"
+        else:
+            accepted = []
+            with output_lock:
+                for row in shop_rows:
+                    if row["url"] in global_urls:
+                        continue
+                    global_urls.add(row["url"])
+                    accepted.append(row)
+                    all_rows.append(row)
+                if accepted:
+                    with all_path.open("a", encoding="utf-8", newline="\n") as stream:
+                        for row in accepted:
+                            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+                        stream.flush()
+            if args.upload and accepted:
+                upload_rows(
+                    client,
+                    connection,
+                    accepted,
+                    shop,
+                    os.environ["SUPABASE_URL"],
+                    os.environ["SUPABASE_SECRET_KEY"],
+                )
         prices = [float(row["price_gbp"]) for row in shop_rows]
         split = {}
         for row in shop_rows:

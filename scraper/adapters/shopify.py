@@ -70,7 +70,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
     if not product_base.startswith("https://"):
         product_base = "https://" + product_base
     collections = shop.get("collections") or [None]
-    max_pages = 1 if probe else int(shop.get("max_pages", 8))
+    max_pages = 1 if probe else int(shop.get("max_pages", 20))
     rows = []
     for collection in collections:
         gender = (
@@ -78,11 +78,11 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
             if collection
             else shop.get("default_gender", "m")
         )
-        handle = collection.get("handle") if collection else None
+        collection_handle = collection.get("handle") if collection else None
         for page in range(1, max_pages + 1):
             endpoint = (
-                f"https://{host}/collections/{handle}/products.json"
-                if handle
+                f"https://{host}/collections/{collection_handle}/products.json"
+                if collection_handle
                 else f"https://{host}/products.json"
             )
             url = endpoint + "?" + urlencode({"limit": 250, "page": page})
@@ -120,8 +120,8 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                 image = images[0].get("src", "") if images and isinstance(images[0], dict) else ""
                 if image.startswith("http://"):
                     image = "https://" + image[7:]
-                handle = str(product.get("handle") or "")
-                url = urljoin(product_base.rstrip("/") + "/", f"products/{handle}")
+                product_handle = str(product.get("handle") or "")
+                url = urljoin(product_base.rstrip("/") + "/", f"products/{product_handle}")
                 compare = variant.get("compare_at_price")
                 extra = {
                     "availability": "InStock",

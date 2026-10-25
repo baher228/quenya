@@ -13,29 +13,58 @@ UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
-CHALLENGE_MARKERS = (
-    "captcha",
-    "cf-chl",
-    "_px",
-    "datadome",
-    "access denied",
+CHALLENGE_SIGNATURES = (
+    "/cdn-cgi/challenge-platform",
+    "cf-chl-",
+    "captcha-delivery.com",
+    "px-captcha",
+    "_incapsula_resource",
     "pardon our interruption",
-    "verify you are human",
+    "<title>just a moment",
+    "<title>access denied",
 )
+WEAK_CHALLENGE_MARKERS = ("captcha", "verify you are human", "access denied")
+EXPECTED_CONTENT_MARKERS = {
+    "burberry": ("__preloaded_state__", "web-api/pages/products"),
+    "jsonld": ("application/ld+json", "product-card", "product-tile"),
+    "sfcc": ("product-tile", "data-pid", "product-card"),
+    "tiles": ("product-tile", "data-pid", "product-card"),
+    "nike": ("/gb/t/", "wall", "product-card"),
+    "ssense": ("application/ld+json", "product-card", "product-tile"),
+}
 _robots_cache: dict[str, urllib.robotparser.RobotFileParser | None] = {}
 _robots_lock = threading.Lock()
 
 
 class Blocked(Exception):
-    def __init__(self, status: str, url: str):
-        super().__init__(f"{status}: {url}")
+    def __init__(self, status: str, url: str, marker: str | None = None):
+        reason = f"{status}: {url}"
+        if marker:
+            reason += f" (matched marker: {marker})"
+        super().__init__(reason)
         self.status = status
         self.url = url
+        self.marker = marker
 
 
-def body_has_challenge(body: str) -> bool:
+def body_has_challenge(body: str, adapter: str = "") -> str | None:
+    try:
+        json.loads(body)
+        return None
+    except (ValueError, TypeError):
+        pass
     value = body.lower()
-    return any(marker in value for marker in CHALLENGE_MARKERS)
+    for marker in CHALLENGE_SIGNATURES:
+        if marker in value:
+            return marker
+    if len(body.encode("utf-8", "replace")) < 15_000:
+        expected = EXPECTED_CONTENT_MARKERS.get(adapter, ())
+        if any(marker in value for marker in expected):
+            return None
+        for marker in WEAK_CHALLENGE_MARKERS:
+            if marker in value:
+                return marker
+    return None
 
 
 class ShopSession:
@@ -138,8 +167,9 @@ class ShopSession:
         self.requests.append({"url": url, "final_url": final_url, "status": status})
         if status in {403, 429, 503}:
             raise Blocked("blocked", url)
-        if body_has_challenge(text):
-            raise Blocked("challenge", url)
+        marker = body_has_challenge(text, self.shop.get("adapter", ""))
+        if marker:
+            raise Blocked("challenge", url, marker)
         if status != 200:
             self.errors += 1
             if self.errors >= 3:
@@ -197,8 +227,13 @@ def is_clothing(value: str) -> bool:
             r"bags?|backpacks?|scarf(?:s|ves)?|gloves?|shoes?|sneakers?|trainers?|"
             r"boots?|loafers?|sandals?|heels?|mules?|slippers?|footwear|"
             r"jewel(?:ry|lery)|earrings?|necklaces?|bracelets?|rings?|kids?|child|"
-            r"underwear|socks?|gift.?card|protector|homeware|home goods|"
+            r"underwear|socks?|gift\s*wrap(?:ping)?|gift\s*box(?:es)?|gift.?cards?|e.?gift|vouchers?|"
+            r"membership|subscription|unlimited|donation|insurance|repair|service|"
+            r"shipping|sample|bundle.?fee|protector|homeware|home goods|"
+            r"skateboard|hardware|grips?|bolts?|"
             r"wallets?|purses?|belts?|watch(?:es)?|sunglasses|key.?ring|"
+            r"infant|baby|toddler|kids?|kid['’]s|junior|girls?|boys?|youth|children|"
+            r"age\s*\d{1,2}|\d{1,2}\s*yrs?|archive\s*[-–:]\s*vests?|"
             r"candle|mug|toy|rug|cushion|blanket|home decor)\b",
             value,
             re.I,
@@ -223,6 +258,7 @@ def make_row(
         title
         and price > 0
         and image.startswith("https://")
+        and not re.search(r"__|[{}]", image)
         and clean_url
         and is_clothing(f"{title} {page}")
         and not re.search(r"OutOfStock|SoldOut|Discontinued|Unavailable", availability, re.I)
