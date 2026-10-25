@@ -113,7 +113,7 @@ Data is in Supabase Postgres (schema `quenya`) and Supabase Storage (`quenya-img
 
 ```bash
 cd backend
-../.venv/bin/python -m app.pg_migrate --sqlite data/quenya.db --images data/images --uploads data/uploads   # SQLite → Supabase
+../.venv/bin/python -m app.pg_migrate --sqlite DB --images DIR --uploads DIR   # SQLite → Supabase
 ../.venv/bin/python -m app.supabase_import --from-file batch.jsonl [--per-shop N] [--exclude-source domain]  # JSONL → Supabase, tags each new item
 ```
 
