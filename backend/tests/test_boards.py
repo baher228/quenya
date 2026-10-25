@@ -7,9 +7,9 @@ from fastapi import HTTPException
 
 from app import db, phase2_api, routing, taste
 from app.config import CONTEXT_SOURCES
-from app.core import shared_core
+from app.core import as_profile, shared_core
 from app.outfits import build_pool, stylist_user_content, validate_outfits
-from app.rank import add_exploration, make_deck
+from app.rank import add_exploration, make_deck, rank_items
 from app.schemas import (
     BoardBriefRequest,
     ProfileBrief,
@@ -777,6 +777,139 @@ def test_core_aggregates_only_across_multiple_boards(monkeypatch):
     }
 
 
+def test_shared_core_disabled_keeps_deck_and_outfit_prompt_board_local(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    brief = _brief(pieces=["top"])
+    profile = _profile(
+        likes={"workwear": 0.1, "minimal": 0.15},
+        avoids={},
+        rules=[],
+        palette=[],
+        niche_level=0.3,
+    )
+    boards = [
+        {
+            "id": "a",
+            "label": "A",
+            "updated_at": "2026-01-01",
+            "brief": {},
+            "taste": profile,
+        },
+        {
+            "id": "b",
+            "label": "B",
+            "updated_at": "2026-01-02",
+            "brief": {},
+            "taste": {
+                **profile,
+                "likes": {"workwear": 1.0},
+            },
+        },
+    ]
+    monkeypatch.setattr(db, "profile_boards", lambda _kind: boards)
+    core = shared_core()
+    items = [
+        _item("workwear-item", "top", ["workwear"]),
+        _item("minimal-item", "top", ["minimal"]),
+    ]
+    local_ranking = rank_items(items, brief, profile)
+    shared_ranking = rank_items(
+        items, brief, profile, core_profile=as_profile(core)
+    )
+    local_ids = [item["id"] for item in local_ranking]
+    assert local_ids == ["minimal-item", "workwear-item"]
+    assert [item["id"] for item in shared_ranking] != local_ids
+
+    shared_core_calls = []
+    monkeypatch.setattr(
+        phase2_api,
+        "shared_core",
+        lambda: shared_core_calls.append(True) or core,
+    )
+    monkeypatch.setattr(
+        phase2_api, "_user_profile", lambda: {"id": "a", "brief": brief}
+    )
+    monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
+    for item in items:
+        item["source"] = "vinted"
+    monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: items)
+    route_rankings = []
+    original_rank_items = phase2_api.rank_items
+
+    def capture_ranking(*args, **kwargs):
+        ranked = original_rank_items(*args, **kwargs)
+        route_rankings.append(
+            ([item["id"] for item in ranked], kwargs.get("core_profile"))
+        )
+        return ranked
+
+    monkeypatch.setattr(phase2_api, "rank_items", capture_ranking)
+    empty_core = {
+        "rules": [],
+        "likes": {},
+        "avoids": {},
+        "palette": [],
+        "sizes": {},
+    }
+    assert phase2_api.get_core() == empty_core
+    assert phase2_api.deck(1)[0]["id"] == "minimal-item"
+    monkeypatch.setattr(db, "profile_boards", lambda _kind: boards[:1])
+    assert phase2_api.deck(1)[0]["id"] == "minimal-item"
+    assert route_rankings == [(local_ids, None), (local_ids, None)]
+    assert shared_core_calls == []
+    assert "Shared rules" not in stylist_user_content(
+        profile, 1, [], items, core_rules=None
+    )
+
+
+def test_shared_core_enabled_contributes_to_deck_ranking(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", True)
+    brief = _brief(pieces=["top"])
+    profile = _profile(
+        likes={},
+        avoids={},
+        rules=[],
+        palette=[],
+        niche_level=0.3,
+    )
+    core = {
+        "rules": [],
+        "likes": {"workwear": 1.0},
+        "avoids": {},
+        "palette": [],
+        "sizes": {},
+    }
+    monkeypatch.setattr(phase2_api, "shared_core", lambda: core)
+    monkeypatch.setattr(
+        phase2_api,
+        "_user_profile",
+        lambda: {"id": "a", "brief": brief},
+    )
+    monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
+    items = [
+        _item("a-minimal-item", "top", ["minimal"]),
+        _item("z-workwear-item", "top", ["workwear"]),
+    ]
+    monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: items)
+    core_profiles = []
+    original_rank_items = phase2_api.rank_items
+
+    def capture_core_profile(*args, **kwargs):
+        core_profiles.append(kwargs.get("core_profile"))
+        return original_rank_items(*args, **kwargs)
+
+    monkeypatch.setattr(phase2_api, "rank_items", capture_core_profile)
+
+    deck = phase2_api.deck(1)
+
+    assert core_profiles == [phase2_api.as_profile(core)]
+    assert deck[0]["id"] == "z-workwear-item"
+
+
 def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
     ranked = [
         _item(f"top-{index}", "top", [f"top{index}"]) for index in range(6)
@@ -902,8 +1035,7 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
         phase2_api, "_user_profile", lambda: {"id": "board", "brief": brief}
     )
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
-    monkeypatch.setattr(phase2_api, "shared_core", lambda: {})
-    monkeypatch.setattr(phase2_api, "as_profile", lambda _core: {})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: items)
 
     result = phase2_api.deck(10)

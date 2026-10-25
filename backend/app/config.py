@@ -11,6 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(REPO_ROOT / ".env")
 
+# Shared-core is archived and off by default.
+# Each board learns only from its own brief and swipes.
+SHARED_CORE_ENABLED = (
+    os.getenv("QUENYA_SHARED_CORE", "").lower() in {"1", "true", "yes"}
+)
+
 MUBIT_API_KEY = os.getenv("MUBIT_API_KEY", "")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 MUBIT_BASE_URL = os.getenv("MUBIT_BASE_URL", "https://api.mubit.ai/openai/v1")
