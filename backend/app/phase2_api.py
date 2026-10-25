@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
 from app import db, images
-from app.config import CONTEXT_SOURCES, SHOP_TIERS, SPORT_CONTEXTS
+from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
 from app.mubit import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
@@ -38,6 +38,12 @@ from app.tagging import tag_item
 from app.taste import create_taste, update_taste
 
 router = APIRouter()
+
+
+def _core() -> dict[str, Any]:
+    if SHARED_CORE_ENABLED:
+        return shared_core()
+    return {"rules": [], "likes": {}, "avoids": {}, "palette": [], "sizes": {}}
 
 
 def _gender_code(gender: str) -> str:
@@ -519,7 +525,7 @@ def rename_board(board_id: str, body: BoardLabelRequest) -> dict[str, Any]:
 
 @router.get("/api/core")
 def get_core() -> dict[str, Any]:
-    return shared_core()
+    return _core()
 
 
 def _new_board(brief: dict[str, Any], label: str, context: str) -> dict[str, Any]:
@@ -690,13 +696,13 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
     candidates = db.list_items(limit=5000)
-    core = shared_core()
+    core = _core()
     ranked = rank_items(
         candidates,
         active["brief"],
         taste,
         exclude_ids=swiped,
-        core_profile=as_profile(core),
+        core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
     )
     share = secondhand_share(active["brief"], taste)
     initial_deck = make_deck(
@@ -753,7 +759,7 @@ def taste_history() -> dict[str, Any]:
         "current": {"version": current["version"], "profile": current["profile"]},
         "history": db.get_taste_history(active["id"]),
         "counts": counts,
-        "core": shared_core(),
+        "core": _core(),
     }
 
 
@@ -763,8 +769,8 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
     current = db.latest_taste(active["id"])
     profile = current["profile"]
     items = db.list_items(limit=5000)
-    core = shared_core()
-    core_profile = as_profile(core)
+    core = _core()
+    core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     pool = build_pool(
         items,
         active["brief"],
@@ -780,7 +786,11 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
         body.count,
         body.locked_ids,
         pool,
-        core_rules=[item["rule"] for item in core["rules"]],
+        core_rules=(
+            [item["rule"] for item in core["rules"]]
+            if SHARED_CORE_ENABLED
+            else None
+        ),
         history=db.swipe_history(active["id"]),
         include_shoes=active["brief"].get("include_shoes", True),
         style_notes=style_notes(active["brief"]),
@@ -884,9 +894,13 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Item is not in this outfit")
     slot = tags_for(replaced).get("slot")
     current = _taste(active["id"])
+    core = _core()
     candidates = [
         item for item in rank_items(
-            items, active["brief"], current, core_profile=as_profile(shared_core())
+            items,
+            active["brief"],
+            current,
+            core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
         )
         if tags_for(item).get("slot") == slot and item["id"] not in outfit["piece_ids"]
     ]
@@ -974,8 +988,12 @@ def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dic
         ).lower()
         and (slot is None or tags_for(item).get("slot") == slot)
     ]
+    core = _core()
     ranked = rank_items(
-        matches, active["brief"], current, core_profile=as_profile(shared_core())
+        matches,
+        active["brief"],
+        current,
+        core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
     )
     return [_public_item(item) for item in ranked[:max(1, min(limit, 100))]]
 
