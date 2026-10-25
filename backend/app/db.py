@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 import re
@@ -41,7 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_items_tags_source ON items(source, gender_hint, c
 CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY, brief_json TEXT NOT NULL, created_at TEXT NOT NULL,
     kind TEXT NOT NULL DEFAULT 'user', active INTEGER NOT NULL DEFAULT 1,
-    label TEXT, context TEXT, updated_at TEXT
+    label TEXT, context TEXT, updated_at TEXT, owner_id TEXT,
+    ranker_arm TEXT, deck_request_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS swipes (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
@@ -89,6 +91,21 @@ CREATE TABLE IF NOT EXISTS fetch_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_fetch_jobs_profile_updated
 ON fetch_jobs(profile_id, updated_at);
+CREATE TABLE IF NOT EXISTS item_embeddings (
+    item_id TEXT PRIMARY KEY, model TEXT NOT NULL, img BLOB, txt BLOB,
+    mix BLOB NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS profile_embeddings (
+    profile_id TEXT PRIMARY KEY, model TEXT NOT NULL, brief BLOB,
+    brief_hash TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS deck_events (
+    id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
+    arm TEXT NOT NULL, policy TEXT NOT NULL, position INTEGER NOT NULL,
+    score REAL NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
+ON deck_events(profile_id, created_at);
 """
 POSTGRES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -118,7 +135,8 @@ CREATE INDEX IF NOT EXISTS idx_items_tags_source ON items(source, gender_hint, c
 CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY, brief_json TEXT NOT NULL, created_at TEXT NOT NULL,
     kind TEXT NOT NULL DEFAULT 'user', active INTEGER NOT NULL DEFAULT 1,
-    label TEXT, context TEXT, updated_at TEXT
+    label TEXT, context TEXT, updated_at TEXT, owner_id TEXT,
+    ranker_arm TEXT, deck_request_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS swipes (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
@@ -169,9 +187,25 @@ ON fetch_jobs(profile_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_profiles_active ON profiles(kind, active);
 CREATE INDEX IF NOT EXISTS idx_routes_kind_corrected
 ON routes(profile_kind, corrected, created_at);
+CREATE TABLE IF NOT EXISTS item_embeddings (
+    item_id TEXT PRIMARY KEY, model TEXT NOT NULL, img vector(512), txt vector(512),
+    mix vector(512) NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS profile_embeddings (
+    profile_id TEXT PRIMARY KEY, model TEXT NOT NULL, brief vector(512),
+    brief_hash TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS deck_events (
+    id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, item_id TEXT NOT NULL,
+    arm TEXT NOT NULL, policy TEXT NOT NULL, position INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
+ON deck_events(profile_id, created_at);
 """
 _INIT_LOCK = Lock()
 _INITIALIZED_DATABASES: set[str] = set()
+logger = logging.getLogger(__name__)
 
 
 class _HybridRow(dict):
@@ -235,7 +269,7 @@ class _PostgresConnection:
         # SET LOCAL keeps search_path inside this transaction, so it never leaks to
         # other apps sharing a pooled Supabase backend.
         if not self._in_transaction:
-            self._connection.execute("SET LOCAL search_path TO quenya")
+            self._connection.execute("SET LOCAL search_path TO quenya, extensions")
             self._in_transaction = True
         return self._connection.execute(self._translate(sql, params), params or None)
 
@@ -308,9 +342,21 @@ def init_db() -> None:
         with db_connection() as connection:
             if database_url:
                 connection.execute("CREATE SCHEMA IF NOT EXISTS quenya")
+                connection.execute("CREATE SCHEMA IF NOT EXISTS extensions")
+                connection.execute(
+                    "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions"
+                )
                 for statement in POSTGRES_SCHEMA.split(";"):
                     if statement.strip():
                         connection.execute(statement)
+                for column, definition in {
+                    "owner_id": "TEXT",
+                    "ranker_arm": "TEXT",
+                    "deck_request_count": "INTEGER NOT NULL DEFAULT 0",
+                }.items():
+                    connection.execute(
+                        f"ALTER TABLE profiles ADD COLUMN IF NOT EXISTS {column} {definition}"
+                    )
             else:
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.executescript(SCHEMA)
@@ -321,6 +367,9 @@ def init_db() -> None:
                     "label": "TEXT",
                     "context": "TEXT",
                     "updated_at": "TEXT",
+                    "owner_id": "TEXT",
+                    "ranker_arm": "TEXT",
+                    "deck_request_count": "INTEGER NOT NULL DEFAULT 0",
                 },
                 "swipes": {"consumed_version": "INTEGER"},
                 "outfits": {"consumed_version": "INTEGER"},
@@ -385,6 +434,7 @@ def init_db() -> None:
 def insert_items(items: list[dict[str, Any]]) -> int:
     init_db()
     inserted = 0
+    inserted_items = []
     sql = """
     INSERT OR IGNORE INTO items (
         id, source, source_url, title, brand, price_gbp, size, description,
@@ -411,7 +461,36 @@ def insert_items(items: list[dict[str, Any]]) -> int:
             row["raw_json"] = json.dumps(row.get("raw_json", row), ensure_ascii=False)
             cursor = connection.execute(sql, row)
             inserted += cursor.rowcount
+            if cursor.rowcount:
+                inserted_items.append(row)
+    if inserted_items and (
+        os.getenv("QUENYA_CLIP_TEXT_PATH") or os.getenv("QUENYA_CLIP_TEXT_URL")
+    ):
+        from app.embedding import persist_item_text
+
+        for item in inserted_items:
+            try:
+                persist_item_text(item)
+            except Exception as exc:
+                logger.error(
+                    "Could not create text embedding for item %s (%s)",
+                    item["id"], type(exc).__name__,
+                )
     return inserted
+
+
+def _maybe_embed_brief(profile_id: str, brief: dict[str, Any]) -> None:
+    if not (os.getenv("QUENYA_CLIP_TEXT_PATH") or os.getenv("QUENYA_CLIP_TEXT_URL")):
+        return
+    from app.embedding import persist_profile_brief
+
+    try:
+        persist_profile_brief(profile_id, brief)
+    except Exception as exc:
+        logger.error(
+            "Could not create text embedding for profile %s (%s)",
+            profile_id, type(exc).__name__,
+        )
 
 
 def source_urls() -> set[str]:
@@ -602,28 +681,38 @@ def create_profile(
     active: bool = True,
     label: str = "Your style",
     context: str = "other",
+    owner_id: str | None = None,
+    ranker_arm: str | None = None,
 ) -> None:
     init_db()
+    if ranker_arm is None:
+        from app.embedding_ranker import fallback_arm
+
+        ranker_arm = fallback_arm(profile_id)
     with db_connection() as connection:
         if kind == "user" and active:
             connection.execute(
                 "UPDATE profiles SET active=0 WHERE kind='user' AND active=1"
             )
         connection.execute(
-            """INSERT INTO profiles (id, brief_json, created_at, kind, active)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO profiles
+               (id, brief_json, created_at, kind, active, owner_id, ranker_arm)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 profile_id,
                 json.dumps(brief, ensure_ascii=False, separators=(",", ":")),
                 now_iso(),
                 kind,
                 int(active),
+                owner_id,
+                ranker_arm,
             ),
         )
         connection.execute(
             "UPDATE profiles SET label=?, context=?, updated_at=? WHERE id=?",
             (label, context, now_iso(), profile_id),
         )
+    _maybe_embed_brief(profile_id, brief)
 
 
 def update_profile_brief(profile_id: str, brief: dict[str, Any]) -> None:
@@ -632,6 +721,189 @@ def update_profile_brief(profile_id: str, brief: dict[str, Any]) -> None:
             "UPDATE profiles SET brief_json=?, updated_at=? WHERE id=?",
             (json.dumps(brief, ensure_ascii=False, separators=(",", ":")), now_iso(), profile_id),
         )
+    _maybe_embed_brief(profile_id, brief)
+
+
+def _vector_string(vector) -> str | None:
+    if vector is None:
+        return None
+    import numpy as np
+
+    values = np.asarray(vector, dtype=np.float32).reshape(-1)
+    return "[" + ",".join(format(float(value), ".8g") for value in values) + "]"
+
+
+def _vector_value(value):
+    if value is None:
+        return None
+    import numpy as np
+
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+    if isinstance(value, bytes):
+        return np.frombuffer(value, dtype=np.float32).copy()
+    if isinstance(value, str):
+        value = json.loads(value)
+    return np.asarray(value, dtype=np.float32)
+
+
+def store_item_embedding(
+    item_id: str, model: str, img, txt, mix
+) -> None:
+    init_db()
+    if os.getenv("QUENYA_DATABASE_URL"):
+        sql = """INSERT INTO item_embeddings(item_id, model, img, txt, mix, updated_at)
+                 VALUES (?, ?, ?::vector, ?::vector, ?::vector, ?)
+                 ON CONFLICT(item_id) DO UPDATE SET model=excluded.model,
+                 img=excluded.img, txt=excluded.txt, mix=excluded.mix,
+                 updated_at=excluded.updated_at"""
+        values = (
+            item_id, model, _vector_string(img), _vector_string(txt),
+            _vector_string(mix), now_iso(),
+        )
+    else:
+        import numpy as np
+
+        def blob(value):
+            return None if value is None else np.asarray(value, dtype=np.float32).tobytes()
+
+        sql = """INSERT INTO item_embeddings(item_id, model, img, txt, mix, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(item_id) DO UPDATE SET model=excluded.model,
+                 img=excluded.img, txt=excluded.txt, mix=excluded.mix,
+                 updated_at=excluded.updated_at"""
+        values = (item_id, model, blob(img), blob(txt), blob(mix), now_iso())
+    with db_connection() as connection:
+        connection.execute(sql, values)
+
+
+def item_embedding_map() -> dict[str, dict[str, Any]]:
+    init_db()
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+    fields = "img::text, txt::text, mix::text" if postgres else "img, txt, mix"
+    with db_connection() as connection:
+        rows = connection.execute(
+            f"SELECT item_id, {fields} FROM item_embeddings WHERE model='clip32'"
+        ).fetchall()
+    return {
+        row["item_id"]: {
+            key: _vector_value(row[key])
+            for key in ("img", "txt", "mix")
+        }
+        for row in rows
+    }
+
+
+def random_item_mix_vectors(limit: int = 3000):
+    init_db()
+    order = "RANDOM()" if not os.getenv("QUENYA_DATABASE_URL") else "random()"
+    with db_connection() as connection:
+        rows = connection.execute(
+            f"SELECT mix::text AS mix FROM item_embeddings WHERE model='clip32' "
+            f"AND mix IS NOT NULL ORDER BY {order} LIMIT ?"
+            if os.getenv("QUENYA_DATABASE_URL")
+            else "SELECT mix FROM item_embeddings WHERE model='clip32' "
+            "AND mix IS NOT NULL ORDER BY RANDOM() LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [_vector_value(row["mix"]) for row in rows if row["mix"] is not None]
+
+
+def store_profile_embedding(profile_id: str, model: str, brief, brief_hash: str) -> None:
+    init_db()
+    if os.getenv("QUENYA_DATABASE_URL"):
+        sql = """INSERT INTO profile_embeddings(profile_id, model, brief, brief_hash, updated_at)
+                 VALUES (?, ?, ?::vector, ?, ?) ON CONFLICT(profile_id) DO UPDATE SET
+                 model=excluded.model, brief=excluded.brief,
+                 brief_hash=excluded.brief_hash, updated_at=excluded.updated_at"""
+        values = (profile_id, model, _vector_string(brief), brief_hash, now_iso())
+    else:
+        import numpy as np
+
+        value = None if brief is None else np.asarray(brief, dtype=np.float32).tobytes()
+        sql = """INSERT INTO profile_embeddings(profile_id, model, brief, brief_hash, updated_at)
+                 VALUES (?, ?, ?, ?, ?) ON CONFLICT(profile_id) DO UPDATE SET
+                 model=excluded.model, brief=excluded.brief,
+                 brief_hash=excluded.brief_hash, updated_at=excluded.updated_at"""
+        values = (profile_id, model, value, brief_hash, now_iso())
+    with db_connection() as connection:
+        connection.execute(sql, values)
+
+
+def profile_embedding(profile_id: str):
+    init_db()
+    field = "brief::text AS brief" if os.getenv("QUENYA_DATABASE_URL") else "brief"
+    with db_connection() as connection:
+        row = connection.execute(
+            f"SELECT {field} FROM profile_embeddings WHERE profile_id=? AND model='clip32'",
+            (profile_id,),
+        ).fetchone()
+    return _vector_value(row["brief"]) if row else None
+
+
+def get_or_assign_ranker_arm(profile_id: str, fallback: str) -> str:
+    init_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT ranker_arm FROM profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+        arm = (row["ranker_arm"] if row else None) or fallback
+        if row and not row["ranker_arm"]:
+            connection.execute(
+                "UPDATE profiles SET ranker_arm=? WHERE id=?", (arm, profile_id)
+            )
+    return arm
+
+
+def next_deck_request(profile_id: str) -> int:
+    init_db()
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE profiles SET deck_request_count=deck_request_count+1 WHERE id=?",
+            (profile_id,),
+        )
+        row = connection.execute(
+            "SELECT deck_request_count FROM profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+    return int(row["deck_request_count"]) if row else 0
+
+
+def profile_swipes(profile_id: str) -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT item_id, liked FROM swipes WHERE profile_id=? ORDER BY created_at, id",
+            (profile_id,),
+        ).fetchall()
+    return [{"item_id": row["item_id"], "liked": bool(row["liked"])} for row in rows]
+
+
+def recent_deck_item_ids(profile_id: str, limit: int = 5) -> list[str]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT item_id FROM deck_events WHERE profile_id=?
+               ORDER BY created_at DESC, position DESC LIMIT ?""",
+            (profile_id, limit),
+        ).fetchall()
+    return [row["item_id"] for row in reversed(rows)]
+
+
+def record_deck_events(events: list[dict[str, Any]]) -> None:
+    if not events:
+        return
+    init_db()
+    with db_connection() as connection:
+        for event in events:
+            connection.execute(
+                """INSERT INTO deck_events
+                   (id, profile_id, item_id, arm, policy, position, score, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                tuple(event[key] for key in (
+                    "id", "profile_id", "item_id", "arm", "policy",
+                    "position", "score", "created_at",
+                )),
+            )
 
 
 def set_profile_label(profile_id: str, label: str) -> None:

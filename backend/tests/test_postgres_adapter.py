@@ -70,10 +70,10 @@ def test_postgres_connect_disables_prepared_statements_and_sets_search_path(
     connection.commit()
     connection.execute("SELECT 3")
     assert calls[1:] == [
-        ("SET LOCAL search_path TO quenya", None),
+        ("SET LOCAL search_path TO quenya, extensions", None),
         ("SELECT 1", None),
         ("SELECT 2", None),
-        ("SET LOCAL search_path TO quenya", None),
+        ("SET LOCAL search_path TO quenya, extensions", None),
         ("SELECT 3", None),
     ]
     connection.close()

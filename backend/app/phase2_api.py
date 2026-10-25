@@ -1,20 +1,29 @@
 import base64
+import hashlib
 import io
 import json
+import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any
 
+import numpy as np
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
 from app import db, images
 from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
+from app.embedding_ranker import (
+    catalogue_sample,
+    choose_bootdiv,
+    fallback_arm,
+    rank_candidates,
+)
 from app.mubit import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
-from app.rank import add_exploration, make_deck, rank_items, secondhand_share, tags_for
+from app.rank import add_exploration, make_deck, rank_items, score_item, secondhand_share, tags_for
 from app.routing import route_input
 from app.schemas import (
     BoardBriefRequest,
@@ -411,7 +420,8 @@ def create_profile(
         except TaskError as exc:
             raise _http_task_error(exc) from exc
         db.create_profile(
-            profile_id, brief, label=label, context=route_output.context
+            profile_id, brief, label=label, context=route_output.context,
+            ranker_arm=fallback_arm(profile_id),
         )
         route_output_data = route_output.model_dump() | {
             "input_brief": brief,
@@ -534,7 +544,10 @@ def _new_board(brief: dict[str, Any], label: str, context: str) -> dict[str, Any
         create_taste(brief, profile_id)
     except TaskError as exc:
         raise _http_task_error(exc) from exc
-    db.create_profile(profile_id, brief, label=label, context=context)
+    db.create_profile(
+        profile_id, brief, label=label, context=context,
+        ranker_arm=fallback_arm(profile_id),
+    )
     return next(board for board in db.profile_boards() if board["id"] == profile_id)
 
 
@@ -696,14 +709,55 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
     candidates = db.list_items(limit=5000)
+    configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
+    arm = (
+        configured_arm
+        if configured_arm in {"tags", "embed"}
+        else db.get_or_assign_ranker_arm(
+            active["id"], fallback_arm(active["id"], "ab")
+        )
+    )
+    request_number = db.next_deck_request(active["id"])
     core = _core()
-    ranked = rank_items(
+    tag_ranked = rank_items(
         candidates,
         active["brief"],
         taste,
         exclude_ids=swiped,
         core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
     )
+    swipes = db.profile_swipes(active["id"])
+    embeddings = db.item_embedding_map() if arm == "embed" else {}
+    brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
+    sample = None
+    scores = {}
+    use_embed = arm == "embed" and any(
+        (embeddings.get(item["id"]) or {}).get("mix") is not None
+        for item in tag_ranked
+    )
+    if use_embed:
+        sample = catalogue_sample()
+        ranked, scores, _history = rank_candidates(
+            tag_ranked, active["id"], taste, brief_vector, swipes, embeddings, sample
+        )
+        seed_text = f"{active['id']}:{swipe_count}:{request_number}"
+        rng = np.random.default_rng(
+            int(hashlib.sha1(seed_text.encode()).hexdigest()[:16], 16)
+        )
+        recent_vectors = [
+            (embeddings.get(item_id) or {}).get("mix")
+            for item_id in db.recent_deck_item_ids(active["id"])
+        ]
+
+        def selector(pool, selected):
+            return choose_bootdiv(
+                pool, selected, swipes, embeddings, scores, brief_vector,
+                taste, sample, recent_vectors, rng,
+            )
+
+    else:
+        ranked = tag_ranked
+        selector = None
     share = secondhand_share(active["brief"], taste)
     initial_deck = make_deck(
         ranked,
@@ -711,15 +765,30 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         active["brief"],
         include_shoes=active["brief"].get("include_shoes", True),
         secondhand_share=share,
+        selector=selector,
     )
-    explored_deck = add_exploration(
-        initial_deck,
-        ranked,
-        n,
-        taste,
-        swipes=swipe_count,
-        seed=f"{active['id']}:{swipe_count}",
+    explored_deck = (
+        initial_deck
+        if use_embed
+        else add_exploration(
+            initial_deck, ranked, n, taste, swipes=swipe_count,
+            seed=f"{active['id']}:{swipe_count}",
+        )
     )
+    now = db.now_iso()
+    db.record_deck_events([
+        {
+            "id": uuid.uuid4().hex,
+            "profile_id": active["id"],
+            "item_id": item["id"],
+            "arm": arm,
+            "policy": "clip32_mix_bootdiv" if use_embed else "tags",
+            "position": index,
+            "score": float(scores.get(item["id"], score_item(item, taste))),
+            "created_at": now,
+        }
+        for index, item in enumerate(explored_deck, start=1)
+    ])
     return [
         {**_public_item(item), "explore": bool(item.get("explore", False))}
         for item in explored_deck
