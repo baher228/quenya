@@ -168,6 +168,17 @@ def test_vinted_unavailable_statuses_are_rejected():
     assert not bulk_job._vinted_unavailable({"status": {"title": "Active"}})
 
 
+def test_vinted_pacing_uses_elapsed_monotonic_time(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(bulk_job.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(bulk_job.time, "sleep", sleeps.append)
+
+    bulk_job._wait_for_vinted_request(99.6)
+
+    assert len(sleeps) == 1
+    assert abs(sleeps[0] - 0.6) < 1e-8
+
+
 def test_append_record_is_durable_and_resume_dedupes(tmp_path):
     state_path = tmp_path / "state.json"
     state = {"done": {}, "counts": {}}

@@ -382,6 +382,10 @@ def _row(record: dict, currency: str = "GBP") -> dict:
     }
 
 
+def _wait_for_vinted_request(last_search_at: float) -> None:
+    time.sleep(max(0.0, 1 - (time.monotonic() - last_search_at)))
+
+
 def scrape_vinted(
     client: PoliteClient, root: Path, state: dict, state_path: Path,
     seen: set[str], pending: dict[str, list[dict]], smoke: bool,
@@ -405,7 +409,7 @@ def scrape_vinted(
                 continue
             if count_for(state, "vinted")["imported"] >= budget and not smoke:
                 break
-            time.sleep(max(0.0, 1 - getattr(scraper, "_last_search_at", 0)))
+            _wait_for_vinted_request(getattr(scraper, "_last_search_at", 0))
             try:
                 items = scraper.search({"search_text": query, "page": page, "per_page": 20})
             except (RuntimeError, ValueError, httpx.HTTPError) as exc:
