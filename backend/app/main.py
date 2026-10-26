@@ -1,4 +1,6 @@
 import json
+import logging
+from threading import Thread
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
@@ -15,6 +17,7 @@ from app.config import (
     QUENYA_CORS_ORIGINS,
     QUENYA_LLM_API_KEY,
     QUENYA_LLM_PROVIDER,
+    QUENYA_WARM_CACHES,
     TAVILY_API_KEY,
 )
 from app.images import (
@@ -39,6 +42,7 @@ from app.tagging import tag_item
 from app.taste import update_taste
 
 app = FastAPI(title="Quenya API")
+logger = logging.getLogger(__name__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -87,6 +91,25 @@ class CorrectionRequest(BaseModel):
 @app.on_event("startup")
 def startup() -> None:
     db.init_db()
+    if QUENYA_WARM_CACHES:
+        Thread(
+            target=_warm_caches,
+            daemon=True,
+            name="cache-warmup",
+        ).start()
+
+
+def _warm_caches() -> None:
+    from app.embedding_ranker import catalogue_sample
+
+    for cache_name, warm in (
+        ("live catalogue", db.live_catalogue),
+        ("embedding catalogue sample", catalogue_sample),
+    ):
+        try:
+            warm()
+        except Exception:
+            logger.exception("Failed to warm %s cache", cache_name)
 
 
 @app.get("/health", include_in_schema=False)

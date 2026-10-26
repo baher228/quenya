@@ -1,5 +1,7 @@
 import os
 
+os.environ["QUENYA_WARM_CACHES"] = "0"
+
 import psycopg
 import pytest
 

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from threading import Thread
 
 from app import db, phase2_api
 
@@ -87,6 +88,14 @@ def test_live_catalogue_cache_ttl_invalidation_and_copy(
             yield connection
 
     monkeypatch.setattr(db, "db_connection", counted_db_connection)
+    refresh_threads = []
+
+    def tracking_thread(*args, **kwargs):
+        thread = Thread(*args, **kwargs)
+        refresh_threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(db, "Thread", tracking_thread)
     first = db.live_catalogue()
     assert calls == 1
     first[0]["title"] = "mutated copy"
@@ -95,6 +104,9 @@ def test_live_catalogue_cache_ttl_invalidation_and_copy(
 
     clock[0] = 15.0
     assert db.live_catalogue()[0]["title"] == "cached"
+    assert len(refresh_threads) == 1
+    refresh_threads[0].join(timeout=2)
+    assert not refresh_threads[0].is_alive()
     assert calls == 2
 
     db.invalidate_live_catalogue()
