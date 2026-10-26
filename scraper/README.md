@@ -57,6 +57,23 @@ under `scraper/out/`.
 `--max-pages`, `--time-budget` (minutes), `--workers`, `--max-requests`,
 `--delay`, `--jitter` and `--batch-size` tune collection.
 
+## Accessories
+
+Run the accessory catalogue separately from apparel:
+
+```bash
+python scraper/scrape.py --category-set accessories --workers 8
+python scraper/scrape.py --probe --category-set accessories --shops shop-key
+```
+
+Accessory mode classifies bags and fashion accessories, requires GBP Shopify
+feeds, and keeps only available variants. It uses `accessory_pages` for JSON-LD
+shops; apparel runs continue to use `pages`. Resume an interrupted run with
+`--resume scraper/out/<run-id>`. The saved progress records its category set,
+and existing JSONL output is used to deduplicate by product URL and record ID.
+Use `--known file1.jsonl file2.jsonl` to seed deduplication from other runs or
+`--shard K/N` to select a stable slice of the selected shop list.
+
 ## Optional Supabase upload
 
 No Supabase request is made unless `--upload` is explicitly provided. Set

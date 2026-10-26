@@ -5,7 +5,7 @@ from lxml import html as lxml_html
 
 from .common import (
     ShopSession,
-    is_clothing,
+    accepts,
     jsonld_products,
     make_row,
     request_succeeded,
@@ -124,7 +124,9 @@ def _tile_rows(body: str, shop: dict, page_url: str, gender: str):
             if candidate and not candidate.lower().endswith(".svg"):
                 image = urljoin(page_url, candidate)
                 break
-        if not title or not image or not is_clothing(f"{title} {url}"):
+        if not title or not image or not accepts(
+            shop, f"{title} {url}", title=title
+        ):
             continue
         row = make_row(
             shop,
@@ -143,7 +145,13 @@ def _tile_rows(body: str, shop: dict, page_url: str, gender: str):
 
 def scrape(shop: dict, session: ShopSession, probe: bool = False):
     rows = []
-    for page in shop.get("pages", [])[: 1 if probe else None]:
+    page_key = "accessory_pages" if shop.get("_category_set") == "accessories" else "pages"
+    probe_page_count = (
+        2
+        if probe and shop.get("_category_set") == "accessories"
+        else 1 if probe else None
+    )
+    for page in shop.get(page_key, [])[:probe_page_count]:
         gender, url = page["gender"], page["url"]
         fetched = session.get(url, browser=bool(shop.get("browser")))
         if fetched is None:

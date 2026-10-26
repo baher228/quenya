@@ -1,7 +1,13 @@
 import json
 from urllib.parse import urlencode, urljoin
 
-from .common import ShopSession, is_clothing, make_row, request_succeeded, unique_rows
+from .common import (
+    ShopSession,
+    accepts,
+    make_row,
+    request_succeeded,
+    unique_rows,
+)
 
 
 def gender_for(product: dict, rule: str, default: str = "m") -> str:
@@ -69,14 +75,17 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
     product_base = shop.get("product_base") or f"https://{base_domain}"
     if not product_base.startswith("https://"):
         product_base = "https://" + product_base
-    collections = shop.get("collections") or [None]
+    accessories = shop.get("_category_set") == "accessories"
+    collections = [None] if accessories else shop.get("collections") or [None]
     max_pages = 1 if probe else int(shop.get("max_pages", 20))
     rows = []
     for collection in collections:
         gender = (
-            collection.get("gender", shop.get("default_gender", "m"))
-            if collection
-            else shop.get("default_gender", "m")
+            None if accessories else (
+                collection.get("gender", shop.get("default_gender", "m"))
+                if collection
+                else shop.get("default_gender", "m")
+            )
         )
         collection_handle = collection.get("handle") if collection else None
         for page in range(1, max_pages + 1):
@@ -109,9 +118,18 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                 if isinstance(tags, str):
                     tags = [tag.strip() for tag in tags.split(",")]
                 evidence = " ".join([title, product_type, " ".join(map(str, tags))])
-                if not title or not is_clothing(evidence):
+                if not title or not accepts(
+                    shop,
+                    evidence,
+                    title=title,
+                    product_type=product_type,
+                    tags=tags,
+                ):
                     continue
-                if any(str(tag).lower() in {"kids", "kid", "jewellery", "jewelry"} for tag in tags):
+                rejected_tags = {"kids", "kid"}
+                if not accessories:
+                    rejected_tags.update({"jewellery", "jewelry"})
+                if any(str(tag).lower() in rejected_tags for tag in tags):
                     continue
                 price, variant = _available_variant(product)
                 if not variant:
@@ -141,7 +159,9 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                     price,
                     image,
                     url,
-                    gender_for(product, shop.get("gender_rule", "default"), gender),
+                    None if accessories else gender_for(
+                        product, shop.get("gender_rule", "default"), gender
+                    ),
                     url,
                     extra,
                 )

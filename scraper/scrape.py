@@ -41,11 +41,18 @@ def load_shops():
 
 def _shop_filter(shops, args, probe=False):
     selected = set(filter(None, (args.shops or "").split(",")))
+    category_set = getattr(args, "category_set", "apparel")
     result = []
     for shop in shops:
         if selected and shop["key"] not in selected:
             continue
         if args.group and shop.get("group") != args.group:
+            continue
+        if category_set == "apparel" and "accessories" in shop.get("category_sets", []):
+            continue
+        if category_set == "accessories" and not (
+            shop.get("adapter") == "shopify" or shop.get("accessory_pages")
+        ):
             continue
         if probe:
             result.append(shop)
@@ -69,19 +76,28 @@ def _list(shops):
 
 
 def _probe(shops, args):
+    category_set = getattr(args, "category_set", "apparel")
+    host_locks = {}
+    host_locks_lock = threading.Lock()
+
     def probe_one(original):
         shop = dict(original)
+        shop["_category_set"] = category_set
+        host = str(shop.get("host") or "").lower()
+        with host_locks_lock:
+            host_lock = host_locks.setdefault(host, threading.Lock())
         session = ShopSession(
             shop,
             max_requests=2,
-            delay=args.delay,
-            jitter=args.jitter,
+            delay=getattr(args, "delay", None),
+            jitter=getattr(args, "jitter", None),
             check_robots=False,
             probe=True,
         )
         status, reason, rows = "error", "", []
         try:
-            rows = REGISTRY[shop["adapter"]](shop, session, probe=True)
+            with host_lock:
+                rows = REGISTRY[shop["adapter"]](shop, session, probe=True)
             if shop.get("_status"):
                 status = shop["_status"]
                 reason = shop.get("_reason", "")
@@ -91,10 +107,12 @@ def _probe(shops, args):
                 status, reason = "error", "One or more listing requests failed"
             elif rows:
                 status = "ok"
-                reason = "GBP clothing rows accepted"
+                label = "accessories" if category_set == "accessories" else "clothing"
+                reason = f"GBP {label} rows accepted"
             elif session.requests:
                 status = "empty"
-                reason = "No accepted GBP clothing rows"
+                label = "accessories" if category_set == "accessories" else "clothing"
+                reason = f"No accepted GBP {label} rows"
             else:
                 status = "error"
                 reason = "No request completed"
@@ -127,7 +145,7 @@ def _probe(shops, args):
         return result
 
     results = []
-    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 8))) as pool:
         futures = [pool.submit(probe_one, shop) for shop in shops]
         for future in as_completed(futures):
             results.append(future.result())
@@ -152,7 +170,12 @@ def _markdown(summary):
     ]
     for shop in summary["shops"]:
         split = (
-            ", ".join(f"{key} {value}" for key, value in sorted(shop["gender_split"].items()))
+            ", ".join(
+                f"{'unknown' if key is None or key == 'null' else key} {value}"
+                for key, value in sorted(
+                    shop["gender_split"].items(), key=lambda item: str(item[0])
+                )
+            )
             or "—"
         )
         price = (
@@ -189,18 +212,96 @@ def _images_broken(checks):
     return bool(checks) and all(check.get("status") != 200 for check in checks)
 
 
+def _shard_shops(shops, shard):
+    if not shard:
+        return shops
+    try:
+        index_text, count_text = shard.split("/", 1)
+        index, count = int(index_text), int(count_text)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError("--shard must be K/N") from exc
+    if count < 1 or index < 0 or index >= count:
+        raise ValueError("--shard must satisfy 0 <= K < N")
+    return [shop for position, shop in enumerate(shops) if position % count == index]
+
+
+def _row_record_id(row):
+    return (row.get("record") or {}).get("id")
+
+
+def _load_jsonl_rows(path):
+    rows = []
+    with Path(path).open(encoding="utf-8") as stream:
+        for line in stream:
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
+def _atomic_progress(path, category_set, done):
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(
+            {"category_set": category_set, "done": sorted(done)},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+
+
 def _run(shops, args):
     _load_env()
-    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = ROOT / "out" / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+    category_set = getattr(args, "category_set", "apparel")
+    shops = _shard_shops(shops, getattr(args, "shard", None))
+    resume_dir = getattr(args, "resume", None)
+    if resume_dir:
+        out_dir = Path(resume_dir)
+        if not out_dir.is_dir():
+            raise ValueError(f"resume directory does not exist: {out_dir}")
+        progress_path = out_dir / "progress.json"
+        if not progress_path.is_file():
+            raise ValueError("resume directory has no progress.json category_set")
+        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        if progress.get("category_set") != category_set:
+            raise ValueError(
+                f"cannot resume {progress.get('category_set')!r} output as {category_set!r}"
+            )
+        done = set(progress.get("done") or [])
+        shops = [shop for shop in shops if shop["key"] not in done]
+        run_id = out_dir.name
+    else:
+        run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        out_dir = ROOT / "out" / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        done = set()
+        progress_path = out_dir / "progress.json"
+        _atomic_progress(progress_path, category_set, done)
     all_path = out_dir / "all.jsonl"
-    all_path.touch()
-    deadline = (
-        time.monotonic() + max(0, args.time_budget) * 60 if args.time_budget is not None else None
-    )
-    global_urls, all_rows = set(), []
+    all_path.touch(exist_ok=True)
+    time_budget = getattr(args, "time_budget", None)
+    deadline = time.monotonic() + max(0, time_budget) * 60 if time_budget is not None else None
+    global_urls, global_ids, all_rows = set(), set(), []
+    for path in out_dir.glob("*.jsonl"):
+        for row in _load_jsonl_rows(path):
+            if row.get("url"):
+                global_urls.add(row["url"])
+            record_id = _row_record_id(row)
+            if record_id:
+                global_ids.add(record_id)
+    for known_path in getattr(args, "known", None) or []:
+        for row in _load_jsonl_rows(known_path):
+            if row.get("url"):
+                global_urls.add(row["url"])
+            record_id = _row_record_id(row)
+            if record_id:
+                global_ids.add(record_id)
+    if all_path.exists():
+        all_rows = _load_jsonl_rows(all_path)
     output_lock = threading.Lock()
+    reserved_urls, reserved_ids = set(), set()
     summary_rows = []
     connection = None
     client = None
@@ -221,30 +322,44 @@ def _run(shops, args):
 
     def run_one(original):
         shop = dict(original)
-        if args.max_pages:
-            if shop.get("pages"):
-                shop["pages"] = shop["pages"][: args.max_pages]
-            shop["max_pages"] = args.max_pages
+        shop["_category_set"] = category_set
+        max_pages = getattr(args, "max_pages", 0)
+        if max_pages:
+            for page_key in ("pages", "accessory_pages"):
+                if shop.get(page_key):
+                    shop[page_key] = shop[page_key][:max_pages]
+            shop["max_pages"] = max_pages
         session = ShopSession(
             shop,
-            max_requests=args.max_requests,
-            delay=args.delay,
-            jitter=args.jitter,
+            max_requests=getattr(args, "max_requests", None),
+            delay=getattr(args, "delay", None),
+            jitter=getattr(args, "jitter", None),
         )
         session.deadline = deadline
         shop_path = out_dir / f"{shop['key']}.jsonl"
-        shop_path.touch()
+        shop_path.touch(exist_ok=True)
         shop_rows = []
         shop_urls = set()
 
         def save_rows(rows):
             accepted = []
-            for row in rows:
-                if row["url"] in shop_urls:
-                    continue
-                shop_urls.add(row["url"])
-                accepted.append(row)
-                shop_rows.append(row)
+            with output_lock:
+                for row in rows:
+                    url = row["url"]
+                    record_id = _row_record_id(row)
+                    if (
+                        url in shop_urls
+                        or url in global_urls
+                        or url in reserved_urls
+                        or (record_id and (record_id in global_ids or record_id in reserved_ids))
+                    ):
+                        continue
+                    shop_urls.add(url)
+                    if record_id:
+                        reserved_ids.add(record_id)
+                    reserved_urls.add(url)
+                    accepted.append(row)
+                    shop_rows.append(row)
             if accepted:
                 with shop_path.open("a", encoding="utf-8", newline="\n") as stream:
                     for row in accepted:
@@ -263,7 +378,8 @@ def _run(shops, args):
             elif any(item.get("status") != 200 for item in session.requests) and not shop_rows:
                 status, reason = "error", "One or more listing requests failed"
             elif not shop_rows:
-                status, reason = "empty", "No accepted GBP clothing rows"
+                label = "accessories" if category_set == "accessories" else "clothing"
+                status, reason = "empty", f"No accepted GBP {label} rows"
         except Blocked as exc:
             status, reason = exc.status, str(exc)
         except TimeoutError as exc:
@@ -272,8 +388,9 @@ def _run(shops, args):
             status, reason = "error", f"{type(exc).__name__}: {exc}"
 
         checks = []
-        if args.check_images:
-            for row in shop_rows[: args.check_images]:
+        check_images = getattr(args, "check_images", 2)
+        if check_images:
+            for row in shop_rows[:check_images]:
                 try:
                     response = httpx.get(
                         row["image_url_original"], timeout=20, follow_redirects=True
@@ -287,25 +404,32 @@ def _run(shops, args):
         if images_broken:
             status = "images_broken"
             reason = "Every sampled image check failed"
-        else:
-            accepted = []
             with output_lock:
                 for row in shop_rows:
-                    if row["url"] in global_urls:
-                        continue
+                    reserved_urls.discard(row["url"])
+                    record_id = _row_record_id(row)
+                    if record_id:
+                        reserved_ids.discard(record_id)
+        else:
+            with output_lock:
+                for row in shop_rows:
                     global_urls.add(row["url"])
-                    accepted.append(row)
+                    record_id = _row_record_id(row)
+                    if record_id:
+                        global_ids.add(record_id)
+                        reserved_ids.discard(record_id)
+                    reserved_urls.discard(row["url"])
                     all_rows.append(row)
-                if accepted:
+                if shop_rows:
                     with all_path.open("a", encoding="utf-8", newline="\n") as stream:
-                        for row in accepted:
+                        for row in shop_rows:
                             stream.write(json.dumps(row, ensure_ascii=False) + "\n")
                         stream.flush()
-            if args.upload and accepted:
+            if args.upload and shop_rows:
                 upload_rows(
                     client,
                     connection,
-                    accepted,
+                    shop_rows,
                     shop,
                     os.environ["SUPABASE_URL"],
                     os.environ["SUPABASE_SECRET_KEY"],
@@ -337,10 +461,13 @@ def _run(shops, args):
         }
 
     try:
-        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 8))) as pool:
             futures = {pool.submit(run_one, shop): shop for shop in shops}
             for future in as_completed(futures):
-                summary_rows.append(future.result())
+                result = future.result()
+                summary_rows.append(result)
+                done.add(result["key"])
+                _atomic_progress(progress_path, category_set, done)
     finally:
         if connection:
             connection.close()
@@ -348,7 +475,7 @@ def _run(shops, args):
             client.close()
 
     summary_rows.sort(key=lambda item: item["key"])
-    batch_size = max(1, args.batch_size)
+    batch_size = max(1, getattr(args, "batch_size", 1000))
     for index, rows in enumerate(split_batches(all_rows, batch_size), start=1):
         batch = out_dir / f"batch_{index:03}.jsonl"
         with batch.open("w", encoding="utf-8", newline="\n") as stream:
@@ -374,6 +501,19 @@ def main(argv=None):
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--probe", action="store_true")
     parser.add_argument("--shops", help="comma-separated shop keys")
+    parser.add_argument(
+        "--category-set",
+        choices=("apparel", "accessories"),
+        default="apparel",
+    )
+    parser.add_argument("--resume", help="reuse an existing output directory")
+    parser.add_argument(
+        "--known",
+        nargs="+",
+        metavar="PATH",
+        help="JSONL files used to pre-seed URL and record ID deduplication",
+    )
+    parser.add_argument("--shard", help="only run shard K/N using selected shop order")
     parser.add_argument("--group")
     parser.add_argument("--uk", action="store_true", help="include shops marked UK-only")
     parser.add_argument(

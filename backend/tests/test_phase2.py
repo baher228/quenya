@@ -468,6 +468,42 @@ def test_outfit_validator_rejects_missing_shoes_and_reuse():
     assert any("missing shoes" in error for error in errors)
 
 
+def test_outfit_validator_allows_optional_accessories_with_core_piece_limits():
+    def accessory(item_id, slot):
+        item = _item(item_id, "top")
+        item["tags"].update(
+            slot=slot,
+            category="bag" if slot == "bag" else "belt",
+        )
+        return item
+
+    core = [_item("top", "top"), _item("bottom", "bottom"), _item("shoes", "shoes")]
+    extras = [
+        accessory("bag", "bag"),
+        accessory("accessory-1", "accessory"),
+        accessory("accessory-2", "accessory"),
+    ]
+
+    def validate(piece_ids, pieces, locked_ids=None):
+        outfit = {
+            "title": "Look",
+            "mood": "Relaxed",
+            "piece_ids": piece_ids,
+            "why": "A complete outfit.",
+        }
+        return validate_outfits([outfit], pieces, 1, locked_ids or [], 500)
+
+    for chosen in ([], extras[:1], extras[:2]):
+        selected = core + chosen
+        valid, errors = validate([item["id"] for item in selected], selected)
+        assert len(valid) == 1 and not errors
+
+    too_many = core + [accessory(f"extra-{index}", "accessory") for index in range(3)]
+    valid, errors = validate([item["id"] for item in too_many], too_many)
+    assert not valid
+    assert any("must contain 3-5 pieces" in error for error in errors)
+
+
 def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "taste.sqlite")
     brief = _brief(condition="second-hand", budget_gbp=100)
