@@ -4,6 +4,7 @@ brand = "Represent"
 host = "uk.representclo.com"
 domain = "uk.representclo.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "streetwear"
@@ -20,6 +21,7 @@ brand = "Corteiz"
 host = "www.corteiz.com"
 domain = "corteiz.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "roadman"
@@ -36,15 +38,17 @@ brand = "Trapstar"
 host = "uk.trapstarlondon.com"
 domain = "uk.trapstarlondon.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "roadman"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+note = "Round 2 collection check (pages 1-3): using the 201-product MENS T-SHIRTS collection."
 gender_rule = "men"
 default_gender = "m"
 max_pages = 20
 max_requests = 30
+tee_collections = [{ handle = "t-shirts", gender = "m" }]
 
 [[shop]]
 key = "sunspel"
@@ -52,6 +56,7 @@ brand = "Sunspel"
 host = "www.sunspel.com"
 domain = "www.sunspel.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -68,11 +73,12 @@ brand = "Self-Portrait"
 host = "www.self-portrait.com"
 domain = "www.self-portrait.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "women"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+note = "Round 2 collection check (pages 1-3): no tee collection found; retaining the full products.json scan."
 gender_rule = "selfportrait"
 default_gender = "w"
 accessory_default_gender = "w"
@@ -85,6 +91,7 @@ brand = "Belstaff"
 host = "belstaff.com"
 domain = "belstaff.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -102,6 +109,7 @@ brand = "Oliver Spencer"
 host = "oliverspencer.co.uk"
 domain = "oliverspencer.co.uk"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -118,6 +126,7 @@ brand = "Montirex"
 host = "montirex.com"
 domain = "montirex.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "outdoor"
@@ -135,6 +144,7 @@ brand = "Wax London"
 host = "waxlondon.com"
 domain = "waxlondon.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -151,6 +161,7 @@ brand = "Percival"
 host = "percivalclo.com"
 domain = "percivalclo.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -183,6 +194,7 @@ brand = "Folk"
 host = "folkclothing.com"
 domain = "folkclothing.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -199,6 +211,7 @@ brand = "Kestin"
 host = "kestin.co"
 domain = "kestin.co"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -215,6 +228,7 @@ brand = "Finisterre"
 host = "finisterre.com"
 domain = "finisterre.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "outdoor"
@@ -279,15 +293,17 @@ brand = "KITRI"
 host = "kitristudio.com"
 domain = "kitristudio.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "women"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+note = "Round 2 collection check (pages 1-3): using the 4-product T-shirts collection."
 gender_rule = "women"
 default_gender = "w"
 max_pages = 20
 max_requests = 30
+tee_collections = [{ handle = "t-shirts" }]
 
 [[shop]]
 key = "damsonmadder"
@@ -295,6 +311,7 @@ brand = "Damson Madder"
 host = "damsonmadder.com"
 domain = "damsonmadder.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "women"
@@ -391,6 +408,7 @@ brand = "Cole Buxton"
 host = "colebuxton.com"
 domain = "colebuxton.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "streetwear"
@@ -471,6 +489,7 @@ brand = "Albam"
 host = "albamclothing.com"
 domain = "albamclothing.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -487,6 +506,7 @@ brand = "Community Clothing"
 host = "communityclothing.co.uk"
 domain = "communityclothing.co.uk"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "heritage"
@@ -503,15 +523,17 @@ brand = "Omnes"
 host = "omnes.com"
 domain = "omnes.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "women"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+note = "Round 2 collection check (pages 1-3): using the 14-product T-Shirts collection."
 gender_rule = "women"
 default_gender = "w"
 max_pages = 20
 max_requests = 30
+tee_collections = [{ handle = "apparel-accessories-clothing-clothing-tops-t-shirts" }]
 
 [[shop]]
 key = "nobodyschild"
@@ -519,6 +541,7 @@ brand = "Nobody's Child"
 host = "www.nobodyschild.com"
 domain = "www.nobodyschild.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "women"
@@ -535,6 +558,7 @@ brand = "Adanola"
 host = "adanola.com"
 domain = "adanola.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "sport"
@@ -551,6 +575,7 @@ brand = "Aries"
 host = "www.ariesarise.com"
 domain = "www.ariesarise.com"
 adapter = "shopify"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "any"
 group = "streetwear"
@@ -1669,3 +1694,861 @@ status = "ok"
 note = "Accessories probe 2026-10-26: GBP Shopify feed, 180 accepted in-stock accessory rows."
 max_pages = 20
 max_requests = 30
+
+[[shop]]
+key = "stussy"
+brand = "Stüssy"
+host = "uk.stussy.com"
+domain = "uk.stussy.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+tee_collections = [{ handle = "tees" }]
+max_requests = 40
+
+[[shop]]
+key = "huf"
+brand = "HUF"
+host = "www.hufworldwide.co.uk"
+domain = "hufworldwide.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "placesplusfaces"
+brand = "Places+Faces"
+host = "www.placesplusfaces.com"
+domain = "www.placesplusfaces.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "maharishi"
+brand = "Maharishi"
+host = "www.maharishistore.com"
+domain = "www.maharishistore.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "siksilk"
+brand = "SikSilk"
+host = "siksilk.com"
+domain = "siksilk.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "men"
+max_requests = 40
+
+[[shop]]
+key = "lazyoaf"
+brand = "Lazy Oaf"
+host = "www.lazyoaf.com"
+domain = "www.lazyoaf.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using All T-Shirts (31 products) and Men's T-shirts (64 products); kids and sale collections excluded."
+gender_rule = "default"
+max_requests = 40
+tee_collections = [
+    { handle = "all-t-shirts" },
+    { handle = "mens-t-shirts", gender = "m" },
+]
+
+[[shop]]
+key = "slamcity"
+brand = "Slam City Skates"
+host = "slamcity.com"
+domain = "www.slamcity.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "t-shirt" }]
+max_requests = 40
+
+[[shop]]
+key = "routeone"
+brand = "Route One"
+host = "www.routeone.co.uk"
+domain = "www.routeone.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26: picked skate-t-shirts (137 products), largest general T-shirt collection in collections.json pages 1-4."
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "skate-t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "blacksheep"
+brand = "Black Sheep"
+host = "www.blacksheepstore.co.uk"
+domain = "blacksheepstore.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "noteshop"
+brand = "Note Shop"
+host = "www.noteshop.co.uk"
+domain = "www.noteshop.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "clothing-t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "urbanindustry"
+brand = "Urban Industry"
+host = "www.urbanindustry.co.uk"
+domain = "www.urbanindustry.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "goodhood"
+brand = "Goodhood"
+host = "goodhoodstore.com"
+domain = "goodhoodstore.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "garbstore"
+brand = "Garbstore"
+host = "www.couvertureandthegarbstore.com"
+domain = "www.couvertureandthegarbstore.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [
+  { handle = "mens-t-shirts", gender = "m" },
+  { handle = "mens-long-sleeve-tees", gender = "m" },
+  { handle = "womens-t-shirts", gender = "w" },
+]
+max_requests = 40
+
+[[shop]]
+key = "numbersix"
+brand = "Number Six"
+host = "www.numbersixlondon.com"
+domain = "www.numbersixlondon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): the general T-Shirts collection is empty; the 6-product Thanks collection is brand-specific, so retaining the full products.json scan."
+gender_rule = "default"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "outsiders"
+brand = "Outsiders Store"
+host = "www.outsidersstore.com"
+domain = "www.outsidersstore.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [
+  { handle = "mens-t-shirts", gender = "m" },
+  { handle = "womens-t-shirts", gender = "w" },
+]
+max_requests = 40
+
+[[shop]]
+key = "urbanexcess"
+brand = "Urban Excess"
+host = "www.urbanexcess.com"
+domain = "www.urbanexcess.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "ciele"
+brand = "Ciele"
+host = "eu.cieleathletics.com"
+domain = "eu.cieleathletics.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "soar"
+brand = "Soar"
+host = "www.soarrunning.com"
+domain = "www.soarrunning.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "montane"
+brand = "Montane"
+host = "montane.com"
+domain = "montane.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "ronhill"
+brand = "Ronhill"
+host = "www.ronhill.com"
+domain = "www.ronhill.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "alpkit"
+brand = "Alpkit"
+host = "alpkit.com"
+domain = "alpkit.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using men's tees (19 products) and women's tees (35 products); the mixed hoodie and outlet collections are excluded."
+gender_rule = "default"
+max_requests = 40
+tee_collections = [
+    { handle = "mens-tees", gender = "m" },
+    { handle = "womens-tees", gender = "w" },
+]
+
+[[shop]]
+key = "passenger"
+brand = "Passenger"
+host = "www.passenger-clothing.com"
+domain = "www.passenger-clothing.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+tee_collections = [
+  { handle = "mens-t-shirts-vests", gender = "m" },
+  { handle = "womens-t-shirts-vests", gender = "w" },
+]
+max_requests = 40
+
+[[shop]]
+key = "howies"
+brand = "howies"
+host = "howies.co.uk"
+domain = "howies.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "ashmei"
+brand = "ashmei"
+host = "ashmei.com"
+domain = "ashmei.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "vollebak"
+brand = "Vollebak"
+host = "vollebak.com"
+domain = "vollebak.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "tala"
+brand = "TALA"
+host = "www.wearetala.com"
+domain = "www.wearetala.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "women"
+max_requests = 40
+
+[[shop]]
+key = "uskees"
+brand = "Uskees"
+host = "uskees.co.uk"
+domain = "uskees.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "thought"
+brand = "Thought"
+host = "www.wearethought.com"
+domain = "thoughtsocks.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using the two 2-product women's tee-containing collections; outlet collection excluded."
+gender_rule = "default"
+max_requests = 40
+tee_collections = [
+    { handle = "womens-organic-cotton-tops", gender = "w" },
+    { handle = "womens-sustainable-t-shirts", gender = "w" },
+]
+
+[[shop]]
+key = "peregrine"
+brand = "Peregrine"
+host = "www.peregrineclothing.co.uk"
+domain = "www.peregrineclothing.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "lyleandscott"
+brand = "Lyle & Scott"
+host = "www.lyleandscott.com"
+domain = "www.lyleandscott.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "casualclassics"
+brand = "80s Casual Classics"
+host = "www.80scasualclassics.co.uk"
+domain = "www.80scasualclassics.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [{ handle = "t-shirts" }]
+max_requests = 40
+
+[[shop]]
+key = "ymc"
+brand = "YMC"
+host = "www.youmustcreate.com"
+domain = "www.youmustcreate.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "peggsandson"
+brand = "Peggs & Son"
+host = "www.peggsandson.com"
+domain = "www.peggsandson.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "men"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "oipolloi"
+brand = "Oipolloi"
+host = "oipolloi.com"
+domain = "oipolloi.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "stuarts"
+brand = "Stuarts London"
+host = "www.stuartslondon.com"
+domain = "www.stuartslondon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "men"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "hambledon"
+brand = "The Hambledon"
+host = "thehambledon.com"
+domain = "thehambledon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "lucyandyak"
+brand = "Lucy & Yak"
+host = "lucyandyak.com"
+domain = "lucyandyak.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "motelrocks"
+brand = "Motel Rocks"
+host = "www.motelrocks.com"
+domain = "www.motelrocks.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using the 58-product TEES collection."
+gender_rule = "women"
+tee_collections = [{ handle = "tops-tees" }]
+max_requests = 40
+
+[[shop]]
+key = "mintvelvet"
+brand = "Mint Velvet"
+host = "www.mintvelvet.co.uk"
+domain = "mintvelvet.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "sistersandseekers"
+brand = "Sisters & Seekers"
+host = "sistersandseekers.com"
+domain = "sistersandseekers.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using the 8-product Summer Tees collection."
+gender_rule = "women"
+max_requests = 40
+tee_collections = [{ handle = "summer-tees", gender = "w" }]
+
+[[shop]]
+key = "aligne"
+brand = "Aligne"
+host = "aligne.co"
+domain = "aligne.co"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): no tee collection found; retaining the full products.json scan."
+gender_rule = "women"
+max_requests = 40
+
+[[shop]]
+key = "jigsaw"
+brand = "Jigsaw"
+host = "www.jigsaw-online.com"
+domain = "www.jigsaw-online.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "bellafreud"
+brand = "Bella Freud"
+host = "bellafreud.com"
+domain = "bellafreud.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "toast"
+brand = "Toast"
+host = "www.toa.st"
+domain = "www.toa.st"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "baukjen"
+brand = "Baukjen"
+host = "www.baukjen.com"
+domain = "www.baukjen.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): using T-Shirts & Vests (35 products) and Tops & Tees (168 products); outlet collection excluded."
+gender_rule = "women"
+max_requests = 40
+tee_collections = [
+    { handle = "t-shirts-vests" },
+    { handle = "tops-tees" },
+]
+
+[[shop]]
+key = "oddmuse"
+brand = "Odd Muse"
+host = "oddmuse.co.uk"
+domain = "oddmuse.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "women"
+max_requests = 40
+
+[[shop]]
+key = "wnu"
+brand = "With Nothing Underneath"
+host = "www.withnothingunderneath.com"
+domain = "www.withnothingunderneath.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "women"
+max_requests = 40
+
+[[shop]]
+key = "rokit"
+brand = "Rokit"
+host = "www.rokit.co.uk"
+domain = "www.rokit.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "vintage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+brand_from_vendor = true
+tee_collections = [
+  { handle = "mens-vintage-t-shirts-vests", gender = "m" },
+  { handle = "womens-vintage-t-shirts-vests", gender = "w" },
+  { handle = "vintage-band-tees" },
+]
+max_requests = 40
+
+[[shop]]
+key = "beyondretro"
+brand = "Beyond Retro"
+host = "www.beyondretro.com"
+domain = "www.beyondretro.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "vintage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26: meta.json returned 404; specified collection feeds redirected to home and were empty; use full scan max_pages=6."
+gender_rule = "default"
+brand_from_vendor = true
+max_pages = 6
+max_requests = 40
+
+[[shop]]
+key = "bloodrecords"
+brand = "Blood Records"
+host = "blood-records.co.uk"
+domain = "blood-records.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "vintage"
+category_sets = ["tees"]
+status = "pending"
+note = "Round 2 collection check (pages 1-3): no tee collection found; retaining the full products.json scan."
+gender_rule = "default"
+brand_from_vendor = true
+max_requests = 40
+
+[[shop]]
+key = "arcticmonkeys"
+brand = "Arctic Monkeys"
+host = "store.arcticmonkeys.com"
+domain = "www.arcticmonkeys.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "vintage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "pinkfloyd"
+brand = "Pink Floyd"
+host = "shop.pinkfloyd.com"
+domain = "shop.uk.pinkfloyd.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "vintage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "default"
+max_requests = 40
+
+[[shop]]
+key = "universalworks_tees"
+brand = "Universal Works"
+host = "www.universalworks.co.uk"
+domain = "universalworks.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+category_sets = ["tees"]
+status = "pending"
+note = "Tee probe 2026-10-26"
+gender_rule = "men"
+max_requests = 40

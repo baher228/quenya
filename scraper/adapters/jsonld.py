@@ -145,7 +145,12 @@ def _tile_rows(body: str, shop: dict, page_url: str, gender: str):
 
 def scrape(shop: dict, session: ShopSession, probe: bool = False):
     rows = []
-    page_key = "accessory_pages" if shop.get("_category_set") == "accessories" else "pages"
+    category_set = shop.get("_category_set")
+    page_key = (
+        "accessory_pages" if category_set == "accessories"
+        else "tee_pages" if category_set == "tees"
+        else "pages"
+    )
     probe_page_count = (
         2
         if probe and shop.get("_category_set") == "accessories"
@@ -201,4 +206,6 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
         session.emit(found)
         if probe:
             shop["_probe_rows"] = len(found)
+        if getattr(session, "full", False):
+            break
     return unique_rows(rows)

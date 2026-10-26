@@ -48,7 +48,14 @@ def _shop_filter(shops, args, probe=False):
             continue
         if args.group and shop.get("group") != args.group:
             continue
-        if category_set == "apparel" and "accessories" in shop.get("category_sets", []):
+        category_sets = shop.get("category_sets")
+        if (
+            category_set == "apparel"
+            and category_sets is not None
+            and "apparel" not in category_sets
+        ):
+            continue
+        if category_set == "tees" and "tees" not in (category_sets or []):
             continue
         if category_set == "accessories" and not (
             shop.get("adapter") == "shopify" or shop.get("accessory_pages")
@@ -107,11 +114,11 @@ def _probe(shops, args):
                 status, reason = "error", "One or more listing requests failed"
             elif rows:
                 status = "ok"
-                label = "accessories" if category_set == "accessories" else "clothing"
+                label = {"accessories": "accessories", "tees": "tees"}.get(category_set, "clothing")
                 reason = f"GBP {label} rows accepted"
             elif session.requests:
                 status = "empty"
-                label = "accessories" if category_set == "accessories" else "clothing"
+                label = {"accessories": "accessories", "tees": "tees"}.get(category_set, "clothing")
                 reason = f"No accepted GBP {label} rows"
             else:
                 status = "error"
@@ -325,7 +332,7 @@ def _run(shops, args):
         shop["_category_set"] = category_set
         max_pages = getattr(args, "max_pages", 0)
         if max_pages:
-            for page_key in ("pages", "accessory_pages"):
+            for page_key in ("pages", "accessory_pages", "tee_pages"):
                 if shop.get(page_key):
                     shop[page_key] = shop[page_key][:max_pages]
             shop["max_pages"] = max_pages
@@ -334,6 +341,7 @@ def _run(shops, args):
             max_requests=getattr(args, "max_requests", None),
             delay=getattr(args, "delay", None),
             jitter=getattr(args, "jitter", None),
+            row_cap=getattr(args, "max_rows_per_shop", 0),
         )
         session.deadline = deadline
         shop_path = out_dir / f"{shop['key']}.jsonl"
@@ -345,6 +353,8 @@ def _run(shops, args):
             accepted = []
             with output_lock:
                 for row in rows:
+                    if session.full:
+                        break
                     url = row["url"]
                     record_id = _row_record_id(row)
                     if (
@@ -360,6 +370,8 @@ def _run(shops, args):
                     reserved_urls.add(url)
                     accepted.append(row)
                     shop_rows.append(row)
+                    if session.row_cap and len(shop_rows) >= session.row_cap:
+                        session.full = True
             if accepted:
                 with shop_path.open("a", encoding="utf-8", newline="\n") as stream:
                     for row in accepted:
@@ -378,7 +390,7 @@ def _run(shops, args):
             elif any(item.get("status") != 200 for item in session.requests) and not shop_rows:
                 status, reason = "error", "One or more listing requests failed"
             elif not shop_rows:
-                label = "accessories" if category_set == "accessories" else "clothing"
+                label = {"accessories": "accessories", "tees": "tees"}.get(category_set, "clothing")
                 status, reason = "empty", f"No accepted GBP {label} rows"
         except Blocked as exc:
             status, reason = exc.status, str(exc)
@@ -503,7 +515,7 @@ def main(argv=None):
     parser.add_argument("--shops", help="comma-separated shop keys")
     parser.add_argument(
         "--category-set",
-        choices=("apparel", "accessories"),
+        choices=("apparel", "accessories", "tees"),
         default="apparel",
     )
     parser.add_argument("--resume", help="reuse an existing output directory")
@@ -523,6 +535,7 @@ def main(argv=None):
     )
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--max-pages", type=int, default=0)
+    parser.add_argument("--max-rows-per-shop", type=int, default=0)
     parser.add_argument("--time-budget", type=float, default=12)
     parser.add_argument("--batch-size", type=int, default=1000)
     parser.add_argument("--max-requests", type=int)

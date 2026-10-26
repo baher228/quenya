@@ -1,0 +1,102 @@
+{
+  "products": [
+    {
+      "id": 10,
+      "title": "Classic Tee",
+      "handle": "classic-tee",
+      "vendor": "Vendor Brand",
+      "product_type": "T-Shirts",
+      "tags": [],
+      "options": [{"name": "Colour", "position": 1, "values": ["Blue", "Red", "Green"]}],
+      "images": [
+        {
+          "id": 1001,
+          "src": "https://images.example.test/blue-tee.jpg",
+          "variant_ids": [101, 102]
+        }
+      ],
+      "variants": [
+        {"id": 101, "available": true, "price": "28.00", "option1": "Blue"},
+        {"id": 102, "available": true, "price": "24.00", "option1": "Blue"},
+        {
+          "id": 103,
+          "available": true,
+          "price": "30.00",
+          "option1": "Red",
+          "featured_image": {"src": "https://images.example.test/red-tee.jpg"}
+        },
+        {"id": 104, "available": false, "price": "20.00", "option1": "Green"}
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Shared Image Tee",
+      "handle": "shared-image-tee",
+      "vendor": "",
+      "product_type": "T-Shirts",
+      "tags": [],
+      "options": [{"name": "Color", "position": 1, "values": ["Black", "White"]}],
+      "images": [
+        {
+          "id": 1101,
+          "src": "https://images.example.test/shared-tee.jpg",
+          "variant_ids": [201, 202]
+        }
+      ],
+      "variants": [
+        {
+          "id": 201,
+          "available": true,
+          "price": "26.00",
+          "option1": "Black",
+          "featured_image": {"src": "https://images.example.test/shared-tee.jpg"}
+        },
+        {
+          "id": 202,
+          "available": true,
+          "price": "27.00",
+          "option1": "White",
+          "featured_image": {"src": "https://images.example.test/shared-tee.jpg"}
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "ESSENTIAL T-SHIRT",
+      "handle": "essential-t-shirt",
+      "vendor": "Vendor Brand",
+      "product_type": "T-Shirts",
+      "tags": ["baby"],
+      "options": [{"name": "Colour", "position": 1, "values": ["Chalk"]}],
+      "images": [
+        {
+          "id": 1201,
+          "src": "https://images.example.test/essential-tee.jpg",
+          "variant_ids": [301]
+        }
+      ],
+      "variants": [
+        {"id": 301, "available": true, "price": "28.00", "option1": "Chalk"}
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Charcoal Tee",
+      "handle": "charcoal-tee",
+      "vendor": "Vendor Brand",
+      "product_type": "T-Shirts",
+      "tags": [],
+      "options": [{"name": "Color", "position": 1, "values": ["charcoal"]}],
+      "images": [
+        {
+          "id": 1301,
+          "src": "https://images.example.test/charcoal-tee.jpg",
+          "variant_ids": [401]
+        }
+      ],
+      "variants": [
+        {"id": 401, "available": true, "price": "28.00", "option1": "charcoal"}
+      ]
+    }
+  ]
+}

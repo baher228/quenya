@@ -1,4 +1,5 @@
 import json
+import re
 from urllib.parse import urlencode, urljoin
 
 from .common import (
@@ -8,6 +9,7 @@ from .common import (
     request_succeeded,
     unique_rows,
 )
+from .tees import tee_gender
 
 
 def gender_for(product: dict, rule: str, default: str = "m") -> str:
@@ -53,6 +55,92 @@ def _products(data):
     return products if isinstance(products, list) else []
 
 
+def _colour_option_position(product):
+    options = product.get("options") or []
+    for index, option in enumerate(options):
+        if not isinstance(option, dict) or not re.search(
+            r"colou?r|colorway|shade", str(option.get("name") or ""), re.I
+        ):
+            continue
+        try:
+            return int(option.get("position") or index + 1)
+        except (TypeError, ValueError):
+            return index + 1
+    return None
+
+
+def _single_available_colour(product):
+    option_position = _colour_option_position(product)
+    if option_position is None:
+        return None
+    colours = {
+        str(variant.get(f"option{option_position}") or "").strip()
+        for variant in product.get("variants", [])
+        if isinstance(variant, dict)
+        and variant.get("available") is True
+        and str(variant.get(f"option{option_position}") or "").strip()
+    }
+    return next(iter(colours)) if len(colours) == 1 else None
+
+
+def _colour_rows(product):
+    option_position = _colour_option_position(product)
+    if option_position is None:
+        return None
+
+    groups = {}
+    for variant in product.get("variants", []):
+        if not isinstance(variant, dict) or variant.get("available") is not True:
+            continue
+        try:
+            price = float(variant.get("price") or 0)
+        except (TypeError, ValueError):
+            continue
+        colour = str(variant.get(f"option{option_position}") or "").strip()
+        if price > 0 and colour:
+            groups.setdefault(colour, []).append((price, variant))
+    if len(groups) < 2:
+        return None
+
+    images = product.get("images") or []
+    result = []
+    for colour, variants in groups.items():
+        variants.sort(key=lambda item: item[0])
+        price, cheapest = variants[0]
+        if not cheapest.get("id"):
+            return None
+        image = ""
+        for _, variant in variants:
+            featured = variant.get("featured_image")
+            if isinstance(featured, dict) and featured.get("src"):
+                image = str(featured["src"])
+                break
+        if not image:
+            variant_ids = {str(variant.get("id")) for _, variant in variants if variant.get("id")}
+            for item in images:
+                if not isinstance(item, dict):
+                    continue
+                image_ids = {str(value) for value in item.get("variant_ids", [])}
+                if variant_ids.intersection(image_ids) and item.get("src"):
+                    image = str(item["src"])
+                    break
+        if not image:
+            return None
+        if image.startswith("http://"):
+            image = "https://" + image[7:]
+        result.append(
+            {
+                "colour": colour,
+                "price": price,
+                "variant": cheapest,
+                "image": image,
+            }
+        )
+    if len({item["image"] for item in result}) == 1:
+        return None
+    return result
+
+
 def scrape(shop: dict, session: ShopSession, probe: bool = False):
     host = shop["host"]
     meta_url = f"https://{host}/meta.json"
@@ -75,18 +163,29 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
     product_base = shop.get("product_base") or f"https://{base_domain}"
     if not product_base.startswith("https://"):
         product_base = "https://" + product_base
-    accessories = shop.get("_category_set") == "accessories"
-    collections = [None] if accessories else shop.get("collections") or [None]
+    category_set = shop.get("_category_set")
+    accessories = category_set == "accessories"
+    tees = category_set == "tees"
+    collections = (
+        [None]
+        if accessories
+        else shop.get("tee_collections") or [None]
+        if tees
+        else shop.get("collections") or [None]
+    )
     max_pages = 1 if probe else int(shop.get("max_pages", 20))
     rows = []
     for collection in collections:
-        gender = (
-            None if accessories else (
+        if accessories:
+            gender = None
+        elif tees:
+            gender = collection.get("gender") if collection else None
+        else:
+            gender = (
                 collection.get("gender", shop.get("default_gender", "m"))
                 if collection
                 else shop.get("default_gender", "m")
             )
-        )
         collection_handle = collection.get("handle") if collection else None
         for page in range(1, max_pages + 1):
             endpoint = (
@@ -129,46 +228,96 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                 rejected_tags = {"kids", "kid"}
                 if not accessories:
                     rejected_tags.update({"jewellery", "jewelry"})
+                if tees:
+                    rejected_tags.update(
+                        {"youth", "junior", "children", "kidswear", "boys", "girls"}
+                    )
                 if any(str(tag).lower() in rejected_tags for tag in tags):
                     continue
-                price, variant = _available_variant(product)
-                if not variant:
-                    continue
                 images = product.get("images") or []
-                image = images[0].get("src", "") if images and isinstance(images[0], dict) else ""
-                if image.startswith("http://"):
-                    image = "https://" + image[7:]
                 product_handle = str(product.get("handle") or "")
-                url = urljoin(product_base.rstrip("/") + "/", f"products/{product_handle}")
-                compare = variant.get("compare_at_price")
-                extra = {
-                    "availability": "InStock",
-                    "product_id": product.get("id"),
-                    "product_type": product_type,
-                    "price_source": "shopify_variant_gbp",
-                    "shopify_product": product,
-                }
-                try:
-                    if compare and float(compare) > price:
-                        extra["compare_at_price"] = float(compare)
-                except (TypeError, ValueError):
-                    pass
-                row = make_row(
-                    shop,
-                    title,
-                    price,
-                    image,
-                    url,
-                    None if accessories else gender_for(
-                        product, shop.get("gender_rule", "default"), gender
-                    ),
-                    url,
-                    extra,
+                product_url = urljoin(
+                    product_base.rstrip("/") + "/", f"products/{product_handle}"
                 )
-                if row:
-                    page_rows.append(row)
+                colour_rows = _colour_rows(product) if tees else None
+                single_colour = (
+                    _single_available_colour(product) if tees and not colour_rows else None
+                )
+                variants = colour_rows or [None]
+                for colour_row in variants:
+                    if colour_row:
+                        price = colour_row["price"]
+                        variant = colour_row["variant"]
+                        image = colour_row["image"]
+                    else:
+                        price, variant = _available_variant(product)
+                        if not variant:
+                            continue
+                        image = (
+                            images[0].get("src", "")
+                            if images and isinstance(images[0], dict)
+                            else ""
+                        )
+                        if image.startswith("http://"):
+                            image = "https://" + image[7:]
+                    row_url = (
+                        product_url
+                        + "?"
+                        + urlencode({"variant": variant["id"]})
+                        if colour_row
+                        else product_url
+                    )
+                    row_title = title
+                    colour = colour_row["colour"] if colour_row else single_colour
+                    if colour and colour.casefold() not in title.casefold():
+                        row_title = f"{title} - {colour}"
+                    row_shop = shop
+                    if tees and shop.get("brand_from_vendor"):
+                        vendor = str(product.get("vendor") or "").strip()
+                        if vendor:
+                            row_shop = dict(shop, brand=vendor)
+                    extra = {
+                        "availability": "InStock",
+                        "product_id": product.get("id"),
+                        "product_type": product_type,
+                        "price_source": "shopify_variant_gbp",
+                        "shopify_product": product,
+                    }
+                    if colour_row:
+                        extra.update(
+                            colour=colour_row["colour"],
+                            variant_id=variant.get("id"),
+                        )
+                    compare = variant.get("compare_at_price")
+                    try:
+                        if compare and float(compare) > price:
+                            extra["compare_at_price"] = float(compare)
+                    except (TypeError, ValueError):
+                        pass
+                    row_gender = (
+                        tee_gender(shop, product, row_url, gender)
+                        if tees
+                        else None if accessories
+                        else gender_for(product, shop.get("gender_rule", "default"), gender)
+                    )
+                    row = make_row(
+                        row_shop,
+                        row_title,
+                        price,
+                        image,
+                        row_url,
+                        row_gender,
+                        row_url,
+                        extra,
+                    )
+                    if row:
+                        page_rows.append(row)
             rows.extend(page_rows)
             session.emit(page_rows)
-            if probe:
+            if getattr(session, "full", False):
                 break
+            if probe and not tees:
+                break
+        if getattr(session, "full", False):
+            break
     return unique_rows(rows)
