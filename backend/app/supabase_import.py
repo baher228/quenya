@@ -1,5 +1,4 @@
 import argparse
-import io
 import json
 import logging
 import os
@@ -10,7 +9,6 @@ from urllib.parse import quote
 
 import httpx
 import numpy as np
-from PIL import Image, ImageOps
 
 from app import db, images
 from app.sources import STOCK_PHRASE, is_unavailable
@@ -71,34 +69,20 @@ def _download_storage(path: str) -> bytes:
     return response.content
 
 
-def _download_original_image(url: str) -> bytes:
-    response = httpx.get(
+def _download_original_image(url: str, referer: str | None = None) -> bytes:
+    return images.download_display_image(
         url,
-        headers={"User-Agent": images.BROWSER_UA},
-        follow_redirects=True,
-        timeout=15,
+        referer=referer,
+        minimum_bytes=3 * 1024,
     )
-    response.raise_for_status()
-    content = response.content
-    if len(content) <= 3 * 1024:
-        raise ValueError("Image download is 3 KB or smaller")
-    with Image.open(io.BytesIO(content)) as image:
-        image.verify()
-    return content
 
 
 def _cache_image(image_url: str, content: bytes) -> str:
     destination = images.image_path(image_url)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if not destination.exists():
-        with Image.open(io.BytesIO(content)) as original:
-            image = ImageOps.exif_transpose(original).convert("RGB")
-            image.thumbnail((512, 512), Image.Resampling.LANCZOS)
-            output = io.BytesIO()
-            image.save(output, format="JPEG", quality=80, optimize=True)
-        temporary = destination.with_suffix(".import.tmp")
-        temporary.write_bytes(output.getvalue())
-        temporary.replace(destination)
+    temporary = destination.with_suffix(".import.tmp")
+    temporary.write_bytes(images.encode_display_jpeg(content))
+    temporary.replace(destination)
     return str(destination)
 
 
@@ -188,14 +172,10 @@ def run_insert_only_file_import(
                 try:
                     content = _download_original_image(image_url)
                     local_image = _cache_image(image_url, content)
-                    image_path = local_image
-                    if images.storage_enabled():
-                        storage_path = f"{images.image_key(image_url)}.jpg"
-                        with open(local_image, "rb") as image_file:
-                            images.upload_storage_object(
-                                storage_path, image_file.read(), "image/jpeg"
-                            )
-                        image_path = storage_path
+                    with open(local_image, "rb") as image_file:
+                        image_path = images.persist_display_image(
+                            image_url, image_file.read()
+                        )
                 except (httpx.HTTPError, OSError, RuntimeError, ValueError):
                     failed += 1
                     continue
@@ -372,6 +352,10 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                 if not local_image.exists():
                     _cache_image(image_url, _download_storage(storage_path))
                 local_image = str(local_image)
+            with open(local_image, "rb") as image_file:
+                image_path = images.persist_display_image(
+                    image_url, image_file.read()
+                )
             record = dict(record)
             if file_import:
                 record.update(
@@ -384,7 +368,7 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                     condition_hint=row.get("condition") or record.get("condition_hint"),
                 )
             record["image_url"] = image_url
-            record["image_path"] = local_image
+            record["image_path"] = image_path
             added = db.insert_items([record])
             if not added:
                 skipped += 1

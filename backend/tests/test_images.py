@@ -7,6 +7,42 @@ from PIL import Image
 from app import images
 
 
+def _image_bytes(size):
+    buffer = BytesIO()
+    Image.new("RGB", size, "navy").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_encode_display_jpeg_downscales_and_preserves_smaller_dimensions():
+    large = images.encode_display_jpeg(_image_bytes((3000, 4000)))
+    small = images.encode_display_jpeg(_image_bytes((800, 1000)))
+
+    with Image.open(BytesIO(large)) as encoded_large:
+        assert encoded_large.format == "JPEG"
+        assert encoded_large.size == (1200, 1600)
+    with Image.open(BytesIO(small)) as encoded_small:
+        assert encoded_small.format == "JPEG"
+        assert encoded_small.size == (800, 1000)
+
+
+def test_upscale_image_url_rewrites_only_verified_cdn_variants():
+    burberry = (
+        "https://assets.burberry.com/is/image/Burberryltd/item"
+        "?wid=640&hei=852&fmt=jpg"
+    )
+    ssense = "https://img.ssensemedia.com/h_960,w_960/item.jpg?foo=bar"
+
+    assert images.upscale_image_url(burberry) == (
+        "https://assets.burberry.com/is/image/Burberryltd/item"
+        "?wid=1600&hei=2133&fmt=jpg"
+    )
+    assert images.upscale_image_url(ssense) == (
+        "https://img.ssensemedia.com/h_1600,w_1600/item.jpg?foo=bar"
+    )
+    unknown = "https://images.example.test/item_100x100.jpg?width=100"
+    assert images.upscale_image_url(unknown) == unknown
+
+
 def test_asos_image_download_normalizes_url_and_retries_timeout(monkeypatch, tmp_path):
     source_url = (
         "https://images.asos-media.com/products/jacket/123456789-1-black"
@@ -37,6 +73,42 @@ def test_asos_image_download_normalizes_url_and_retries_timeout(monkeypatch, tmp
     assert all(call[0] == expected_url for call in calls)
     assert all(call[1]["headers"]["User-Agent"] == "curl/8.5.0" for call in calls)
     assert all(call[1]["timeout"] == 15 for call in calls)
+
+
+def test_download_display_image_falls_back_to_original(monkeypatch):
+    original = (
+        "https://assets.burberry.com/is/image/Burberryltd/item"
+        "?wid=640&hei=852"
+    )
+    calls = []
+
+    class Response:
+        def __init__(self, content, status=200):
+            self.content = content
+            self.status = status
+
+        def raise_for_status(self):
+            if self.status >= 400:
+                raise httpx.HTTPStatusError(
+                    "bad status",
+                    request=httpx.Request("GET", "https://example.test"),
+                    response=httpx.Response(self.status),
+                )
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        if len(calls) == 1:
+            return Response(b"missing", status=404)
+        return Response(_image_bytes((20, 30)))
+
+    monkeypatch.setattr(images.httpx, "get", fake_get)
+    content = images.download_display_image(original, referer="https://shop.example/item")
+
+    assert content == _image_bytes((20, 30))
+    assert len(calls) == 2
+    assert "wid=1600" in calls[0][0]
+    assert calls[1][0] == original
+    assert calls[0][1]["headers"]["Referer"] == "https://shop.example/item"
 
 
 def _jpeg_bytes():
@@ -128,7 +200,7 @@ def test_storage_requires_explicit_mode_and_img_route_redirects(
     monkeypatch.setenv("SUPABASE_URL", "https://project.example")
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "test-secret")
     monkeypatch.delenv("QUENYA_IMAGE_STORE", raising=False)
-    assert not images.storage_enabled()
+    assert images.storage_enabled()
 
     monkeypatch.setenv("QUENYA_IMAGE_STORE", "supabase")
     from app.main import get_image
@@ -139,6 +211,78 @@ def test_storage_requires_explicit_mode_and_img_route_redirects(
     assert response.headers["location"] == (
         "https://project.example/storage/v1/object/public/"
         f"quenya-img/{key}.jpg"
+    )
+    monkeypatch.setenv("QUENYA_IMAGE_STORE", "r2")
+    monkeypatch.setenv("QUENYA_R2_PUBLIC_URL", "https://pub.example/")
+    response = get_image(f"{key}.jpg")
+    assert response.status_code == 302
+    assert response.headers["location"] == f"https://pub.example/{key}.jpg"
+
+
+def test_r2_upload_uses_configured_bucket_and_cache_headers(monkeypatch):
+    import boto3
+
+    calls = []
+    client_options = []
+
+    class StubClient:
+        def put_object(self, **kwargs):
+            calls.append(kwargs)
+
+    def fake_client(service, **kwargs):
+        client_options.append((service, kwargs))
+        return StubClient()
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    monkeypatch.setenv("QUENYA_R2_ACCOUNT_ID", "account")
+    monkeypatch.setenv("QUENYA_R2_ACCESS_KEY_ID", "access")
+    monkeypatch.setenv("QUENYA_R2_SECRET_ACCESS_KEY", "secret")
+    monkeypatch.setenv("QUENYA_R2_BUCKET", "quenya")
+    images._cached_r2_client.cache_clear()
+    try:
+        images.upload_r2_object("a" * 40 + ".jpg", b"jpeg")
+    finally:
+        images._cached_r2_client.cache_clear()
+
+    assert client_options == [
+        (
+            "s3",
+            {
+                "endpoint_url": "https://account.r2.cloudflarestorage.com",
+                "aws_access_key_id": "access",
+                "aws_secret_access_key": "secret",
+                "region_name": "auto",
+            },
+        )
+    ]
+    assert calls == [
+        {
+            "Bucket": "quenya",
+            "Key": "a" * 40 + ".jpg",
+            "Body": b"jpeg",
+            "ContentType": "image/jpeg",
+            "CacheControl": "public, max-age=2592000",
+        }
+    ]
+
+
+def test_user_uploads_still_use_supabase_in_r2_mode(monkeypatch):
+    monkeypatch.setenv("QUENYA_IMAGE_STORE", "r2")
+    monkeypatch.setenv("SUPABASE_URL", "https://project.example")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "test-secret")
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(200, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(images.httpx, "post", fake_post)
+
+    result = images.save_upload("inspiration", b"photo")
+
+    assert result == "uploads/inspiration.jpg"
+    assert calls[0][0].endswith(
+        "/storage/v1/object/quenya-img/uploads/inspiration.jpg"
     )
 
 

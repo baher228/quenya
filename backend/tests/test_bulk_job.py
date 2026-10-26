@@ -439,8 +439,14 @@ def test_insert_only_import_tags_before_a_single_items_insert(tmp_path, monkeypa
     connection = _Connection()
     tag_calls = []
     monkeypatch.setattr(supabase_import, "_download_original_image", lambda _url: b"bytes")
-    monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: "/tmp/image.jpg")
-    monkeypatch.setattr(supabase_import.images, "storage_enabled", lambda: False)
+
+    def cache_image(*_args):
+        image_path = tmp_path / "image.jpg"
+        image_path.write_bytes(b"image")
+        return str(image_path)
+
+    monkeypatch.setattr(supabase_import, "_cache_image", cache_image)
+    monkeypatch.setattr(supabase_import.images, "display_storage_enabled", lambda: False)
 
     def tag_item(item, *, log_attempts):
         tag_calls.append((item["source_url"], log_attempts))
@@ -482,8 +488,14 @@ def test_insert_only_import_counts_and_continues_after_vinted_insert_error(
             return super().execute(sql, params)
 
     monkeypatch.setattr(supabase_import, "_download_original_image", lambda _url: b"bytes")
-    monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: "/tmp/image.jpg")
-    monkeypatch.setattr(supabase_import.images, "storage_enabled", lambda: False)
+
+    def cache_image(*_args):
+        image_path = tmp_path / "image.jpg"
+        image_path.write_bytes(b"image")
+        return str(image_path)
+
+    monkeypatch.setattr(supabase_import, "_cache_image", cache_image)
+    monkeypatch.setattr(supabase_import.images, "display_storage_enabled", lambda: False)
     monkeypatch.setattr(
         supabase_import,
         "tag_item",
@@ -560,8 +572,14 @@ def test_insert_only_import_pauses_after_consecutive_tag_errors(tmp_path, monkey
         rows.append(row)
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
     monkeypatch.setattr(supabase_import, "_download_original_image", lambda _url: b"bytes")
-    monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: "/tmp/image.jpg")
-    monkeypatch.setattr(supabase_import.images, "storage_enabled", lambda: False)
+
+    def cache_image(*_args):
+        image_path = tmp_path / "image.jpg"
+        image_path.write_bytes(b"image")
+        return str(image_path)
+
+    monkeypatch.setattr(supabase_import, "_cache_image", cache_image)
+    monkeypatch.setattr(supabase_import.images, "display_storage_enabled", lambda: False)
     def fail_tag(*_args, **_kwargs):
         raise RuntimeError("tagger unavailable")
 

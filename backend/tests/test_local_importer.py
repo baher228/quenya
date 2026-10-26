@@ -48,8 +48,14 @@ def _configure_local_import(monkeypatch, tmp_path, db_path):
     db._INITIALIZED_DATABASES.clear()
     db.init_db()
     monkeypatch.setattr(supabase_import, "_download_original_image", lambda _url: b"image")
-    monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: str(tmp_path / "image.jpg"))
-    monkeypatch.setattr(images, "storage_enabled", lambda: False)
+
+    def cache_image(*_args):
+        path = tmp_path / "image.jpg"
+        path.write_bytes(b"image")
+        return str(path)
+
+    monkeypatch.setattr(supabase_import, "_cache_image", cache_image)
+    monkeypatch.setattr(images, "display_storage_enabled", lambda: False)
     vector = np.asarray([1, 0, 0, 0], dtype=np.float32)
     monkeypatch.setattr(embedding, "encode_images", lambda _images: vector[None, :])
     monkeypatch.setattr(embedding, "encode_texts", lambda _texts: vector[None, :])
