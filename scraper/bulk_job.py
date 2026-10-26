@@ -53,7 +53,10 @@ NON_APPAREL_WORDS = re.compile(
     r"concealer|eyeliner|eyeshadow|nail polish|fragrance|perfume|haircare|"
     r"homeware|furniture|kitchenware|kitchen|tableware|drinkware|glassware|"
     r"coasters?|mugs?|plates?|bowls?|cutlery|decor|candles?|bedding|bathroom|"
-    r"cushion|pillow|ornament|vase|rug|toy|food)\b",
+    r"cushion|pillow|ornament|vase|rug|toy|food|shampoos?|conditioners?|"
+    r"body[- ]wash(?:es)?|shower[- ]gels?|hand[- ]creams?|body[- ]lotions?|"
+    r"moisturi[sz]ers?|serums?|deodorants?|parfums?|eau[- ]de[- ]toilette|"
+    r"eau[- ]de[- ]parfum|gift[- ]sets?|toothbrush(?:es)?|incense)\b",
     re.IGNORECASE,
 )
 STOCK_WORDS = re.compile(

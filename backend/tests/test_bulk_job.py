@@ -125,6 +125,52 @@ def test_jsonld_rejects_home_products_even_if_they_have_a_clothing_category():
     assert reason == "non_apparel"
 
 
+def test_jsonld_rejects_boohoo_shampoo_conditioner_bundle():
+    product = {
+        "@type": "Product",
+        "name": "Rich Moisture Shampoo & Conditioner Bundle",
+        "category": "Accessories",
+        "image": ["https://cdn.example.test/shampoo-bundle.jpg"],
+        "offers": {
+            "@type": "Offer", "price": "18.00", "priceCurrency": "GBP",
+            "availability": "https://schema.org/InStock",
+        },
+    }
+    html = f'<script type="application/ld+json">{json.dumps(product)}</script>'
+
+    record, reason = bulk_job.parse_product_page(
+        html,
+        "https://www.boohoo.com/product/rich-moisture-shampoo-conditioner-bundle",
+        "boohoo.com",
+    )
+
+    assert record is None
+    assert reason == "non_apparel"
+
+
+def test_jsonld_rejects_eau_de_parfum_gift_set():
+    product = {
+        "@type": "Product",
+        "name": "Eau de Parfum Gift Set",
+        "category": "Accessories",
+        "image": ["https://cdn.example.test/eau-de-parfum-gift-set.jpg"],
+        "offers": {
+            "@type": "Offer", "price": "24.00", "priceCurrency": "GBP",
+            "availability": "https://schema.org/InStock",
+        },
+    }
+    html = f'<script type="application/ld+json">{json.dumps(product)}</script>'
+
+    record, reason = bulk_job.parse_product_page(
+        html,
+        "https://www.prettylittlething.com/products/eau-de-parfum-gift-set",
+        "prettylittlething.com",
+    )
+
+    assert record is None
+    assert reason == "non_apparel"
+
+
 def test_sitemap_discovery_prefers_uk_product_sitemaps():
     class Response:
         status_code = 200
