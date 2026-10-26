@@ -47,8 +47,8 @@ def test_proxy_endpoint_returns_items_from_search_direct(client, monkeypatch):
     calls = []
     items = [{"id": "vinted:123"}]
 
-    def fake_search_direct(query, gender, per_page):
-        calls.append((query, gender, per_page))
+    def fake_search_direct(query, gender, per_page, page):
+        calls.append((query, gender, per_page, page))
         return items
 
     monkeypatch.setattr(vinted, "search_direct", fake_search_direct)
@@ -60,13 +60,13 @@ def test_proxy_endpoint_returns_items_from_search_direct(client, monkeypatch):
 
     response = client.get(
         "/internal/vinted/search",
-        params={"q": "vintage coat", "gender": "m", "per_page": 5},
+        params={"q": "vintage coat", "gender": "m", "per_page": 5, "page": 4},
         headers={"X-Quenya-Proxy-Key": "secret"},
     )
 
     assert response.status_code == 200
     assert response.json() == {"items": items}
-    assert calls == [("vintage coat", "m", 5)]
+    assert calls == [("vintage coat", "m", 5, 4)]
 
 
 def test_proxy_endpoint_returns_scraper_error_as_502(client, monkeypatch):
@@ -96,6 +96,8 @@ def test_proxy_endpoint_returns_scraper_error_as_502(client, monkeypatch):
         {"q": "coat", "gender": "other"},
         {"q": "coat", "gender": "w", "per_page": 0},
         {"q": "coat", "gender": "w", "per_page": 97},
+        {"q": "coat", "gender": "w", "page": 0},
+        {"q": "coat", "gender": "w", "page": 21},
     ],
 )
 def test_proxy_endpoint_validates_query_parameters(client, params):
@@ -116,10 +118,10 @@ def test_search_uses_configured_proxy(monkeypatch):
 
     monkeypatch.setattr(vinted.httpx, "get", fake_get)
 
-    assert vinted.search("vintage coat", "w", per_page=7) == items
+    assert vinted.search("vintage coat", "w", per_page=7, page=4) == items
     assert calls == {
         "url": "https://proxy.example/internal/vinted/search",
-        "params": {"q": "vintage coat", "gender": "w", "per_page": 7},
+        "params": {"q": "vintage coat", "gender": "w", "per_page": 7, "page": 4},
         "headers": {"X-Quenya-Proxy-Key": "secret"},
         "timeout": 60,
     }
@@ -142,11 +144,53 @@ def test_search_uses_direct_scraper_without_proxy_url(monkeypatch):
     items = [{"id": "vinted:123"}]
     calls = []
 
-    def fake_search_direct(query, gender, per_page):
-        calls.append((query, gender, per_page))
+    def fake_search_direct(query, gender, per_page, page):
+        calls.append((query, gender, per_page, page))
         return items
 
     monkeypatch.setattr(vinted, "search_direct", fake_search_direct)
 
-    assert vinted.search("coat", "u", per_page=4) == items
-    assert calls == [("coat", "u", 4)]
+    assert vinted.search("coat", "u", per_page=4, page=3) == items
+    assert calls == [("coat", "u", 4, 3)]
+
+
+def test_search_direct_retries_once_after_a_transient_failure(monkeypatch):
+    calls = []
+    sleeps = []
+
+    class Scraper:
+        def search(self, params):
+            calls.append(params)
+            if len(calls) == 1:
+                raise RuntimeError("temporary failure")
+            return ["raw-item"]
+
+    monkeypatch.setattr(vinted, "VintedScraper", lambda _url: Scraper())
+    monkeypatch.setattr(vinted.time, "sleep", sleeps.append)
+    monkeypatch.setattr(vinted, "normalize_item", lambda item, *_args: item)
+
+    assert vinted.search_direct("coat", "w", per_page=20, page=2) == ["raw-item"]
+    assert calls == [
+        {"search_text": "coat", "per_page": 20, "page": 2},
+        {"search_text": "coat", "per_page": 20, "page": 2},
+    ]
+    assert sleeps == [1]
+
+
+def test_search_direct_raises_after_two_failures(monkeypatch):
+    calls = []
+    sleeps = []
+
+    class Scraper:
+        def search(self, params):
+            calls.append(params)
+            raise RuntimeError("still failing")
+
+    monkeypatch.setattr(vinted, "VintedScraper", lambda _url: Scraper())
+    monkeypatch.setattr(vinted.time, "sleep", sleeps.append)
+
+    with pytest.raises(RuntimeError, match="still failing"):
+        vinted.search_direct("coat", "w", page=2)
+
+    assert len(calls) == 2
+    assert sleeps == [1]
