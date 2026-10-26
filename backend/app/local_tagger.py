@@ -6,6 +6,7 @@ from functools import lru_cache
 import numpy as np
 
 from app import db
+from app.gender_rules import product_type_for_item, text_gender
 from app.schemas import ItemTags
 
 LOCAL_TAGGER_ID = "local:clip-knn-v1"
@@ -125,7 +126,13 @@ class LocalTagger:
             "w": "womenswear", "women": "womenswear", "womenswear": "womenswear",
             "u": "unisex", "unisex": "unisex",
         }
-        gender = gender_hints[hint] if hint in gender_hints else vote("gender")
+        gender = text_gender(
+            item.get("title"),
+            product_type_for_item(item),
+            item.get("source_url"),
+        )
+        if gender is None:
+            gender = gender_hints.get(hint) or vote("gender")
         condition_hint = str(item.get("condition_hint") or "").strip().lower()
         condition = (
             condition_hint if condition_hint in {"second-hand", "new"}

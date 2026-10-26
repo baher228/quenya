@@ -88,6 +88,31 @@ def test_gender_hint_variants_override_vote(hint, expected):
     assert result.gender == expected
 
 
+def test_text_gender_overrides_gender_hint():
+    result = _tagger([([1, 0, 0, 0], _tags(gender="menswear"))]).tag(
+        {"title": "Women's Ava Shirt", "gender_hint": "m"},
+        None,
+        np.asarray([1, 0, 0, 0]),
+    )
+    assert result.gender == "womenswear"
+
+
+@pytest.mark.parametrize(
+    "item_fields",
+    [
+        {"product_type": "Men's T-Shirts"},
+        {"raw_json": json.dumps({"record": {"product_type": "Men's T-Shirts"}})},
+    ],
+)
+def test_product_type_overrides_gender_hint(item_fields):
+    result = _tagger([([1, 0, 0, 0], _tags(gender="womenswear"))]).tag(
+        {"title": "Essential Tee", "gender_hint": "w", **item_fields},
+        None,
+        np.asarray([1, 0, 0, 0]),
+    )
+    assert result.gender == "menswear"
+
+
 def test_gender_without_hint_uses_weighted_vote():
     result = _tagger([
         ([1, 0, 0, 0], _tags(gender="womenswear")),
