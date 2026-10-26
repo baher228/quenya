@@ -21,7 +21,7 @@ from app.embedding_ranker import (
     history_query,
     rank_candidates,
 )
-from app.mubit import TaskError, call_task
+from app.llm import TaskError, call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import add_exploration, make_deck, rank_items, score_item, secondhand_share, tags_for
@@ -44,7 +44,7 @@ from app.schemas import (
 )
 from app.sources import catalog, retail, sport, vinted
 from app.styles import decode_brief, style_notes, style_queries
-from app.tagging import tag_item
+from app.tagging import tag_item_with_vectors
 from app.taste import create_taste, update_taste
 
 router = APIRouter()
@@ -343,13 +343,18 @@ def _fetch_profile_items(
         }
         errors = []
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(tag_item, item): item for item in pending}
+            futures = {
+                executor.submit(tag_item_with_vectors, item): item for item in pending
+            }
             for future, item in futures.items():
                 domain = item.get("source", "unknown")
                 domain_counts.setdefault(domain, {"inserted": 0, "tagged": 0, "failed": 0})
                 try:
-                    tags, meta = future.result()
-                    db.save_tags(item["id"], tags.model_dump(), meta.request_id, item["image_path"])
+                    tags, meta, vectors = future.result()
+                    db.save_tags(
+                        item["id"], tags.model_dump(), meta.request_id,
+                        item["image_path"], vectors=vectors,
+                    )
                     tagged += 1
                     domain_counts[domain]["tagged"] += 1
                 except Exception as exc:
@@ -1336,11 +1341,16 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
             ]
         failures: list[TaskError] = []
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(tag_item, item): item for item in pending}
+            futures = {
+                executor.submit(tag_item_with_vectors, item): item for item in pending
+            }
             for future, item in futures.items():
                 try:
-                    tags, meta = future.result()
-                    db.save_tags(item["id"], tags.model_dump(), meta.request_id, item["image_path"])
+                    tags, meta, vectors = future.result()
+                    db.save_tags(
+                        item["id"], tags.model_dump(), meta.request_id,
+                        item["image_path"], vectors=vectors,
+                    )
                 except TaskError as exc:
                     failures.append(exc)
                     db.save_tag_error(item["id"], str(exc))

@@ -13,7 +13,7 @@ def seed(per_category: int, tavily_budget: int, old_money_queries: int) -> dict:
         existing_ids = {
             row["id"] for row in connection.execute("SELECT id FROM items").fetchall()
         }
-        mubit_before = connection.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
+        llm_before = connection.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
     fetched: dict[str, int] = {}
     records_by_url = {}
     tavily_left = max(0, tavily_budget)
@@ -80,7 +80,7 @@ def seed(per_category: int, tavily_budget: int, old_money_queries: int) -> dict:
                 db.save_tag_error(item["id"], str(exc))
                 source_report["tag_failed"] += 1
     with db.db_connection() as connection:
-        mubit_after = connection.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
+        llm_after = connection.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
     return {
         "sources": report,
         "total_fetched": len(records),
@@ -89,7 +89,7 @@ def seed(per_category: int, tavily_budget: int, old_money_queries: int) -> dict:
         "total_tag_failed": sum(entry["tag_failed"] for entry in report.values()),
         "tavily_urls_used": tavily_budget - tavily_left,
         "tavily_disabled": any(item.get("tavily_disabled") for item in crawl_reports),
-        "mubit_calls": mubit_after - mubit_before,
+        "llm_calls": llm_after - llm_before,
         "crawl_reports": crawl_reports,
     }
 

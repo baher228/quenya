@@ -525,9 +525,10 @@ def save_tags(
     tags: dict[str, Any],
     request_id: str | None,
     cached_image_path: str | None = None,
+    vectors: tuple[Any, Any, Any] | None = None,
 ) -> None:
     with db_connection() as connection:
-        connection.execute(
+        cursor = connection.execute(
             """UPDATE items SET tags_json=?, tags_request_id=?, tagged_at=?,
                image_path=COALESCE(?, image_path), tag_error=NULL
                WHERE id=?""",
@@ -539,6 +540,12 @@ def save_tags(
                 item_id,
             ),
         )
+        if vectors is not None and cursor.rowcount:
+            from app.embedding import MODEL_NAME
+
+            store_item_embedding(
+                item_id, MODEL_NAME, *vectors, connection=connection
+            )
 
 
 def save_tag_error(item_id: str, error: str) -> None:

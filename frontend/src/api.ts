@@ -66,7 +66,13 @@ const post = <T>(path: string, data?: unknown) =>
   req<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
 export const api = {
-  health: () => req<{ items_total: number; items_tagged: number; models: Record<string, string> }>("/api/health"),
+  health: () => req<{
+    items_total: number;
+    items_tagged: number;
+    llm_provider: string;
+    llm_ready: boolean;
+    models: Record<string, string>;
+  }>("/api/health"),
   createProfile: (brief: Brief, newBoard = false) =>
     post<ProfileResult>(
       "/api/profile", { brief, new_board: newBoard },

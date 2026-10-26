@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.mubit import TaskError, call_task
+from app.llm import TaskError, call_task
 from app.prompts import DECODER_MODEL, DECODER_SYSTEM
 
 logger = logging.getLogger(__name__)

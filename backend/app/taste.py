@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from app import db
-from app.mubit import CallMeta, call_task
+from app.llm import CallMeta, call_task
 from app.prompts import TASTE_MODEL, TASTE_SYSTEM
 from app.rank import norm_token
 from app.schemas import TasteProfile

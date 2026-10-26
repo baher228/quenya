@@ -1,7 +1,6 @@
-"""Frozen Mubit task prompts.
+"""Frozen model task prompts.
 
-Mubit groups calls into one task by identical system prompt + model + output format.
-Changing any string here starts a NEW Mubit task and resets its kept-example count.
+Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 

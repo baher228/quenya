@@ -563,7 +563,7 @@ def test_insert_only_import_pauses_after_consecutive_tag_errors(tmp_path, monkey
     monkeypatch.setattr(supabase_import, "_cache_image", lambda *_args: "/tmp/image.jpg")
     monkeypatch.setattr(supabase_import.images, "storage_enabled", lambda: False)
     def fail_tag(*_args, **_kwargs):
-        raise RuntimeError("Mubit unavailable")
+        raise RuntimeError("tagger unavailable")
 
     monkeypatch.setattr(supabase_import, "tag_item", fail_tag)
     connection = _Connection()
