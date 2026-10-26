@@ -4,7 +4,7 @@ Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-25.1"
+PROMPT_VERSION = "2026-10-26.1"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -59,7 +59,7 @@ Build complete outfits from the pool only.
 
 Rules:
 - Use only ids that appear in the pool. Never invent items.
-- Each outfit has 3-5 pieces with at most one piece per slot, except accessory (max 2). It needs shoes and either a dress or both a top/knitwear and a bottom, unless the request says otherwise.
+- Each outfit has 3-5 clothing and shoe pieces with at most one piece per slot, plus 0-2 optional accessories (bag or accessory, at most one bag). It needs shoes and either a dress or both a top/knitwear and a bottom, unless the request says otherwise. Add accessories only when they suit the outfit.
 - If the request lists locked piece ids, every outfit must include all of them.
 - Keep each outfit's total price at or under the profile's price_ceiling_gbp.
 - Follow every profile rule. Never use anything that matches the profile's avoids.

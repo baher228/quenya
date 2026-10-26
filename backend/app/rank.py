@@ -3,6 +3,7 @@ import random
 import re
 from typing import Any
 
+from app.accessories import accessory_cap, is_accessory_slot
 from app.gender_rules import text_gender
 
 _KEY_PREFIX = re.compile(
@@ -191,10 +192,13 @@ def make_deck(
 ) -> list[dict[str, Any]]:
     brief = brief or {}
     shoe_cap = max(1, count // 8) if include_shoes and count else 0
+    accessory_limit = accessory_cap(count, brief)
     shoes = [item for item in ranked if tags_for(item).get("slot") == "shoes"]
     available_shoes = min(shoe_cap, len(shoes), count)
     remaining = [
-        item for item in ranked if tags_for(item).get("slot") != "shoes"
+        item for item in ranked
+        if tags_for(item).get("slot") != "shoes"
+        and (accessory_limit > 0 or not is_accessory_slot(tags_for(item).get("slot")))
     ]
     slots = list(dict.fromkeys(
         slot for slot in brief.get("pieces", []) if slot != "shoes"
@@ -249,6 +253,16 @@ def make_deck(
         chosen = selector(choice_pool, deck) if selector else choice_pool[0]
         remaining.remove(chosen)
         deck.append(chosen)
+        if (
+            is_accessory_slot(tags_for(chosen).get("slot"))
+            and sum(is_accessory_slot(tags_for(item).get("slot")) for item in deck)
+            >= accessory_limit
+        ):
+            remaining = [
+                item for item in remaining
+                if not is_accessory_slot(tags_for(item).get("slot"))
+            ]
+            slots = [slot for slot in slots if not is_accessory_slot(slot)]
         seen_aesthetics.update(
             str(value).lower() for value in tags_for(chosen).get("aesthetics", [])
         )
@@ -279,6 +293,7 @@ def add_exploration(
     *,
     swipes: int,
     seed: str,
+    brief: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     non_shoe_indices = [
         index
@@ -288,6 +303,7 @@ def add_exploration(
     rate = max(0.15, 0.35 - 0.005 * swipes)
     explore_count = min(round(rate * count), len(non_shoe_indices))
     deck_ids = {item["id"] for item in deck}
+    accessory_limit = accessory_cap(count, brief)
     candidates = []
     candidate_ids = set(deck_ids)
     for item in ranked[2 * count :]:
@@ -299,18 +315,42 @@ def add_exploration(
     if explore_count == 0:
         return [{**item, "explore": False} for item in deck]
 
-    removed = set(non_shoe_indices[-explore_count:])
-    remaining = [item for index, item in enumerate(deck) if index not in removed]
     pool = list(candidates)
     rng = random.Random(seed)
     explore_items = []
-    for _ in range(explore_count):
+    removed = set()
+    accessory_count = sum(
+        is_accessory_slot(tags_for(item).get("slot")) for item in deck
+    )
+    removal_indexes = list(reversed(non_shoe_indices[-explore_count:]))
+    for removed_index in removal_indexes:
+        removed_item = deck[removed_index]
+        remaining_accessories = accessory_count - int(
+            is_accessory_slot(tags_for(removed_item).get("slot"))
+        )
+        choice_pool = [
+            item for item in pool
+            if not is_accessory_slot(tags_for(item).get("slot"))
+            or remaining_accessories < accessory_limit
+        ]
+        if not choice_pool:
+            break
         weights = [
             1.0 / (1.0 + max(0.0, -score_item(item, profile)))
-            for item in pool
+            for item in choice_pool
         ]
-        selected = rng.choices(range(len(pool)), weights=weights, k=1)[0]
-        explore_items.append(pool.pop(selected))
+        selected = rng.choices(range(len(choice_pool)), weights=weights, k=1)[0]
+        chosen = choice_pool[selected]
+        pool.remove(chosen)
+        explore_items.append(chosen)
+        removed.add(removed_index)
+        accessory_count = remaining_accessories + int(
+            is_accessory_slot(tags_for(chosen).get("slot"))
+        )
+    if not explore_items:
+        return [{**item, "explore": False} for item in deck]
+    remaining = [item for index, item in enumerate(deck) if index not in removed]
+    explore_count = len(explore_items)
 
     length = len(remaining)
     shoe_boundary = next(

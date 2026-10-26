@@ -81,6 +81,8 @@ def _item(item_id, slot, aesthetics=None):
         "shoes": "boots",
         "outerwear": "jacket",
         "dress": "dress",
+        "bag": "bag",
+        "accessory": "belt",
     }
     return {
         "id": item_id,
@@ -947,6 +949,58 @@ def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
         item["tags"]["slot"] != "shoes"
         for item in build_pool(pool, brief, _profile(), [], [])
     )
+
+
+def test_default_accessory_cap_applies_with_and_without_selector():
+    ranked = []
+    for index in range(20):
+        item = _item(f"accessory-{index}", "top")
+        item["tags"].update(slot="bag" if index % 2 else "accessory")
+        ranked.append(item)
+    ranked.extend(_item(f"clothing-{index}", "top") for index in range(20))
+    brief = _brief(pieces=[])
+
+    for selector in (None, lambda pool, _deck: pool[0]):
+        deck = make_deck(
+            ranked, 10, brief, include_shoes=False, selector=selector
+        )
+        assert sum(
+            item["tags"]["slot"] in {"bag", "accessory"} for item in deck
+        ) <= 1
+
+    accessory_brief = _brief(pieces=["accessory"])
+    accessory_deck = make_deck(
+        ranked, 10, accessory_brief, include_shoes=False
+    )
+    assert len(accessory_deck) == 10
+    assert all(
+        item["tags"]["slot"] in {"bag", "accessory"} for item in accessory_deck
+    )
+
+    belt_brief = _brief(text="navy suit with a leather belt", pieces=[])
+    belt_deck = make_deck(
+        ranked[:20], 10, belt_brief, include_shoes=False
+    )
+    assert len(belt_deck) == 10
+    assert all(
+        item["tags"]["slot"] in {"bag", "accessory"} for item in belt_deck
+    )
+
+
+def test_exploration_does_not_exceed_default_accessory_cap():
+    ranked = [_item(f"clothing-{index}", "top") for index in range(20)]
+    ranked.extend(
+        _item(f"accessory-candidate-{index}", "accessory") for index in range(20)
+    )
+    deck = ranked[:10]
+
+    result = add_exploration(
+        deck, ranked, 10, _profile(), swipes=0, seed="accessory-cap"
+    )
+
+    assert sum(
+        item["tags"]["slot"] in {"bag", "accessory"} for item in result
+    ) <= 1
 
 
 def test_add_exploration_is_deterministic_and_uses_swipe_rate():

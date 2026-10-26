@@ -809,6 +809,7 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         else add_exploration(
             initial_deck, ranked, n, taste, swipes=swipe_count,
             seed=f"{active['id']}:{swipe_count}",
+            brief=active["brief"],
         )
     )
     now = db.now_iso()

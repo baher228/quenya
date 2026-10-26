@@ -6,6 +6,7 @@ from functools import lru_cache
 import numpy as np
 
 from app import db
+from app.accessories import accessory_gender, accessory_kind
 from app.gender_rules import product_type_for_item, text_gender
 from app.schemas import ItemTags
 
@@ -74,6 +75,9 @@ class LocalTagger:
         image_vec: np.ndarray | None,
         text_vec: np.ndarray,
     ) -> ItemTags:
+        title = item.get("title")
+        product_type = product_type_for_item(item)
+        kind = accessory_kind(title, product_type)
         if not self.reference:
             raise ValueError("LocalTagger has no GPT-tagged reference items")
         text = _unit(text_vec)
@@ -126,10 +130,10 @@ class LocalTagger:
             "w": "womenswear", "women": "womenswear", "womenswear": "womenswear",
             "u": "unisex", "unisex": "unisex",
         }
-        gender = text_gender(
-            item.get("title"),
-            product_type_for_item(item),
-            item.get("source_url"),
+        gender = (
+            accessory_gender(title, product_type, item.get("source_url"), kind[1])
+            if kind
+            else text_gender(title, product_type, item.get("source_url"))
         )
         if gender is None:
             gender = gender_hints.get(hint) or vote("gender")
@@ -138,14 +142,17 @@ class LocalTagger:
             condition_hint if condition_hint in {"second-hand", "new"}
             else "second-hand" if item.get("source") == "vinted" else "new"
         )
-        slot = vote("slot")
-        same_slot = [
-            neighbours[index] for index in range(len(neighbours))
-            if neighbours[index].get("slot") == slot
-        ]
-        if not same_slot:
-            raise ValueError("No same-slot category in local references")
-        category = same_slot[0]["category"]
+        if kind:
+            slot, category = kind
+        else:
+            slot = vote("slot")
+            same_slot = [
+                neighbours[index] for index in range(len(neighbours))
+                if neighbours[index].get("slot") == slot
+            ]
+            if not same_slot:
+                raise ValueError("No same-slot category in local references")
+            category = same_slot[0]["category"]
         formality = round(
             sum(float(tags["formality"]) * float(weight)
                 for tags, weight in zip(neighbours, weights, strict=True))
@@ -164,7 +171,7 @@ class LocalTagger:
             "category": category,
             "colours": colours,
             "materials": ranked_values("materials", 2),
-            "fit": vote("fit"),
+            "fit": "unknown" if kind else vote("fit"),
             "era": vote("era"),
             "aesthetics": ranked_values("aesthetics", 3),
             "formality": min(5, max(1, formality)),

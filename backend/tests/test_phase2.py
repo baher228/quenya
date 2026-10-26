@@ -303,6 +303,7 @@ def _item(item_id, slot, *, price=20.0, gender="unisex", condition="second-hand"
         "bottom": "trousers",
         "shoes": "boots",
         "outerwear": "chore jacket",
+        "dress": "dress",
     }
     return {
         "id": item_id,
@@ -466,6 +467,63 @@ def test_outfit_validator_rejects_missing_shoes_and_reuse():
     valid, errors = validate_outfits([outfit], pool, 1, [], 100)
     assert not valid
     assert any("missing shoes" in error for error in errors)
+
+
+def test_outfit_validator_allows_optional_accessories_with_core_piece_limits():
+    def accessory(item_id, slot):
+        item = _item(item_id, "top")
+        item["tags"].update(
+            slot=slot,
+            category="bag" if slot == "bag" else "belt",
+        )
+        return item
+
+    core = [_item("top", "top"), _item("bottom", "bottom"), _item("shoes", "shoes")]
+    extras = [
+        accessory("bag", "bag"),
+        accessory("accessory-1", "accessory"),
+        accessory("accessory-2", "accessory"),
+    ]
+
+    def validate(piece_ids, pieces, locked_ids=None):
+        outfit = {
+            "title": "Look",
+            "mood": "Relaxed",
+            "piece_ids": piece_ids,
+            "why": "A complete outfit.",
+        }
+        return validate_outfits([outfit], pieces, 1, locked_ids or [], 500)
+
+    for chosen in ([], extras[:1], extras[:2]):
+        selected = core + chosen
+        valid, errors = validate([item["id"] for item in selected], selected)
+        assert len(valid) == 1 and not errors
+
+    too_many = core + [accessory(f"extra-{index}", "accessory") for index in range(3)]
+    valid, errors = validate([item["id"] for item in too_many], too_many)
+    assert not valid
+    assert any(
+        "must contain 3-5 clothing/shoe pieces and at most 2 accessories" in error
+        for error in errors
+    )
+
+    two_bags = core + [accessory("bag-1", "bag"), accessory("bag-2", "bag")]
+    valid, errors = validate([item["id"] for item in two_bags], two_bags)
+    assert not valid
+    assert any("breaks slot limits" in error for error in errors)
+
+    five_core = [
+        _item("top-1", "top"),
+        _item("bottom-1", "bottom"),
+        _item("shoes-1", "shoes"),
+        _item("outerwear-1", "outerwear"),
+        _item("dress-1", "dress"),
+        *extras[:2],
+    ]
+    valid, errors = validate(
+        [item["id"] for item in five_core], five_core, locked_ids=["accessory-1"]
+    )
+    assert len(valid) == 1 and not errors
 
 
 def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, tmp_path):

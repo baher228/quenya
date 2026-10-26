@@ -122,15 +122,22 @@ def validate_outfits(
         reasons = []
         if index >= count:
             reasons.append("unexpected extra outfit")
-        if not 3 <= len(piece_ids) <= 5:
-            reasons.append("must contain 3-5 pieces")
         if len(piece_ids) != len(set(piece_ids)) or any(piece is None for piece in pieces):
             reasons.append("contains duplicate ids or ids outside the pool")
         if not set(locked_ids).issubset(piece_ids):
             reasons.append("does not include all locked ids")
         existing = [piece for piece in pieces if piece]
         slots = [tags_for(piece).get("slot") for piece in existing]
-        if any(slots.count(slot) > (2 if slot == "accessory" else 1) for slot in set(slots)):
+        core_slots = [slot for slot in slots if slot not in {"bag", "accessory"}]
+        accessories = [slot for slot in slots if slot in {"bag", "accessory"}]
+        if not 3 <= len(core_slots) <= 5 or len(accessories) > 2:
+            reasons.append(
+                "must contain 3-5 clothing/shoe pieces and at most 2 accessories"
+            )
+        if (
+            any(core_slots.count(slot) > 1 for slot in set(core_slots))
+            or slots.count("bag") > 1
+        ):
             reasons.append("breaks slot limits")
         complete_clothing = "dress" in slots or (
             {"top", "knitwear"} & set(slots) and "bottom" in slots
