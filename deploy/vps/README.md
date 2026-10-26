@@ -26,7 +26,7 @@ The API container listens on port 8000 and is published only to `127.0.0.1:8100`
 
 3. Check `https://srv948389.hstgr.cloud/health` and confirm `llm_provider` is `cursor` and `llm_ready` is `true`. `QUENYA_CORS_ORIGINS` is a comma-separated exact-origin allowlist; add each Vercel preview origin explicitly if needed.
 
-The current `frontend/vercel.json` rewrite still targets `quenya-api.vercel.app`; point that rewrite at the VPS hostname as a separate frontend cutover step.
+Rollback: point the `/api/:path*` and `/img/:path*` rewrites back to `https://quenya-api.vercel.app`.
 
 ## Update, logs and rollback
 
