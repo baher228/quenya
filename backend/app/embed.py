@@ -2,13 +2,14 @@ import argparse
 import hashlib
 import json
 import os
+import time
 from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 
 from app import db
-from app.embedding import MODEL_NAME, brief_text, encode_texts, item_text
+from app.embedding import MODEL_NAME, brief_text, encode_images, encode_texts, item_text
 
 DEFAULT_EMBED_DIR = Path("/home/ubuntu/research/rec/emb/clip32")
 
@@ -69,12 +70,11 @@ def _image_source(item: dict) -> str | None:
 
 def backfill(batch_size: int) -> None:
     import httpx
-    import open_clip
-    import torch
     from PIL import Image
 
-    items = db.list_items(limit=100000)
+    items = db.items_for_embedding(limit=100000)
     current = db.item_embedding_map()
+    started = time.monotonic()
     missing_text = [
         item for item in items
         if not current.get(item["id"]) or current[item["id"]].get("txt") is None
@@ -82,24 +82,32 @@ def backfill(batch_size: int) -> None:
     for start in range(0, len(missing_text), batch_size):
         batch = missing_text[start : start + batch_size]
         vectors = encode_texts([item_text(item) for item in batch])
-        for item, text in zip(batch, vectors, strict=True):
-            old = current.get(item["id"]) or {}
-            image = old.get("img")
-            mix = _unit(image + text) if image is not None else text
-            db.store_item_embedding(item["id"], MODEL_NAME, image, text, mix)
-            current[item["id"]] = {"img": image, "txt": text, "mix": mix}
+        with db.db_connection() as connection:
+            for item, text in zip(batch, vectors, strict=True):
+                old = current.get(item["id"]) or {}
+                image = old.get("img")
+                mix = _unit(image + text) if image is not None else text
+                db.store_item_embedding(
+                    item["id"], MODEL_NAME, image, text, mix, connection=connection
+                )
+                current[item["id"]] = {"img": image, "txt": text, "mix": mix}
+        completed = min(start + len(batch), len(missing_text))
+        elapsed = max(time.monotonic() - started, 1e-9)
+        rate = completed / elapsed
+        eta = (len(missing_text) - completed) / rate if rate else 0
+        print(
+            f"Text vectors {completed}/{len(missing_text)} "
+            f"rate={rate:.2f}/s eta={eta:.0f}s",
+            flush=True,
+        )
 
     missing_images = [
         item for item in items
         if not current.get(item["id"]) or current[item["id"]].get("img") is None
     ]
     if missing_images:
-        torch.set_num_threads(os.cpu_count() or 1)
-        model, _, preprocess = open_clip.create_model_and_transforms(
-            "ViT-B-32", pretrained="laion2b_s34b_b79k", device="cpu"
-        )
-        model.eval()
-
+        image_started = time.monotonic()
+        checked = encoded = 0
         for start in range(0, len(missing_images), batch_size):
             batch = missing_images[start : start + batch_size]
             image_rows, image_items = [], []
@@ -110,21 +118,33 @@ def backfill(batch_size: int) -> None:
                 try:
                     response = httpx.get(source, follow_redirects=True, timeout=20)
                     response.raise_for_status()
-                    image_rows.append(preprocess(Image.open(BytesIO(response.content)).convert("RGB")))
+                    with Image.open(BytesIO(response.content)) as opened:
+                        image_rows.append(opened.convert("RGB"))
                     image_items.append(item)
                 except Exception:
                     continue
-            if not image_rows:
-                continue
-            with torch.no_grad():
-                vectors = model.encode_image(torch.stack(image_rows))
-                vectors = torch.nn.functional.normalize(vectors, dim=-1).cpu().numpy()
-            for item, image in zip(image_items, vectors, strict=True):
-                old = current.get(item["id"]) or {}
-                text = old.get("txt")
-                mix = _unit(image + text) if text is not None else image
-                db.store_item_embedding(item["id"], MODEL_NAME, image, text, mix)
-                current[item["id"]] = {"img": image, "txt": text, "mix": mix}
+            if image_rows:
+                vectors = encode_images(image_rows)
+                with db.db_connection() as connection:
+                    for item, image in zip(image_items, vectors, strict=True):
+                        old = current.get(item["id"]) or {}
+                        text = old.get("txt")
+                        mix = _unit(image + text) if text is not None else image
+                        db.store_item_embedding(
+                            item["id"], MODEL_NAME, image, text, mix,
+                            connection=connection,
+                        )
+                        current[item["id"]] = {"img": image, "txt": text, "mix": mix}
+                encoded += len(image_items)
+            checked += len(batch)
+            elapsed = max(time.monotonic() - image_started, 1e-9)
+            rate = checked / elapsed
+            eta = (len(missing_images) - checked) / rate if rate else 0
+            print(
+                f"Image vectors {checked}/{len(missing_images)} encoded={encoded} "
+                f"rate={rate:.2f}/s eta={eta:.0f}s",
+                flush=True,
+            )
 
     with db.db_connection() as connection:
         rows = connection.execute("SELECT id, brief_json FROM profiles").fetchall()
@@ -161,11 +181,14 @@ def main() -> None:
     filler = subparsers.add_parser("backfill")
     filler.add_argument("--batch-size", type=int, default=32)
     filler.add_argument("--allow-postgres", action="store_true")
+    filler.add_argument("--skip-db-init", action="store_true")
     args = parser.parse_args()
     if getattr(args, "batch_size", 1) < 1:
         parser.error("--batch-size must be positive")
     if os.getenv("QUENYA_DATABASE_URL") and not args.allow_postgres:
-        parser.error("set --allow-postgres only for a non-production test database")
+        parser.error("set --allow-postgres to opt into a PostgreSQL backfill")
+    if getattr(args, "skip_db_init", False):
+        os.environ["QUENYA_SKIP_DB_INIT"] = "1"
     if args.command == "import-research":
         import_research(args.dir)
     else:

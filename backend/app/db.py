@@ -334,6 +334,8 @@ def db_connection():
 
 
 def init_db() -> None:
+    if os.getenv("QUENYA_SKIP_DB_INIT") == "1":
+        return
     with _INIT_LOCK:
         database_url = os.getenv("QUENYA_DATABASE_URL")
         database_key = f"postgres:{database_url}" if database_url else f"sqlite:{DB_PATH}"
@@ -632,6 +634,15 @@ def list_items(
     return result
 
 
+def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM items ORDER BY fetched_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def model_stats() -> list[dict[str, Any]]:
     init_db()
     with db_connection() as connection:
@@ -748,9 +759,54 @@ def _vector_value(value):
 
 
 def store_item_embedding(
-    item_id: str, model: str, img, txt, mix
+    item_id: str, model: str, img, txt, mix, connection=None
 ) -> None:
-    init_db()
+    if connection is None:
+        init_db()
+    if connection is not None:
+        import sqlite3
+
+        if isinstance(connection, _PostgresConnection):
+            sql = """INSERT INTO item_embeddings(item_id, model, img, txt, mix, updated_at)
+                     VALUES (?, ?, ?::vector, ?::vector, ?::vector, ?)
+                     ON CONFLICT(item_id) DO UPDATE SET model=excluded.model,
+                     img=excluded.img, txt=excluded.txt, mix=excluded.mix,
+                     updated_at=excluded.updated_at"""
+            values = (
+                item_id, model, _vector_string(img), _vector_string(txt),
+                _vector_string(mix), now_iso(),
+            )
+            connection.execute(sql, values)
+        elif isinstance(connection, sqlite3.Connection):
+            import numpy as np
+
+            def blob(value):
+                return None if value is None else np.asarray(value, dtype=np.float32).tobytes()
+
+            connection.execute(
+                """INSERT INTO item_embeddings(item_id, model, img, txt, mix, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(item_id) DO UPDATE SET model=excluded.model,
+                   img=excluded.img, txt=excluded.txt, mix=excluded.mix,
+                   updated_at=excluded.updated_at""",
+                (item_id, model, blob(img), blob(txt), blob(mix), now_iso()),
+            )
+        else:
+            sql = """INSERT INTO quenya.item_embeddings
+                     (item_id, model, img, txt, mix, updated_at)
+                     VALUES (%s, %s, %s::extensions.vector, %s::extensions.vector,
+                             %s::extensions.vector, %s)
+                     ON CONFLICT(item_id) DO UPDATE SET model=excluded.model,
+                     img=excluded.img, txt=excluded.txt, mix=excluded.mix,
+                     updated_at=excluded.updated_at"""
+            connection.execute(
+                sql,
+                (
+                    item_id, model, _vector_string(img), _vector_string(txt),
+                    _vector_string(mix), now_iso(),
+                ),
+            )
+        return
     if os.getenv("QUENYA_DATABASE_URL"):
         sql = """INSERT INTO item_embeddings(item_id, model, img, txt, mix, updated_at)
                  VALUES (?, ?, ?::vector, ?::vector, ?::vector, ?)

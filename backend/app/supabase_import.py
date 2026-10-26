@@ -3,11 +3,13 @@ import io
 import json
 import logging
 import os
+import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
+import numpy as np
 from PIL import Image, ImageOps
 
 from app import db, images
@@ -123,11 +125,19 @@ def run_insert_only_file_import(
     connection: Any,
     known_urls: set[str],
     *,
+    tagger: str = "llm",
     max_new_items: int | None = None,
     tag_failure_streak: int = 0,
     max_tag_failure_streak: int = 20,
 ) -> dict[str, Any]:
     """Tag first and insert only into quenya.items without running schema setup."""
+    if tagger not in {"llm", "local"}:
+        raise ValueError("tagger must be 'llm' or 'local'")
+    local_tagger = None
+    if tagger == "local":
+        from app.local_tagger import LocalTagger
+
+        local_tagger = LocalTagger.from_db()
     inserted = tagged = skipped = skipped_stock = tag_failed = failed = 0
     inserted_urls: list[str] = []
     for path in paths:
@@ -206,7 +216,22 @@ def run_insert_only_file_import(
                     fetched_at=datetime.now(UTC).isoformat(),
                 )
                 try:
-                    tags, meta = tag_item(item, log_attempts=False)
+                    image_vec = text_vec = mix_vec = None
+                    if tagger == "local":
+                        from app.embedding import encode_images, encode_texts, item_text
+                        from app.local_tagger import LOCAL_TAGGER_ID
+
+                        image_vec = encode_images([local_image])[0]
+                        text_vec = encode_texts([item_text(item)])[0]
+                        tags = local_tagger.tag(item, image_vec, text_vec)
+                        mix_vec = image_vec + text_vec
+                        norm = float(np.linalg.norm(mix_vec))
+                        if norm > 1e-12:
+                            mix_vec = mix_vec / norm
+                        tags_request_id = LOCAL_TAGGER_ID
+                    else:
+                        tags, meta = tag_item(item, log_attempts=False)
+                        tags_request_id = meta.request_id
                 except Exception as exc:
                     tag_failed += 1
                     tag_failure_streak += 1
@@ -226,27 +251,37 @@ def run_insert_only_file_import(
                 if not isinstance(raw_json, str):
                     raw_json = json.dumps(raw_json, ensure_ascii=False)
                 try:
+                    is_sqlite = isinstance(connection, sqlite3.Connection)
+                    table = "items" if is_sqlite else "quenya.items"
+                    placeholder = "?" if is_sqlite else "%s"
+                    values = (
+                        item["id"], item["source"], item["source_url"], item["title"],
+                        item.get("brand"), item["price_gbp"], item.get("size"),
+                        item.get("description"), item["image_url"], item["image_path"],
+                        item.get("gender_hint"), item.get("condition_hint"),
+                        item.get("availability"), item.get("query"), item["fetched_at"],
+                        raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
+                        tags_request_id, datetime.now(UTC).isoformat(),
+                    )
                     cursor = connection.execute(
-                        """INSERT INTO quenya.items (
+                        f"""INSERT INTO {table} (
                             id, source, source_url, title, brand, price_gbp, size,
                             description, image_url, image_path, gender_hint, condition_hint,
                             availability, query, fetched_at, raw_json, tags_json,
                             tags_request_id, tagged_at
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s
+                            {", ".join([placeholder] * 19)}
                         ) ON CONFLICT (source_url) DO NOTHING RETURNING source_url""",
-                        (
-                            item["id"], item["source"], item["source_url"], item["title"],
-                            item.get("brand"), item["price_gbp"], item.get("size"),
-                            item.get("description"), item["image_url"], item["image_path"],
-                            item.get("gender_hint"), item.get("condition_hint"),
-                            item.get("availability"), item.get("query"), item["fetched_at"],
-                            raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
-                            meta.request_id, datetime.now(UTC).isoformat(),
-                        ),
+                        values,
                     )
                     inserted_row = cursor.fetchone()
+                    if inserted_row and tagger == "local":
+                        from app.embedding import MODEL_NAME
+
+                        db.store_item_embedding(
+                            item["id"], MODEL_NAME, image_vec, text_vec, mix_vec,
+                            connection=connection,
+                        )
                     connection.commit()
                 except Exception as exc:
                     try:
