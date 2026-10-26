@@ -17,9 +17,23 @@ SHARED_CORE_ENABLED = (
     os.getenv("QUENYA_SHARED_CORE", "").lower() in {"1", "true", "yes"}
 )
 
-MUBIT_API_KEY = os.getenv("MUBIT_API_KEY", "")
+QUENYA_LLM_PROVIDER = os.getenv("QUENYA_LLM_PROVIDER", "cursor")
+QUENYA_LLM_API_KEY = os.getenv("QUENYA_LLM_API_KEY", "")
+QUENYA_LLM_BASE_URL = os.getenv(
+    "QUENYA_LLM_BASE_URL", "https://api.openai.com/v1"
+)
+QUENYA_LLM_DAILY_CAP = os.getenv("QUENYA_LLM_DAILY_CAP", "300")
+QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
+QUENYA_CORS_ORIGINS = os.getenv(
+    "QUENYA_CORS_ORIGINS", "http://localhost:5173"
+)
+CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "")
+QUENYA_CURSOR_MODEL = os.getenv(
+    "QUENYA_CURSOR_MODEL", "gemini-3.7-flash-high"
+)
+QUENYA_CURSOR_BIN = os.getenv("QUENYA_CURSOR_BIN", "")
+QUENYA_CURSOR_TIMEOUT_S = os.getenv("QUENYA_CURSOR_TIMEOUT_S", "120")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
-MUBIT_BASE_URL = os.getenv("MUBIT_BASE_URL", "https://api.mubit.ai/openai/v1")
 DB_PATH = Path(os.getenv("DB_PATH", str(BACKEND_ROOT / "data" / "quenya.db"))).expanduser()
 
 SHOP_TIERS = {

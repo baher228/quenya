@@ -1,0 +1,29 @@
+name: quenya
+
+services:
+  quenya-api:
+    build:
+      context: ../..
+      dockerfile: deploy/vps/Dockerfile
+    env_file:
+      - /etc/quenya/quenya.env
+    ports:
+      - "127.0.0.1:8100:8000"
+    mem_limit: 3g
+    cpus: 1.5
+    restart: unless-stopped
+    volumes:
+      - quenya-cache:/cache
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  quenya-cache:

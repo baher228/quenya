@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from app import db
-from app.mubit import TaskError
+from app.llm import TaskError
 from app.tagging import tag_item
 
 
@@ -71,7 +71,7 @@ def tag_untagged(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Tag untagged catalog items with Mubit")
+    parser = argparse.ArgumentParser(description="Tag untagged catalog items")
     parser.add_argument("--limit", type=int, default=100000)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--source", choices=("vinted", "retail"))

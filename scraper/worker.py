@@ -279,7 +279,12 @@ def run(args):
                                 continue
                             try:
                                 inserted = upload_row(
-                                    client, connection, row, shop, supabase_url, secret
+                                    client,
+                                    connection,
+                                    row,
+                                    {"domain": shop},
+                                    supabase_url,
+                                    secret,
                                 )
                                 counts[shop]["inserted" if inserted else "skipped"] += 1
                             except psycopg.Error:

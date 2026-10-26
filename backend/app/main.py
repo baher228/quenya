@@ -10,12 +10,15 @@ from starlette.requests import Request
 
 from app import db
 from app.config import (
-    MUBIT_API_KEY,
+    CURSOR_API_KEY,
     PROMPT_VERSION,
+    QUENYA_CORS_ORIGINS,
+    QUENYA_LLM_API_KEY,
+    QUENYA_LLM_PROVIDER,
     TAVILY_API_KEY,
 )
 from app.images import cached_image_path, storage_enabled, storage_public_url
-from app.mubit import TaskError
+from app.llm import TaskError
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
 from app.prompts import (
@@ -32,7 +35,11 @@ from app.taste import update_taste
 app = FastAPI(title="Quenya API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        origin.strip()
+        for origin in QUENYA_CORS_ORIGINS.split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,12 +83,20 @@ def startup() -> None:
     db.init_db()
 
 
+@app.get("/health", include_in_schema=False)
 @app.get("/api/health")
 def health() -> dict:
     total, tagged = db.total_counts()
+    provider = QUENYA_LLM_PROVIDER.strip().lower()
+    llm_ready = (
+        bool(CURSOR_API_KEY) if provider == "cursor"
+        else bool(QUENYA_LLM_API_KEY) if provider == "openai"
+        else False
+    )
     return {
         "ok": True,
-        "mubit_key_present": bool(MUBIT_API_KEY),
+        "llm_provider": provider,
+        "llm_ready": llm_ready,
         "tavily_key_present": bool(TAVILY_API_KEY),
         "models": {
             "tagger": TAGGER_MODEL,

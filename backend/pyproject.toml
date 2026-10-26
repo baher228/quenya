@@ -14,15 +14,21 @@ dependencies = [
     "pydantic>=2",
     "pillow>=10",
     "vinted-scraper>=5",
-    "scrapling[fetchers]>=0.2",
+    "scrapling>=0.2",
     "tavily-python>=0.5",
     "python-dotenv>=1",
     "python-multipart>=0.0.9",
     "psycopg[binary]>=3.2",
+    "numpy>=1.26",
+    "onnxruntime>=1.18",
+    "ftfy>=6.2",
+    "regex>=2024.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.9"]
+scrape = ["scrapling[fetchers]>=0.2"]
+embed = ["open_clip_torch==3.3.0", "torch==2.14.1", "pillow==12.3.0"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

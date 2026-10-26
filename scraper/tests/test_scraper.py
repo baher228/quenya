@@ -641,3 +641,51 @@ def test_store_upload_inserts_on_conflict_with_mocked_image(monkeypatch):
 
     assert "ON CONFLICT (url) DO NOTHING" in executed[0][0]
     assert row["image_path"] == "test/asset.jpg"
+
+
+def test_legacy_worker_upload_uses_shop_config(monkeypatch, tmp_path):
+    import psycopg
+    import worker
+
+    uploads = []
+    record = {
+        "source_url": "https://example.test/p/coat",
+        "title": "Coat",
+        "price_gbp": 20,
+        "image_url": "https://images.example.test/coat.jpg",
+    }
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+    monkeypatch.setattr(worker, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        worker, "CATEGORY_PAGES", {"example.test": [("m", "https://example.test/coats")]}
+    )
+    monkeypatch.setattr(
+        worker,
+        "_fetch",
+        lambda *_args, **_kwargs: ("html", "https://example.test/coats"),
+    )
+    monkeypatch.setattr(worker, "parse_listing", lambda *_args: [record])
+    monkeypatch.setattr(worker, "_ensure_bucket", lambda *_args: None)
+    monkeypatch.setattr(
+        worker,
+        "upload_row",
+        lambda _client, _connection, _row, shop, *_args: uploads.append(shop) or True,
+    )
+    monkeypatch.setattr(worker.httpx, "Client", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(
+        psycopg, "connect", lambda _dsn: SimpleNamespace(close=lambda: None)
+    )
+    monkeypatch.setenv("SUPABASE_URL", "https://supabase.invalid")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://unused")
+
+    worker.run(SimpleNamespace(time_budget=1, shops=None, max_pages=0, dry_run=False))
+
+    assert uploads == [{"domain": "example.test"}]

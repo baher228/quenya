@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app import db
-from app.mubit import call_task
+from app.llm import call_task
 from app.outfits import build_pool, stylist_user_content, validate_outfits
 from app.prompts import STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import make_deck, rank_items, tokens

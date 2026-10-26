@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://quenya-api.vercel.app/api/:path*" },
-    { "source": "/img/:path*", "destination": "https://quenya-api.vercel.app/img/:path*" },
+    { "source": "/api/:path*", "destination": "https://srv948389.hstgr.cloud/api/:path*" },
+    { "source": "/img/:path*", "destination": "https://srv948389.hstgr.cloud/img/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

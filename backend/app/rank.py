@@ -89,6 +89,15 @@ def eligible(
 ) -> bool:
     if item["id"] in (exclude_ids or set()):
         return False
+    availability = str(item.get("availability") or "").lower()
+    if any(
+        marker in availability
+        for marker in (
+            "outofstock", "out of stock", "out-of-stock", "soldout", "sold out",
+            "sold_out", "unavailable", "closed",
+        )
+    ):
+        return False
     tags = tags_for(item)
     gender = brief.get("gender", "both")
     if gender == "menswear" and tags.get("gender") not in {"menswear", "unisex"}:
@@ -169,6 +178,7 @@ def make_deck(
     *,
     include_shoes: bool = True,
     secondhand_share: float = 0.5,
+    selector=None,
 ) -> list[dict[str, Any]]:
     brief = brief or {}
     shoe_cap = max(1, count // 8) if include_shoes and count else 0
@@ -217,29 +227,38 @@ def make_deck(
         )
         alternative = new_pool if preferred is secondhand_pool else secondhand_pool
         choice_pool = preferred or alternative
-        chosen = choice_pool[0] if choice_pool else candidates[0]
+        choice_pool = choice_pool or candidates
         if position % 3 == 2:
-            chosen = next(
-                (
-                    item for item in choice_pool
-                    if {
-                        str(value).lower()
-                        for value in tags_for(item).get("aesthetics", [])
-                    } - seen_aesthetics
-                ),
-                chosen,
-            )
+            distinct = [
+                item for item in choice_pool
+                if {
+                    str(value).lower() for value in tags_for(item).get("aesthetics", [])
+                } - seen_aesthetics
+            ]
+            if distinct:
+                choice_pool = distinct
+        chosen = selector(choice_pool, deck) if selector else choice_pool[0]
         remaining.remove(chosen)
         deck.append(chosen)
         seen_aesthetics.update(
             str(value).lower() for value in tags_for(chosen).get("aesthetics", [])
         )
     if len(deck) < non_shoe_goal:
-        for item in remaining:
-            deck.append(item)
-            if len(deck) >= non_shoe_goal:
+        while remaining and len(deck) < non_shoe_goal:
+            chosen = selector(remaining, deck) if selector else remaining[0]
+            remaining.remove(chosen)
+            deck.append(chosen)
+    shoe_count = max(0, min(shoe_cap, count - len(deck)))
+    if selector:
+        remaining_shoes = list(shoes)
+        for _ in range(shoe_count):
+            if not remaining_shoes:
                 break
-    deck.extend(shoes[: max(0, min(shoe_cap, count - len(deck)))])
+            chosen = selector(remaining_shoes, deck)
+            remaining_shoes.remove(chosen)
+            deck.append(chosen)
+    else:
+        deck.extend(shoes[:shoe_count])
     return deck[:count]
 
 

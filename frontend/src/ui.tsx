@@ -6,7 +6,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   return (
     <div className="errbox" role="alert">
       <p>{error instanceof Error ? error.message : String(error)}</p>
-      {ids.length > 0 && <p className="mono small muted">Mubit {ids.join(", ")}</p>}
+      {ids.length > 0 && <p className="mono small muted">AI request {ids.join(", ")}</p>}
       {onRetry && <button className="btn ghost sm" onClick={onRetry}>Try again</button>}
     </div>
   );

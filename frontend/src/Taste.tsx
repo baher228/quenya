@@ -30,8 +30,6 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
     ...Object.entries(core.avoids).map(([k, v]) => [k, -v] as const),
   ], 8) : [];
   const shown = bars.length > 10 ? [...bars.slice(0, 7), ...bars.slice(-3)] : bars;
-  const trainingTarget = stats?.find(s => s.first_training_at != null)?.first_training_at ?? 25;
-
   return (
     <section className="screen">
       <p className="eyebrow">{board ? board.label : "Your taste"}{taste?.current ? ` · v${taste.current.version}` : ""}</p>
@@ -90,7 +88,7 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
         </div>
       )}
 
-      <div className="panel model"><span className="lbl">Mubit tasks <em>measured by us</em></span>
+      <div className="panel model"><span className="lbl">AI tasks <em>measured by us</em></span>
         {statsErr !== null && <ErrorBox error={statsErr} onRetry={loadStats} />}
         {!stats && statsErr === null && <Loading>Loading</Loading>}
         {stats?.map(s => {
@@ -104,7 +102,7 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset }: {
             </div>
           );
         })}
-        <p className="small muted">Every call goes through Mubit with a fixed prompt per task, and your corrections are sent as calls of the same task. Past {trainingTarget} successful calls a task is ready for Mubit training; adapter status lives in the Mubit console.</p>
+        <p className="small muted">AI tasks handle tagging, taste updates, outfit building and photo reading. Your corrections are used to personalize later suggestions.</p>
       </div>
 
       <button className="btn ghost wide danger" onClick={onReset}>Reset all boards</button>

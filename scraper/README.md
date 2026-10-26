@@ -96,3 +96,20 @@ Create a daily task with **Program/script** set to
 and **Start in** set to `C:\path\to\quenya`. The account must have network
 access and any required environment variables. Run it first without
 `--upload`, then review the timestamped `scraper\out` summary.
+
+## Existing category-page worker
+
+`scraper/worker.py` remains available alongside the config-driven scraper. It
+uses the backend listing readers and takes shop domains rather than registry
+keys:
+
+```powershell
+python scraper\worker.py --dry-run --max-pages 1
+python scraper\worker.py --shops cos.com,arket.com --max-pages 2
+```
+
+The dry run writes a JSONL preview under `scraper\out\`. Without `--dry-run`,
+the worker uploads images and inserts rows directly into Supabase; set
+`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and `SUPABASE_DB_URL` in the environment
+or an ignored `scraper\.env` file first. `--max-pages` is per shop and
+`--time-budget` limits the overall run in minutes.

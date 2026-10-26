@@ -4,7 +4,7 @@ import pytest
 from fastapi import BackgroundTasks
 
 from app import phase2_api, styles
-from app.mubit import TaskError
+from app.llm import TaskError
 from app.outfits import stylist_user_content
 from app.styles import (
     DecoderOut,

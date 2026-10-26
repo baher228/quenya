@@ -241,7 +241,7 @@ export default function App() {
 
         {toast && (
           <div className={"toast" + (toast.pill ? " pill" : "")} key={toast.id} role="status" onClick={() => { setToast(null); setTab("taste"); }}>
-            {toast.pill && <span className="mb">Mubit</span>}
+            {toast.pill && <span className="mb">AI</span>}
             <b>{toast.title}</b>
             {toast.pill && <em>updated</em>}
             {toast.lines.map((l, i) => <span key={i}>{l}</span>)}
@@ -316,7 +316,7 @@ function RejectSheet({ onPick, onClose }: { onPick: (r: string) => void; onClose
   return (
     <>
       <p className="h3">What's off?</p>
-      <p className="small muted">Your answer is a correction: your taste updates now, and it's sent to Mubit as a call of the same taste task.</p>
+      <p className="small muted">Your answer is a correction: your taste updates now and helps personalize later AI suggestions.</p>
       {REASONS.map(r => <button key={r} className="reason" onClick={() => onPick(r)}>{r}</button>)}
       <form className="own" onSubmit={e => { e.preventDefault(); if (own.trim()) onPick(own.trim()); }}>
         <input value={own} onChange={e => setOwn(e.target.value)} placeholder="Or say it yourself: “no square-toe shoes”" maxLength={200} />
