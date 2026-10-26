@@ -211,6 +211,72 @@ def test_tee_category_supports_product_type_and_tag_evidence():
     assert tee_category("Logo Longsleeve", tags=["category: long sleeve t-shirts"]) == (
         "long sleeve t-shirt"
     )
+    assert tee_category("Logo Longsleeve", "[Clothing] Cotton Tees and Hoodies") is None
+    assert tee_category("V Neck Top", "T-Shirts") is None
+    assert tee_category("V Neck Top", tags=["category: T-Shirts"]) is None
+    assert tee_category("CB Henley", "T-Shirts") is None
+    assert tee_category("Football Jersey", "T-Shirts") is None
+    assert tee_category("Rugby Top", "T-Shirts") is None
+    assert tee_category("Mesh Top", "T-Shirts") is None
+    assert tee_category("V Neck Top T-Shirt") == "t-shirt"
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Top",
+        "Tops",
+        "Henley",
+        "Jersey",
+        "Turtle Neck",
+        "Turtleneck",
+        "Roll Neck",
+        "Rollneck",
+        "Funnel Neck",
+        "Funnelneck",
+        "Mock Neck",
+        "Mockneck",
+        "Blouse",
+        "Bandeau",
+        "Peplum",
+        "Wrap",
+        "Rugby",
+        "Mesh",
+        "Bodycon",
+        "Corset",
+        "Bustier",
+        "Crop",
+    ],
+)
+def test_tee_category_rejects_non_tee_title_path_titles(title):
+    assert tee_category(title, "T-Shirts") is None
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type", "tags"),
+    [
+        ("Logo Tee", "Boy's T-Shirts", ()),
+        ("Logo Tee", "Girl's T-Shirts", ()),
+        ("Logo Tee", "Baby T-Shirts", ()),
+        ("Logo Tee", "T-Shirts", ("Gender_Boys",)),
+        ("Logo Tee", "T-Shirts", ("Gender_Girls",)),
+        ("Boy's Logo Tee", "T-Shirts", ()),
+        ("Girl's Logo Tee", "T-Shirts", ()),
+        ("Kids Logo Tee", "T-Shirts", ()),
+        ("Youth Logo Tee", "T-Shirts", ()),
+        ("3 PACK T-SHIRT", "", ()),
+        ("Big John 2-Pack T-Shirt", "", ()),
+        ("Pack of 3 Muscle Fit T-Shirts", "", ()),
+        ("Logo Tee", "MULTIPACK T-SHIRTS - M", ()),
+    ],
+)
+def test_tee_category_rejects_kids_and_multipacks(title, product_type, tags):
+    assert tee_category(title, product_type, tags) is None
+
+
+def test_tee_category_keeps_baby_tag_and_nonleading_band_name():
+    assert tee_category("Logo Tee", "T-Shirts", ["baby"]) == "t-shirt"
+    assert tee_category("Beastie Boys Tee") == "t-shirt"
 
 
 def test_tee_gender_evidence_and_shop_fallback_order():
@@ -245,6 +311,49 @@ def test_tee_gender_evidence_and_shop_fallback_order():
         {"title": "Logo Tee"},
         "https://example.test/products/logo-tee",
     ) == "m"
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee", "tags": ["womens"]},
+        "https://example.test/products/logo-tee",
+        "m",
+    ) == "w"
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee", "tags": ["unisex"]},
+        "https://example.test/products/logo-tee",
+        "m",
+    ) == "m"
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Unisex Logo Tee"},
+        "https://example.test/products/unisex-logo-tee",
+        "m",
+    ) is None
+
+
+@pytest.mark.parametrize(
+    ("collection_gender", "expected"),
+    [("m", "m"), ("w", "w")],
+)
+def test_tee_gender_uses_rokit_collection_gender_for_mixed_tags(
+    collection_gender, expected
+):
+    product = {
+        "title": "Vintage Logo Tee",
+        "product_type": "T-Shirts",
+        "tags": [
+            "ATT|Category two|Mens",
+            "ATT|Mens|TRUE",
+            "ATT|Womens|FALSE",
+            "ATT|Unisex|FALSE",
+        ],
+    }
+    assert tee_gender(
+        {"gender_rule": "default"},
+        product,
+        "https://example.test/products/vintage-logo-tee",
+        collection_gender,
+    ) == expected
 
 
 def test_shopify_tee_colour_splitting_and_vendor_brand():
@@ -286,6 +395,14 @@ def test_shopify_tee_colour_splitting_and_vendor_brand():
     assert shared_rows[0]["title"] == "Shared Image Tee"
     assert shared_rows[0]["url"] == "https://example-shop.test/products/shared-image-tee"
     assert shared_rows[0]["brand"] == "Fallback Brand"
+
+    single_colour_rows = [
+        row for row in rows if row["record"]["raw_json"]["product_id"] in {12, 13}
+    ]
+    assert [row["title"] for row in single_colour_rows] == [
+        "ESSENTIAL T-SHIRT - Chalk",
+        "Charcoal Tee",
+    ]
 
 
 def test_jsonld_uses_tee_pages():

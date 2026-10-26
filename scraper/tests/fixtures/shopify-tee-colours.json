@@ -59,6 +59,44 @@
           "featured_image": {"src": "https://images.example.test/shared-tee.jpg"}
         }
       ]
+    },
+    {
+      "id": 12,
+      "title": "ESSENTIAL T-SHIRT",
+      "handle": "essential-t-shirt",
+      "vendor": "Vendor Brand",
+      "product_type": "T-Shirts",
+      "tags": ["baby"],
+      "options": [{"name": "Colour", "position": 1, "values": ["Chalk"]}],
+      "images": [
+        {
+          "id": 1201,
+          "src": "https://images.example.test/essential-tee.jpg",
+          "variant_ids": [301]
+        }
+      ],
+      "variants": [
+        {"id": 301, "available": true, "price": "28.00", "option1": "Chalk"}
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Charcoal Tee",
+      "handle": "charcoal-tee",
+      "vendor": "Vendor Brand",
+      "product_type": "T-Shirts",
+      "tags": [],
+      "options": [{"name": "Color", "position": 1, "values": ["charcoal"]}],
+      "images": [
+        {
+          "id": 1301,
+          "src": "https://images.example.test/charcoal-tee.jpg",
+          "variant_ids": [401]
+        }
+      ],
+      "variants": [
+        {"id": 401, "available": true, "price": "28.00", "option1": "charcoal"}
+      ]
     }
   ]
 }

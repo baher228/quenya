@@ -55,19 +55,36 @@ def _products(data):
     return products if isinstance(products, list) else []
 
 
-def _colour_rows(product):
+def _colour_option_position(product):
     options = product.get("options") or []
-    option_position = None
     for index, option in enumerate(options):
         if not isinstance(option, dict) or not re.search(
             r"colou?r|colorway|shade", str(option.get("name") or ""), re.I
         ):
             continue
         try:
-            option_position = int(option.get("position") or index + 1)
+            return int(option.get("position") or index + 1)
         except (TypeError, ValueError):
-            option_position = index + 1
-        break
+            return index + 1
+    return None
+
+
+def _single_available_colour(product):
+    option_position = _colour_option_position(product)
+    if option_position is None:
+        return None
+    colours = {
+        str(variant.get(f"option{option_position}") or "").strip()
+        for variant in product.get("variants", [])
+        if isinstance(variant, dict)
+        and variant.get("available") is True
+        and str(variant.get(f"option{option_position}") or "").strip()
+    }
+    return next(iter(colours)) if len(colours) == 1 else None
+
+
+def _colour_rows(product):
+    option_position = _colour_option_position(product)
     if option_position is None:
         return None
 
@@ -213,7 +230,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                     rejected_tags.update({"jewellery", "jewelry"})
                 if tees:
                     rejected_tags.update(
-                        {"youth", "junior", "baby", "children", "kidswear", "boys", "girls"}
+                        {"youth", "junior", "children", "kidswear", "boys", "girls"}
                     )
                 if any(str(tag).lower() in rejected_tags for tag in tags):
                     continue
@@ -223,6 +240,9 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                     product_base.rstrip("/") + "/", f"products/{product_handle}"
                 )
                 colour_rows = _colour_rows(product) if tees else None
+                single_colour = (
+                    _single_available_colour(product) if tees and not colour_rows else None
+                )
                 variants = colour_rows or [None]
                 for colour_row in variants:
                     if colour_row:
@@ -248,8 +268,9 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                         else product_url
                     )
                     row_title = title
-                    if colour_row and colour_row["colour"].casefold() not in title.casefold():
-                        row_title = f"{title} - {colour_row['colour']}"
+                    colour = colour_row["colour"] if colour_row else single_colour
+                    if colour and colour.casefold() not in title.casefold():
+                        row_title = f"{title} - {colour}"
                     row_shop = shop
                     if tees and shop.get("brand_from_vendor"):
                         vendor = str(product.get("vendor") or "").strip()

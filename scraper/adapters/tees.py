@@ -14,15 +14,20 @@ NEGATIVE = re.compile(
     r"boxers?|briefs|trunks|underwear)\b",
     re.I,
 )
-KIDS = re.compile(
-    r"\bkids?\b|\bkid['’]s\b|\bchildren'?s?\b|\btoddlers?\b|\binfants?\b|"
-    r"\bjunior\b|\bbaby\b(?!\s+TEE)|\bage\s*\d|\b\d{1,2}\s*(?:-\s*\d{1,2}\s*)?"
-    r"(?:yrs?|years)\b",
+REJECTED_PRODUCT_TYPE = re.compile(
+    r"\b(?:kids?|youth|junior|baby|children|boy'?s|girl'?s|underwear|sleepwear|nightwear|"
+    r"swim\w*|gift)\b",
     re.I,
 )
-REJECTED_PRODUCT_TYPE = re.compile(
-    r"\b(?:kids?|youth|junior|baby|children|boys|girls|underwear|sleepwear|nightwear|"
-    r"swim\w*|gift)\b",
+TITLE_START_KIDS = re.compile(r"^\s*(?:boys?|girls?|kids?|youth)\b", re.I)
+MULTIPACK = re.compile(
+    r"\b\d+\s*-?\s*packs?\b|\bpack\s+of\s+\d+\b|\bmulti-?packs?\b",
+    re.I,
+)
+NON_TEE_TITLE = re.compile(
+    r"\b(?:tops?|henley\w*|jersey|turtle\s?neck|roll\s?neck|funnel\s?neck|"
+    r"mock\s?neck|blouses?|bandeau|peplum|wrap|rugby|mesh|bodycon|corset|"
+    r"bustier|crop)\b",
     re.I,
 )
 LONG_SLEEVE = re.compile(
@@ -39,7 +44,7 @@ TAG_CATEGORIES = {
     "short sleeve t-shirts",
     "long sleeve t-shirts",
 }
-REJECTED_TAGS = {"kids", "kid", "kidswear", "youth", "junior", "baby", "children", "boys", "girls"}
+REJECTED_TAGS = {"kids", "kid", "kidswear", "youth", "junior", "children", "boys", "girls"}
 WOMEN_TAG = re.compile(r"\b(?:women|womens|woman|female|ladies|womenswear)\b", re.I)
 MEN_TAG = re.compile(r"\b(?:men|mens|man|male|menswear)\b", re.I)
 UNISEX_TAG = re.compile(r"\bunisex\b", re.I)
@@ -53,24 +58,39 @@ def tee_category(title, product_type="", tags=()) -> str | None:
     tags = [str(tag).strip().lower() for tag in tags]
     if (
         REJECTED_PRODUCT_TYPE.search(product_type)
-        or any(tag in REJECTED_TAGS for tag in tags)
+        or MULTIPACK.search(title)
+        or MULTIPACK.search(product_type)
+        or TITLE_START_KIDS.search(title)
     ):
+        return None
+    tag_tokens = {
+        token
+        for tag in tags
+        for token in re.split(r"[\s:_|/\-]+", tag)
+        if token
+    }
+    if tag_tokens.intersection(REJECTED_TAGS):
         return None
 
     title_without_tee = TEE.sub(" TEE ", title)
-    if NEGATIVE.search(title_without_tee) or KIDS.search(title_without_tee):
+    if NEGATIVE.search(title_without_tee):
         return None
 
     tag_categories = {
         re.sub(r"^category:", "", tag, flags=re.I).strip()
         for tag in tags
     }
-    if not (
-        TEE.search(title)
+    title_has_tee = bool(TEE.search(title))
+    has_tee_evidence = (
+        title_has_tee
         or TEE.search(product_type)
         or tag_categories.intersection(TAG_CATEGORIES)
-    ):
+    )
+    if not has_tee_evidence:
         return None
+    if not title_has_tee:
+        if NEGATIVE.search(TEE.sub(" TEE ", product_type)) or NON_TEE_TITLE.search(title):
+            return None
     return "long sleeve t-shirt" if LONG_SLEEVE.search(title) else "t-shirt"
 
 
@@ -102,14 +122,14 @@ def tee_gender(shop, product, url, collection_gender=None) -> str | None:
         women |= bool(WOMEN_TAG.search(value))
         men |= bool(MEN_TAG.search(value))
         unisex |= bool(UNISEX_TAG.search(value))
-    if unisex or (women and men):
-        return None
-    if women:
+    if women and not men:
         return "w"
-    if men:
+    if men and not women:
         return "m"
     if collection_gender in {"m", "w"}:
         return collection_gender
+    if unisex or (women and men):
+        return None
     if gender_rule in {"men", "women", "selfportrait"}:
         return {"men": "m", "women": "w", "selfportrait": "w"}[gender_rule]
     default = shop.get("tee_default_gender")
