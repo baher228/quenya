@@ -3,6 +3,8 @@ import random
 import re
 from typing import Any
 
+from app.gender_rules import text_gender
+
 _KEY_PREFIX = re.compile(
     r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
     r"category|categories|material|materials|fit|era|brand|brands|slot|"
@@ -103,6 +105,13 @@ def eligible(
     if gender == "menswear" and tags.get("gender") not in {"menswear", "unisex"}:
         return False
     if gender == "womenswear" and tags.get("gender") not in {"womenswear", "unisex"}:
+        return False
+    text_gender_value = text_gender(
+        item.get("title"), "", item.get("source_url")
+    )
+    if gender == "menswear" and text_gender_value == "womenswear":
+        return False
+    if gender == "womenswear" and text_gender_value == "menswear":
         return False
     condition = profile.get("condition_preference", brief.get("condition", "both"))
     if condition != "both" and tags.get("condition") != condition:

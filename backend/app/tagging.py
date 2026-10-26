@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 from app import images
 from app.config import QUENYA_TAGGER
 from app.embedding import MODEL_NAME
+from app.gender_rules import product_type_for_item, text_gender
 from app.llm import CallMeta, call_task
 from app.local_tagger import LOCAL_TAGGER_ID, LocalTagger
 from app.prompts import TAGGER_MODEL, TAGGER_SYSTEM
@@ -127,7 +128,15 @@ def tag_item_with_vectors(
         "tagger", TAGGER_SYSTEM, TAGGER_MODEL, content, ItemTags,
         log_attempts=log_attempts,
     )
-    return ItemTags.model_validate(parsed), meta, None
+    tags = ItemTags.model_validate(parsed)
+    gender = text_gender(
+        item.get("title"),
+        product_type_for_item(item),
+        item.get("source_url"),
+    )
+    if gender is not None:
+        tags = tags.model_copy(update={"gender": gender})
+    return tags, meta, None
 
 
 def tag_item(
