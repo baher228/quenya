@@ -9,6 +9,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from scrapling.fetchers import Fetcher
 
+from app.accessories import accessory_gender, accessory_kind
+
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -241,15 +243,30 @@ def is_clothing(value: str) -> bool:
     )
 
 
+def accepts(shop: dict, text: str, title="", product_type="", tags=()) -> bool:
+    if shop.get("_category_set", "apparel") == "accessories":
+        return accessory_kind(title or text, product_type, tags) is not None
+    return is_clothing(text)
+
+
 def make_row(
     shop: dict, title: str, price: float, image: str, url: str, gender: str, page: str, extra=None
 ):
     from app.sources.listing_readers import infer_category
 
+    extra = dict(extra or {})
     domain = shop["domain"]
     clean_url = canonical_url(url, page, domain)
     image = urljoin(page, str(image or ""))
     availability = str((extra or {}).get("availability") or "InStock")
+    product_type = str(extra.get("product_type") or "")
+    shopify_product = extra.get("shopify_product") or {}
+    tags = shopify_product.get("tags") or extra.get("tags") or ()
+    kind = (
+        accessory_kind(title, product_type, tags)
+        if shop.get("_category_set", "apparel") == "accessories"
+        else None
+    )
     try:
         price = float(price)
     except (TypeError, ValueError):
@@ -260,11 +277,22 @@ def make_row(
         and image.startswith("https://")
         and not re.search(r"__|[{}]", image)
         and clean_url
-        and is_clothing(f"{title} {page}")
+        and accepts(
+            shop,
+            f"{title} {page}",
+            title=title,
+            product_type=product_type,
+            tags=tags,
+        )
         and not re.search(r"OutOfStock|SoldOut|Discontinued|Unavailable", availability, re.I)
     ):
         return None
-    extra = dict(extra or {})
+    row_gender = gender
+    category = None
+    if kind:
+        slot, category = kind
+        label = accessory_gender(title, product_type, clean_url, category)
+        row_gender = {"menswear": "m", "womenswear": "w"}.get(label)
     record = {
         "id": f"{domain}:{hashlib.sha1(clean_url.encode()).hexdigest()[:18]}",
         "source": domain,
@@ -275,11 +303,25 @@ def make_row(
         "size": None,
         "description": None,
         "image_url": image,
-        "gender_hint": gender if gender in {"m", "w"} else None,
+        "gender_hint": row_gender if row_gender in {"m", "w"} else None,
         "condition_hint": "new",
         "availability": extra.pop("availability", "InStock"),
         "query": f"listing:{domain}",
-        "raw_json": {"provenance": "live", "currency": "GBP", "category_page": page, **extra},
+        "raw_json": {
+            "provenance": "live",
+            "currency": "GBP",
+            "category_page": page,
+            **(
+                {
+                    "category_set": "accessories",
+                    "accessory_slot": slot,
+                    "accessory_category": category,
+                }
+                if kind
+                else {}
+            ),
+            **extra,
+        },
     }
     return {
         "url": clean_url,
@@ -287,8 +329,12 @@ def make_row(
         "title": title.strip(),
         "brand": shop.get("brand"),
         "price_gbp": price,
-        "gender": gender if gender in {"m", "w"} else "m",
-        "category": infer_category(title, page),
+        "gender": (
+            row_gender
+            if kind
+            else gender if gender in {"m", "w"} else "m"
+        ),
+        "category": category if kind else infer_category(title, page),
         "condition": "new",
         "image_url_original": image,
         "record": record,

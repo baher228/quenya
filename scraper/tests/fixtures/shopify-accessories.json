@@ -1,0 +1,94 @@
+{
+  "products": [
+    {
+      "id": 101,
+      "handle": "leather-belt",
+      "title": "Leather Belt",
+      "product_type": "Belts",
+      "tags": ["Accessories"],
+      "images": [{"src": "https://images.example.test/belt.jpg"}],
+      "variants": [{"available": true, "price": "55.00"}]
+    },
+    {
+      "id": 102,
+      "handle": "small-tote",
+      "title": "Small Tote Bag",
+      "product_type": "Bags",
+      "tags": ["Accessories"],
+      "images": [{"src": "https://images.example.test/tote.jpg"}],
+      "variants": [{"available": true, "price": "95.00"}]
+    },
+    {
+      "id": 103,
+      "handle": "ribbed-socks",
+      "title": "Ribbed Cotton Socks",
+      "product_type": "Socks",
+      "tags": ["Accessories"],
+      "images": [{"src": "https://images.example.test/socks.jpg"}],
+      "variants": [{"available": true, "price": "18.00"}]
+    },
+    {
+      "id": 104,
+      "handle": "gold-hoops",
+      "title": "Gold Hoop Earrings",
+      "product_type": "Jewellery",
+      "tags": ["Jewellery"],
+      "images": [{"src": "https://images.example.test/earrings.jpg"}],
+      "variants": [{"available": true, "price": "72.00"}]
+    },
+    {
+      "id": 105,
+      "handle": "womens-belt",
+      "title": "Women's Leather Belt",
+      "product_type": "Belts",
+      "tags": ["Accessories"],
+      "images": [{"src": "https://images.example.test/womens-belt.jpg"}],
+      "variants": [{"available": true, "price": "65.00"}]
+    },
+    {
+      "id": 106,
+      "handle": "shampoo-gift-set",
+      "title": "Shampoo Gift Set",
+      "product_type": "Beauty",
+      "tags": ["Beauty"],
+      "images": [{"src": "https://images.example.test/shampoo.jpg"}],
+      "variants": [{"available": true, "price": "30.00"}]
+    },
+    {
+      "id": 107,
+      "handle": "weekender-book",
+      "title": "The Weekender: A Travel Book",
+      "product_type": "Bags",
+      "tags": ["Books"],
+      "images": [{"src": "https://images.example.test/book.jpg"}],
+      "variants": [{"available": true, "price": "24.00"}]
+    },
+    {
+      "id": 108,
+      "handle": "belt-gift-card",
+      "title": "Leather Belt Gift Card",
+      "product_type": "Belts",
+      "tags": ["Gift Cards"],
+      "images": [{"src": "https://images.example.test/gift-card.jpg"}],
+      "variants": [{"available": true, "price": "50.00"}]
+    },
+    {
+      "id": 109,
+      "handle": "sold-out-belt",
+      "title": "Sold Out Belt",
+      "product_type": "Belts",
+      "tags": ["Accessories"],
+      "images": [{"src": "https://images.example.test/sold-out-belt.jpg"}],
+      "variants": [{"available": false, "price": "50.00"}]
+    },
+    {
+      "id": 110,
+      "handle": "kids-beanie",
+      "title": "Kids Beanie",
+      "product_type": "Hats",
+      "tags": ["Kids"],
+      "images": [{"src": "https://images.example.test/kids-beanie.jpg"}],
+      "variants": [{"available": true, "price": "25.00"}]
+    }
+  ]
+}

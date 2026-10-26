@@ -570,7 +570,7 @@ enabled = true
 where = "any"
 group = "women"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted. Accessories probe 2026-10-26: 200 GBP, 78 accepted rows across two accessory pages."
 
 [[shop.pages]]
 gender = "w"
@@ -584,6 +584,12 @@ url = "https://www.ganni.com/en-gb/knitwear/"
 [[shop.pages]]
 gender = "w"
 url = "https://www.ganni.com/en-gb/coats-and-jackets/"
+[[shop.accessory_pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/accessories/"
+[[shop.accessory_pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/accessories/?start=30&sz=30"
 
 [[shop]]
 key = "whistles"
@@ -595,7 +601,7 @@ enabled = true
 where = "any"
 group = "women"
 status = "ok"
-note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted. Accessories probe 2026-10-26: 200 GBP pages, no accepted accessory rows."
 
 [[shop.pages]]
 gender = "w"
@@ -609,7 +615,6 @@ url = "https://www.whistles.com/clothing/coats-jackets/"
 [[shop.pages]]
 gender = "w"
 url = "https://www.whistles.com/clothing/tops/"
-
 [[shop]]
 key = "nike"
 brand = "Nike"
@@ -870,7 +875,7 @@ enabled = true
 where = "any"
 group = "premium"
 status = "ok"
-note = "Probe 2026-10-25: 44 GBP clothing rows from UK category listings."
+note = "Probe 2026-10-25: 44 GBP clothing rows from UK category listings. Accessories probe 2026-10-26: 200 GBP, 41 accepted rows across two accessory pages."
 
 [[shop.pages]]
 gender = "m"
@@ -878,6 +883,12 @@ url = "https://www.hugoboss.com/uk/men-clothing/"
 [[shop.pages]]
 gender = "w"
 url = "https://www.hugoboss.com/uk/women-clothing/"
+[[shop.accessory_pages]]
+gender = "m"
+url = "https://www.hugoboss.com/uk/men-accessories/"
+[[shop.accessory_pages]]
+gender = "w"
+url = "https://www.hugoboss.com/uk/women-accessories/"
 
 [[shop]]
 key = "paulsmith"
@@ -1432,3 +1443,228 @@ url = "https://shop.mango.com/gb/en/c/women/dresses-and-jumpsuits_d0c8fdc1"
 [[shop.pages]]
 gender = "w"
 url = "https://shop.mango.com/gb/en/c/women/jackets_0d4b5eb2"
+
+[[shop]]
+key = "cambridgesatchel"
+brand = "Cambridge Satchel"
+host = "www.cambridgesatchel.com"
+domain = "cambridgesatchel.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 158 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "allycapellino"
+brand = "Ally Capellino"
+host = "allycapellino.co.uk"
+domain = "allycapellino.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 96 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "bennettwinch"
+brand = "Bennett Winch"
+host = "www.bennettwinch.com"
+domain = "bennettwinch.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 59 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "strathberry"
+brand = "Strathberry"
+host = "www.strathberry.com"
+domain = "strathberry.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "error"
+note = "Accessories probe 2026-10-26: /meta.json returned HTTP 404; no Shopify feed."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "tusting"
+brand = "Tusting"
+host = "www.tusting.co.uk"
+domain = "tusting.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 58 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "finlayco"
+brand = "Finlay & Co"
+host = "www.finlayandco.com"
+domain = "finlayandco.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 117 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "larssonjennings"
+brand = "Larsson & Jennings"
+host = "www.larssonjennings.com"
+domain = "larssonjennings.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "non_gbp"
+note = "Accessories probe 2026-10-26: Shopify meta.json currency was USD; not enabled."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "missoma"
+brand = "Missoma"
+host = "www.missoma.com"
+domain = "missoma.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 196 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "astridandmiyu"
+brand = "Astrid & Miyu"
+host = "www.astridandmiyu.com"
+domain = "astridandmiyu.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 31 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "edgeofember"
+brand = "Edge of Ember"
+host = "www.edgeofember.com"
+domain = "edgeofember.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 240 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "daisylondon"
+brand = "Daisy London"
+host = "www.daisyjewellery.com"
+domain = "daisyjewellery.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 60 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "londonsockcompany"
+brand = "London Sock Company"
+host = "www.londonsockcompany.com"
+domain = "londonsockcompany.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 108 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "corgi"
+brand = "Corgi"
+host = "www.corgisocks.com"
+domain = "corgisocks.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 192 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "christys"
+brand = "Christys' London"
+host = "www.christys-hats.com"
+domain = "christys-hats.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 65 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "lockandco"
+brand = "Lock & Co. Hatters"
+host = "www.lockhatters.com"
+domain = "lockhatters.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "accessories"
+category_sets = ["accessories"]
+status = "ok"
+note = "Accessories probe 2026-10-26: GBP Shopify feed, 180 accepted in-stock accessory rows."
+max_pages = 20
+max_requests = 30

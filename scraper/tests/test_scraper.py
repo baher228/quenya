@@ -3,10 +3,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import scrape
 import store
 from adapters import burberry, common, jsonld, nike, sfcc, shopify, ssense, tiles
 from adapters.common import ShopSession, make_row, unique_rows
-from scrape import _images_broken, split_batches
+from scrape import _images_broken, _shard_shops, _shop_filter, split_batches
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WORKER_KEYS = {
@@ -102,6 +103,88 @@ def test_shopify_requires_gbp_and_reads_available_minimum_with_pagination():
     assert len(fake.requests) == 3
     assert "page=2" in fake.requests[-1]["url"]
     assert_worker_row(row)
+
+
+def test_shopify_accessory_mode_filters_exclusions_and_keeps_apparel_unchanged():
+    product_page = fixture("shopify-accessories.json")
+    accessories = shop(
+        "test",
+        "Test",
+        "shopify",
+        "example-shop.test",
+        max_pages=1,
+        _category_set="accessories",
+    )
+    rows = shopify.scrape(
+        accessories,
+        FakeSession([fixture("shopify-meta-gbp.json"), product_page]),
+    )
+
+    assert [row["title"] for row in rows] == [
+        "Leather Belt",
+        "Small Tote Bag",
+        "Ribbed Cotton Socks",
+        "Gold Hoop Earrings",
+        "Women's Leather Belt",
+    ]
+    assert [row["record"]["raw_json"]["accessory_slot"] for row in rows] == [
+        "accessory",
+        "bag",
+        "accessory",
+        "accessory",
+        "accessory",
+    ]
+    assert rows[-1]["gender"] == "w"
+    assert rows[0]["gender"] is None
+    assert rows[3]["record"]["raw_json"]["accessory_category"] == "earrings"
+    assert all(row["record"]["raw_json"]["category_set"] == "accessories" for row in rows)
+    for row in rows:
+        assert_worker_row(row)
+
+    apparel = shop("test", "Test", "shopify", "example-shop.test", max_pages=1)
+    apparel_rows = shopify.scrape(
+        apparel,
+        FakeSession([fixture("shopify-meta-gbp.json"), product_page]),
+    )
+    assert [row["title"] for row in apparel_rows] == ["Shampoo Gift Set"]
+    assert all(common.accessory_kind(row["title"]) is None for row in apparel_rows)
+
+
+def test_accessory_jsonld_pages_and_tile_acceptance():
+    body = """<a href="/product/silk-scarf.html" title="Silk Scarf">
+      <span>Silk Scarf £42</span>
+      <img src="https://images.example.test/silk-scarf.jpg">
+    </a>
+    <a href="/product/shampoo.html" title="Shampoo">
+      <span>Shampoo £18</span>
+      <img src="https://images.example.test/shampoo.jpg">
+    </a>"""
+    config = shop(
+        "whistles",
+        "Whistles",
+        "jsonld",
+        "whistles.com",
+        _category_set="accessories",
+        pages=[{"gender": "w", "url": "https://www.whistles.com/clothing/"}],
+        accessory_pages=[
+            {"gender": "w", "url": "https://www.whistles.com/accessories/"},
+            {
+                "gender": "w",
+                "url": "https://www.whistles.com/accessories/?start=60&sz=60",
+            },
+        ],
+    )
+
+    fake = FakeSession([body, body])
+    rows = jsonld.scrape(config, fake)
+    assert [row["title"] for row in rows] == ["Silk Scarf"]
+    assert fake.requests[0]["url"] == "https://www.whistles.com/accessories/"
+    assert rows[0]["record"]["raw_json"]["accessory_category"] == "scarf"
+    probe = FakeSession([body, body])
+    assert jsonld.scrape(config, probe, probe=True)
+    assert len(probe.requests) == 2
+    assert common.accepts(config, "Gold hoop earrings", title="Gold hoop earrings")
+    assert not common.accepts(config, "Shampoo", title="Shampoo")
 
 
 def test_shopify_reads_three_pages_without_reusing_product_handle():
@@ -689,3 +772,254 @@ def test_legacy_worker_upload_uses_shop_config(monkeypatch, tmp_path):
     worker.run(SimpleNamespace(time_budget=1, shops=None, max_pages=0, dry_run=False))
 
     assert uploads == [{"domain": "example.test"}]
+
+
+def test_accessory_shop_selection_and_sharding():
+    shops = [
+        shop("shopify", adapter="shopify", enabled=True),
+        shop(
+            "jsonld-accessories",
+            adapter="jsonld",
+            enabled=True,
+            category_sets=["accessories"],
+            accessory_pages=[{"url": "https://example.test/accessories"}],
+        ),
+        shop(
+            "jsonld-apparel",
+            adapter="jsonld",
+            enabled=True,
+            pages=[{"url": "https://example.test/clothing"}],
+        ),
+        shop(
+            "accessory-only",
+            adapter="shopify",
+            enabled=True,
+            category_sets=["accessories"],
+        ),
+    ]
+    accessories_args = SimpleNamespace(
+        shops=None,
+        group=None,
+        category_set="accessories",
+        uk=False,
+        all_enabled=False,
+    )
+    apparel_args = SimpleNamespace(
+        shops=None,
+        group=None,
+        category_set="apparel",
+        uk=False,
+        all_enabled=False,
+    )
+
+    assert [
+        item["key"] for item in _shop_filter(shops, accessories_args)
+    ] == ["shopify", "jsonld-accessories", "accessory-only"]
+    assert [
+        item["key"] for item in _shop_filter(shops, apparel_args)
+    ] == ["shopify", "jsonld-apparel"]
+    assert [item["key"] for item in _shard_shops(shops, "1/2")] == [
+        "jsonld-accessories",
+        "accessory-only",
+    ]
+    with pytest.raises(ValueError, match="0 <= K < N"):
+        _shard_shops(shops, "2/2")
+
+
+def test_resume_loads_url_and_record_id_dedupes_and_skips_done_shops(tmp_path, monkeypatch):
+    resume_dir = tmp_path / "resume"
+    resume_dir.mkdir()
+    existing_url_row = make_row(
+        shop(domain="example.test", _category_set="accessories"),
+        "Tote Bag",
+        50,
+        "https://images.example.test/tote.jpg",
+        "https://example.test/products/known-url",
+        None,
+        "https://example.test/accessories",
+    )
+    existing_url_row["record"]["id"] = "url-record"
+    existing_id_row = make_row(
+        shop(domain="example.test", _category_set="accessories"),
+        "Leather Belt",
+        40,
+        "https://images.example.test/belt.jpg",
+        "https://example.test/products/known-id",
+        None,
+        "https://example.test/accessories",
+    )
+    existing_id_row["record"]["id"] = "known-record-id"
+    (resume_dir / "all.jsonl").write_text(
+        json.dumps(existing_url_row) + "\n", encoding="utf-8"
+    )
+    (resume_dir / "previous-shop.jsonl").write_text(
+        json.dumps(existing_id_row) + "\n", encoding="utf-8"
+    )
+    (resume_dir / "progress.json").write_text(
+        json.dumps({"category_set": "accessories", "done": ["done-shop"]}),
+        encoding="utf-8",
+    )
+
+    duplicate_url = make_row(
+        shop(domain="example.test", _category_set="accessories"),
+        "Different Tote Bag",
+        60,
+        "https://images.example.test/other-tote.jpg",
+        existing_url_row["url"],
+        None,
+        "https://example.test/accessories",
+    )
+    duplicate_url["record"]["id"] = "different-record"
+    duplicate_id = make_row(
+        shop(domain="example.test", _category_set="accessories"),
+        "Another Belt",
+        45,
+        "https://images.example.test/another-belt.jpg",
+        "https://example.test/products/another-belt",
+        None,
+        "https://example.test/accessories",
+    )
+    duplicate_id["record"]["id"] = "known-record-id"
+    fresh = make_row(
+        shop(domain="example.test", _category_set="accessories"),
+        "Wool Scarf",
+        35,
+        "https://images.example.test/scarf.jpg",
+        "https://example.test/products/fresh-scarf",
+        None,
+        "https://example.test/accessories",
+    )
+    fresh["record"]["id"] = "fresh-record-id"
+    emitted = [duplicate_url, duplicate_id, fresh]
+    called = []
+
+    def fake_adapter(config, session):
+        called.append(config["key"])
+        assert config["_category_set"] == "accessories"
+        session.emit(emitted)
+
+    monkeypatch.setitem(scrape.REGISTRY, "test", fake_adapter)
+    args = SimpleNamespace(
+        category_set="accessories",
+        shard=None,
+        resume=str(resume_dir),
+        known=None,
+        time_budget=1,
+        upload=False,
+        workers=1,
+        max_pages=0,
+        max_requests=10,
+        delay=0,
+        jitter=0,
+        check_images=0,
+        batch_size=10,
+    )
+
+    summary = scrape._run(
+        [
+            shop(key="done-shop", adapter="test", domain="example.test"),
+            shop(key="target", adapter="test", domain="example.test"),
+        ],
+        args,
+    )
+
+    assert called == ["target"]
+    assert summary["total_rows"] == 2
+    final_rows = [json.loads(line) for line in (resume_dir / "all.jsonl").read_text().splitlines()]
+    assert {row["url"] for row in final_rows} == {
+        existing_url_row["url"],
+        fresh["url"],
+    }
+    assert len({row["record"]["id"] for row in final_rows}) == len(final_rows)
+    progress = json.loads((resume_dir / "progress.json").read_text())
+    assert set(progress["done"]) == {"done-shop", "target"}
+
+
+def test_known_jsonl_preseeds_record_ids(tmp_path, monkeypatch):
+    monkeypatch.setattr(scrape, "ROOT", tmp_path)
+    known_path = tmp_path / "known.jsonl"
+    known = make_row(
+        shop(domain="example.test"),
+        "Cotton Coat",
+        30,
+        "https://images.example.test/coat.jpg",
+        "https://example.test/products/known",
+        "m",
+        "https://example.test/category",
+    )
+    known["record"]["id"] = "known-record-id"
+    known_path.write_text(json.dumps(known) + "\n", encoding="utf-8")
+    incoming = dict(known)
+    incoming["url"] = "https://example.test/products/different"
+    incoming["record"] = dict(known["record"], id="known-record-id")
+
+    monkeypatch.setitem(
+        scrape.REGISTRY,
+        "test",
+        lambda _shop, session: session.emit([incoming]),
+    )
+    args = SimpleNamespace(
+        category_set="apparel",
+        shard=None,
+        resume=None,
+        known=[str(known_path)],
+        time_budget=1,
+        upload=False,
+        workers=1,
+        max_pages=0,
+        max_requests=10,
+        delay=0,
+        jitter=0,
+        check_images=0,
+        batch_size=10,
+    )
+
+    summary = scrape._run(
+        [shop(key="known-test", adapter="test", domain="example.test")],
+        args,
+    )
+
+    assert summary["total_rows"] == 0
+
+
+def test_markdown_handles_unisex_accessories_with_no_gender():
+    summary = {
+        "run_id": "test",
+        "total_rows": 2,
+        "shops": [
+            {
+                "key": "accessories",
+                "status": "ok",
+                "requests": [],
+                "rows": 2,
+                "gender_split": {None: 1, "w": 1},
+                "price_min": 10,
+                "price_max": 20,
+                "sample": {},
+                "reason": "",
+            }
+        ],
+    }
+    summary = json.loads(json.dumps(summary))
+
+    markdown = scrape._markdown(summary)
+
+    assert "unknown 1, w 1" in markdown
+
+
+def test_resume_refuses_a_different_category_set(tmp_path):
+    resume_dir = tmp_path / "resume"
+    resume_dir.mkdir()
+    (resume_dir / "progress.json").write_text(
+        json.dumps({"category_set": "apparel", "done": []}),
+        encoding="utf-8",
+    )
+    args = SimpleNamespace(
+        category_set="accessories",
+        shard=None,
+        resume=str(resume_dir),
+        known=None,
+    )
+
+    with pytest.raises(ValueError, match="cannot resume"):
+        scrape._run([], args)
