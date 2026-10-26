@@ -61,7 +61,7 @@ def run_persona(persona: dict[str, Any], *, router: bool = False) -> dict[str, A
         db.create_profile(profile_id, brief, kind="warmup", active=False)
     profile_row = db.get_profile(profile_id, kind="warmup")
     snapshot_items = [
-        item for item in db.list_items(limit=5000)
+        item for item in db.live_catalogue()
         if not (item.get("query") or "").startswith("live:")
     ]
     rounds = []

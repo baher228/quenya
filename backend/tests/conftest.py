@@ -17,3 +17,10 @@ def fresh_postgres_schema(monkeypatch):
         connection.execute("CREATE SCHEMA quenya")
     db._INITIALIZED_DATABASES.clear()
     db.init_db()
+
+
+@pytest.fixture(autouse=True)
+def clear_live_catalogue_cache():
+    db.invalidate_live_catalogue()
+    yield
+    db.invalidate_live_catalogue()

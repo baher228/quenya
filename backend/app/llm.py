@@ -24,6 +24,7 @@ from app.config import (
     PROMPT_VERSION,
     QUENYA_CURSOR_BIN,
     QUENYA_CURSOR_MODEL,
+    QUENYA_CURSOR_STYLIST_MODEL,
     QUENYA_CURSOR_TIMEOUT_S,
     QUENYA_LLM_API_KEY,
     QUENYA_LLM_BASE_URL,
@@ -632,7 +633,11 @@ def _call_cursor_task(
 ) -> tuple[BaseModel, CallMeta]:
     if log_attempts:
         db.init_db()
-    model = QUENYA_CURSOR_MODEL
+    model = (
+        QUENYA_CURSOR_STYLIST_MODEL
+        if task_name == "stylist"
+        else QUENYA_CURSOR_MODEL
+    )
     request_ids: list[str | None] = []
     transient_retries = 0
     validation_retries = 0

@@ -9,9 +9,10 @@ from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock
+from time import monotonic
 from typing import Any
 
-from app.config import DB_PATH
+from app.config import DB_PATH, QUENYA_CATALOGUE_TTL_S
 from app.rank import tags_for, tokens
 
 SCHEMA = """
@@ -205,6 +206,9 @@ ON deck_events(profile_id, created_at);
 """
 _INIT_LOCK = Lock()
 _INITIALIZED_DATABASES: set[str] = set()
+_LIVE_CATALOGUE_LOCK = Lock()
+_LIVE_CATALOGUE_CACHE: list[dict[str, Any]] | None = None
+_LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
 logger = logging.getLogger(__name__)
 
 
@@ -666,6 +670,49 @@ def list_items(
         if len(result) == limit:
             break
     return result
+
+
+def invalidate_live_catalogue() -> None:
+    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+    with _LIVE_CATALOGUE_LOCK:
+        _LIVE_CATALOGUE_CACHE = None
+        _LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
+
+
+def live_catalogue() -> list[dict[str, Any]]:
+    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+    init_db()
+    with _LIVE_CATALOGUE_LOCK:
+        if (
+            _LIVE_CATALOGUE_CACHE is not None
+            and monotonic() < _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+        ):
+            return [dict(item) for item in _LIVE_CATALOGUE_CACHE]
+
+        with db_connection() as connection:
+            rows = connection.execute(
+                """SELECT id, source, source_url, title, brand, price_gbp, size,
+                          description, image_url, image_path, gender_hint,
+                          condition_hint, availability, query, fetched_at,
+                          tags_json, tags_request_id, tagged_at, tag_error
+                   FROM items
+                   WHERE tags_json IS NOT NULL
+                     AND (availability IS NULL OR
+                          (availability NOT LIKE '%OutOfStock'
+                           AND availability NOT LIKE '%SoldOut'
+                           AND availability NOT LIKE '%Discontinued'))
+                   ORDER BY fetched_at DESC"""
+            ).fetchall()
+        catalogue = []
+        for row in rows:
+            item = dict(row)
+            item["tags"] = json.loads(item["tags_json"])
+            catalogue.append(item)
+        _LIVE_CATALOGUE_CACHE = catalogue
+        _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
+            monotonic() + QUENYA_CATALOGUE_TTL_S
+        )
+        return [dict(item) for item in catalogue]
 
 
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:

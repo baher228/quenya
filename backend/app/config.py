@@ -27,6 +27,7 @@ QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
 QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )
+QUENYA_CATALOGUE_TTL_S = int(os.getenv("QUENYA_CATALOGUE_TTL_S", "300"))
 QUENYA_IMAGE_MAX_SIDE = int(os.getenv("QUENYA_IMAGE_MAX_SIDE", "1600"))
 QUENYA_IMAGE_QUALITY = int(os.getenv("QUENYA_IMAGE_QUALITY", "85"))
 QUENYA_IMAGE_STORE = os.getenv("QUENYA_IMAGE_STORE", "supabase").strip().lower()
@@ -38,6 +39,9 @@ QUENYA_R2_PUBLIC_URL = os.getenv("QUENYA_R2_PUBLIC_URL", "").rstrip("/")
 CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "")
 QUENYA_CURSOR_MODEL = os.getenv(
     "QUENYA_CURSOR_MODEL", "gemini-3.7-flash-high"
+)
+QUENYA_CURSOR_STYLIST_MODEL = os.getenv(
+    "QUENYA_CURSOR_STYLIST_MODEL", "gpt-5.3-codex-low-fast"
 )
 QUENYA_CURSOR_BIN = os.getenv("QUENYA_CURSOR_BIN", "")
 QUENYA_CURSOR_TIMEOUT_S = os.getenv("QUENYA_CURSOR_TIMEOUT_S", "120")

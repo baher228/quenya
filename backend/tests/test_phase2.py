@@ -411,7 +411,7 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
         "latest_taste",
         lambda _profile_id: {"version": 1, "profile": profile},
     )
-    monkeypatch.setattr(phase2_api.db, "list_items", lambda **_kwargs: items)
+    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: items)
     monkeypatch.setattr(phase2_api.db, "save_outfit", lambda *_args, **_kwargs: "outfit-1")
     calls = []
 

@@ -185,6 +185,46 @@ def test_cursor_parses_fenced_json(monkeypatch, tmp_path):
     assert meta.completion_tokens == 45
 
 
+def test_cursor_stylist_uses_dedicated_model_and_logs_it(monkeypatch, tmp_path):
+    count_path, capture_path = configure_cursor(
+        monkeypatch,
+        tmp_path,
+        [cursor_response(json.dumps(VALID_TAGS))],
+    )
+    monkeypatch.setattr(
+        llm, "QUENYA_CURSOR_STYLIST_MODEL", "gpt-5.3-codex-low-fast"
+    )
+
+    llm.call_task("stylist", "system", "ignored-model", "input", ItemTags)
+
+    captured = json.loads(capture_path.read_text(encoding="utf-8").splitlines()[0])
+    argv = captured["argv"]
+    assert argv[argv.index("--model") + 1] == "gpt-5.3-codex-low-fast"
+    assert len(count_path.read_text(encoding="utf-8").splitlines()) == 1
+    with db.db_connection() as connection:
+        row = connection.execute(
+            "SELECT task, model_requested FROM llm_calls"
+        ).fetchone()
+    assert tuple(row) == ("stylist", "gpt-5.3-codex-low-fast")
+
+
+def test_cursor_router_uses_default_cursor_model(monkeypatch, tmp_path):
+    _count_path, capture_path = configure_cursor(
+        monkeypatch,
+        tmp_path,
+        [cursor_response(json.dumps(VALID_TAGS))],
+    )
+    monkeypatch.setattr(
+        llm, "QUENYA_CURSOR_STYLIST_MODEL", "stylist-only-model"
+    )
+
+    llm.call_task("router", "system", "ignored-model", "input", ItemTags)
+
+    captured = json.loads(capture_path.read_text(encoding="utf-8").splitlines()[0])
+    argv = captured["argv"]
+    assert argv[argv.index("--model") + 1] == "gemini-test"
+
+
 def test_cursor_extracts_json_from_surrounding_prose(monkeypatch, tmp_path):
     response = cursor_response(f"Here is the result: {json.dumps(VALID_TAGS)} Thanks.")
     configure_cursor(monkeypatch, tmp_path, [response])
