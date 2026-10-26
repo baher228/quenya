@@ -2,6 +2,10 @@
 
 The API container listens on port 8000 and is published only to `127.0.0.1:8100`; Nginx handles public HTTP(S). The frontend remains on Vercel.
 
+## Cloudflare R2 display images
+
+Display images continue to use Supabase by default. To use R2, create the `quenya` bucket, set `QUENYA_IMAGE_STORE=r2`, the account ID, access key, secret key and public URL in the env file, then run `python scripts/backfill_full_res_images.py` from `backend/`. User-uploaded inspiration photos remain in Supabase.
+
 ## Deploy
 
 1. Install Docker Compose, Nginx and Certbot on the host. Create `/etc/quenya/quenya.env` from `quenya.env.example`, fill in the Supabase and Cursor settings, and restrict it:

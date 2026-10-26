@@ -33,12 +33,12 @@ def _image_input(item: dict[str, Any]) -> str | Image.Image | None:
         if path.is_file():
             return str(path)
         if (
-            images.storage_enabled()
+            images.display_storage_enabled()
             and not path.is_absolute()
             and not str(stored_path).startswith(("http://", "https://", "data:"))
         ):
             try:
-                content = images.download_storage_object(str(stored_path))
+                content = images.download_display_object(str(stored_path))
                 with Image.open(io.BytesIO(content)) as opened:
                     return ImageOps.exif_transpose(opened).convert("RGB").copy()
             except (httpx.HTTPError, OSError, RuntimeError):

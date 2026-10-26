@@ -27,6 +27,14 @@ QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
 QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )
+QUENYA_IMAGE_MAX_SIDE = int(os.getenv("QUENYA_IMAGE_MAX_SIDE", "1600"))
+QUENYA_IMAGE_QUALITY = int(os.getenv("QUENYA_IMAGE_QUALITY", "85"))
+QUENYA_IMAGE_STORE = os.getenv("QUENYA_IMAGE_STORE", "supabase").strip().lower()
+QUENYA_R2_ACCOUNT_ID = os.getenv("QUENYA_R2_ACCOUNT_ID", "")
+QUENYA_R2_ACCESS_KEY_ID = os.getenv("QUENYA_R2_ACCESS_KEY_ID", "")
+QUENYA_R2_SECRET_ACCESS_KEY = os.getenv("QUENYA_R2_SECRET_ACCESS_KEY", "")
+QUENYA_R2_BUCKET = os.getenv("QUENYA_R2_BUCKET", "quenya")
+QUENYA_R2_PUBLIC_URL = os.getenv("QUENYA_R2_PUBLIC_URL", "").rstrip("/")
 CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "")
 QUENYA_CURSOR_MODEL = os.getenv(
     "QUENYA_CURSOR_MODEL", "gemini-3.7-flash-high"

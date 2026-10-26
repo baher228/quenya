@@ -17,7 +17,13 @@ from app.config import (
     QUENYA_LLM_PROVIDER,
     TAVILY_API_KEY,
 )
-from app.images import cached_image_path, storage_enabled, storage_public_url
+from app.images import (
+    cached_image_path,
+    r2_enabled,
+    r2_public_url,
+    storage_enabled,
+    storage_public_url,
+)
 from app.llm import TaskError
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
@@ -188,6 +194,11 @@ def get_image(filename: str):
         path = cached_image_path(key)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Image not found") from exc
+    if r2_enabled():
+        return RedirectResponse(
+            r2_public_url(f"{key}.jpg"),
+            status_code=302,
+        )
     if storage_enabled():
         return RedirectResponse(
             storage_public_url(f"{key}.jpg"),
