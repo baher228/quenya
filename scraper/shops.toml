@@ -1811,10 +1811,10 @@ where = "any"
 group = "streetwear"
 category_sets = ["tees"]
 status = "pending"
-note = "Tee probe 2026-10-26: picked route-one-t-shirts (63 products), largest general T-shirt collection in collections.json pages 1-4."
+note = "Tee probe 2026-10-26: picked skate-t-shirts (137 products), largest general T-shirt collection in collections.json pages 1-4."
 gender_rule = "default"
 brand_from_vendor = true
-tee_collections = [{ handle = "route-one-t-shirts" }]
+tee_collections = [{ handle = "skate-t-shirts" }]
 max_requests = 40
 
 [[shop]]
