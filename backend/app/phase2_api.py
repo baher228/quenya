@@ -186,6 +186,8 @@ def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+DECK_CANDIDATE_LIMIT = 5000
+
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result = dict(item)
     tags = result.get("tags")
@@ -715,7 +717,8 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         ).fetchall()
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
-    candidates = db.live_catalogue()
+    # Full catalogue makes the deck ~2x slower until ranking is optimised.
+    candidates = db.live_catalogue()[:DECK_CANDIDATE_LIMIT]
     configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
     arm = (
         configured_arm
