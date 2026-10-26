@@ -1,6 +1,9 @@
 import base64
 import json
+import os
 import stat
+import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -268,6 +271,55 @@ def test_cursor_timeout_retries_once_then_raises(monkeypatch, tmp_path):
         llm.call_task("tagger", "system", "model", "listing", ItemTags)
 
     assert len(count_path.read_text(encoding="utf-8").splitlines()) == 2
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not Path("/proc").is_dir(),
+    reason="requires POSIX process groups and procfs",
+)
+def test_cursor_kills_background_worker_after_response(monkeypatch, tmp_path):
+    configure_cursor(
+        monkeypatch,
+        tmp_path,
+        [cursor_response(json.dumps(VALID_TAGS))],
+    )
+    binary = tmp_path / "cursor-agent"
+    pid_path = tmp_path / "sleep.pid"
+    script = """#!/bin/sh
+sleep 300 >/dev/null 2>&1 &
+echo "$!" > "$FAKE_SLEEP_PID_FILE"
+printf '%s\\n' "$FAKE_CURSOR_OUTPUT"
+"""
+    binary.write_text(script, encoding="utf-8")
+    binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_BIN", str(binary))
+    monkeypatch.setenv("FAKE_SLEEP_PID_FILE", str(pid_path))
+    monkeypatch.setenv(
+        "FAKE_CURSOR_OUTPUT",
+        json.dumps(cursor_response(json.dumps(VALID_TAGS))),
+    )
+
+    parsed, _meta = llm.call_task("tagger", "system", "model", "listing", ItemTags)
+
+    assert parsed.slot == "outerwear"
+    child_pid = int(pid_path.read_text(encoding="utf-8"))
+
+    def process_is_running(pid):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()[2]
+        except FileNotFoundError:
+            return False
+        return state not in {"Z", "X"}
+
+    deadline = time.monotonic() + 2
+    while process_is_running(child_pid) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if process_is_running(child_pid):
+        pytest.fail(f"background sleep process {child_pid} is still running")
 
 
 def test_cursor_data_url_is_saved_and_named_in_prompt(monkeypatch, tmp_path):

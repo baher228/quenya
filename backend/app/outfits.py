@@ -181,6 +181,19 @@ def build_pool(
         )
         if is_outfit_eligible(item)
     ]
+    if brief.get("looking_for") == "pieces":
+        ranked_ids = {item["id"] for item in ranked}
+        outfit_ranked = rank_items(
+            items,
+            {**brief, "looking_for": "outfits"},
+            profile,
+            exclude_ids=set(exclude_ids),
+            core_profile=core_profile,
+        )
+        for item in outfit_ranked:
+            if item["id"] not in ranked_ids and is_outfit_eligible(item):
+                ranked.append(item)
+                ranked_ids.add(item["id"])
     by_slot: dict[str, list[dict[str, Any]]] = {}
     by_role: dict[str, list[dict[str, Any]]] = {}
     for item in ranked:

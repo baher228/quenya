@@ -4,6 +4,7 @@ import mimetypes
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -395,6 +396,13 @@ def _cursor_timeout() -> float:
     return timeout
 
 
+def _kill_cursor_process_group(process_id: int) -> None:
+    try:
+        os.killpg(process_id, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def _auth_error(message: str) -> bool:
     lowered = message.lower()
     return any(
@@ -480,14 +488,26 @@ def _cursor_once(
                 "json",
                 prompt,
             ]
-            completed = subprocess.run(
+            proc = subprocess.Popen(
                 argv,
                 cwd=directory,
                 env=os.environ.copy(),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
-                check=False,
+                start_new_session=True,
+            )
+            try:
+                try:
+                    stdout, stderr = proc.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    _kill_cursor_process_group(proc.pid)
+                    proc.communicate()
+                    raise
+            finally:
+                _kill_cursor_process_group(proc.pid)
+            completed = subprocess.CompletedProcess(
+                argv, proc.returncode, stdout, stderr
             )
         except subprocess.TimeoutExpired as exc:
             message = f"cursor-agent timed out after {timeout:g}s"
