@@ -934,7 +934,7 @@ def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
         [shoe_outfit], pool, 1, [], 100, include_shoes=False
     )
     assert not valid
-    shoe_free = {**shoe_outfit, "piece_ids": ["top", "bottom", "dress"]}
+    shoe_free = {**shoe_outfit, "piece_ids": ["top", "bottom"]}
     valid, errors = validate_outfits(
         [shoe_free], pool, 1, [], 100, include_shoes=False
     )

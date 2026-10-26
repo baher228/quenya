@@ -22,7 +22,7 @@ from app.embedding_ranker import (
     rank_candidates,
 )
 from app.llm import TaskError, call_task
-from app.outfits import build_pool, stylist_user_content, validate_outfits
+from app.outfits import build_pool, layer_role, stylist_user_content, validate_outfits
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import add_exploration, make_deck, rank_items, score_item, secondhand_share, tags_for
 from app.routing import route_input
@@ -1007,7 +1007,9 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
             current,
             core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
         )
-        if tags_for(item).get("slot") == slot and item["id"] not in outfit["piece_ids"]
+        if tags_for(item).get("slot") == slot
+        and layer_role(item) == layer_role(replaced)
+        and item["id"] not in outfit["piece_ids"]
     ]
     replacement = next(
         (

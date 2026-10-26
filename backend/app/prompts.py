@@ -4,7 +4,7 @@ Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-25.1"
+PROMPT_VERSION = "2026-10-25.2"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -54,12 +54,12 @@ Rules:
 Return only JSON matching the schema."""
 
 STYLIST_SYSTEM = """You are the stylist for Quenya, a UK fashion discovery app.
-You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, price and tags.
+You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, layer role (or -), price and tags.
 Build complete outfits from the pool only.
 
 Rules:
 - Use only ids that appear in the pool. Never invent items.
-- Each outfit has 3-5 pieces with at most one piece per slot, except accessory (max 2). It needs shoes and either a dress or both a top/knitwear and a bottom, unless the request says otherwise.
+- Each outfit has one bottom plus exactly one base layer worn against the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, cardigan, quarter-zip or overshirt) and/or one outer layer (coat, jacket, blazer or gilet). Never use two pieces with the same layer role. Use at most 4 clothing pieces, then shoes unless the request says no shoes, an optional bag and 0-2 accessories.
 - If the request lists locked piece ids, every outfit must include all of them.
 - Keep each outfit's total price at or under the profile's price_ceiling_gbp.
 - Follow every profile rule. Never use anything that matches the profile's avoids.
