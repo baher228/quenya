@@ -1,7 +1,9 @@
 import argparse
 import io
 import json
+import logging
 import os
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -12,6 +14,8 @@ from app import db, images
 from app.sources import STOCK_PHRASE, is_unavailable
 from app.tagging import tag_item
 
+LOG = logging.getLogger(__name__)
+
 
 def _connect():
     import psycopg
@@ -20,7 +24,7 @@ def _connect():
     dsn = os.getenv("SUPABASE_DB_URL")
     if not dsn:
         raise RuntimeError("SUPABASE_DB_URL is required")
-    return psycopg.connect(dsn, row_factory=dict_row)
+    return psycopg.connect(dsn, row_factory=dict_row, prepare_threshold=None)
 
 
 def _pending_rows(limit: int | None) -> list[dict[str, Any]]:
@@ -112,6 +116,172 @@ def _is_stock_row(row: dict[str, Any], record: dict[str, Any] | None = None) -> 
         isinstance(title, str) and bool(STOCK_PHRASE.fullmatch(title.strip()))
         for title in (row.get("title"), record.get("title"))
     )
+
+
+def run_insert_only_file_import(
+    paths: list[str | os.PathLike[str]],
+    connection: Any,
+    known_urls: set[str],
+    *,
+    max_new_items: int | None = None,
+    tag_failure_streak: int = 0,
+    max_tag_failure_streak: int = 20,
+) -> dict[str, Any]:
+    """Tag first and insert only into quenya.items without running schema setup."""
+    inserted = tagged = skipped = skipped_stock = tag_failed = failed = 0
+    inserted_urls: list[str] = []
+    for path in paths:
+        with open(path, encoding="utf-8") as stream:
+            for line_number, line in enumerate(stream, 1):
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid JSON in {path}:{line_number}") from exc
+                if not isinstance(row, dict):
+                    raise ValueError(f"Expected an object in {path}:{line_number}")
+                url = str(row.get("url") or "")
+                if not url or url in known_urls:
+                    skipped += 1
+                    continue
+                record = row.get("record")
+                if isinstance(record, str):
+                    try:
+                        record = json.loads(record)
+                    except json.JSONDecodeError:
+                        failed += 1
+                        continue
+                if not isinstance(record, dict):
+                    failed += 1
+                    continue
+                if _is_stock_row(row, record):
+                    skipped += 1
+                    skipped_stock += 1
+                    continue
+                image_url = row.get("image_url_original") or record.get("image_url")
+                try:
+                    price = float(row.get("price_gbp", record.get("price_gbp")))
+                except (TypeError, ValueError):
+                    failed += 1
+                    continue
+                currency = str(row.get("currency") or record.get("currency") or "GBP").upper()
+                if (
+                    not image_url
+                    or not str(image_url).startswith(("http://", "https://"))
+                    or price <= 0
+                    or currency not in {"GBP", "£"}
+                ):
+                    failed += 1
+                    continue
+                try:
+                    content = _download_original_image(image_url)
+                    local_image = _cache_image(image_url, content)
+                    image_path = local_image
+                    if images.storage_enabled():
+                        storage_path = f"{images.image_key(image_url)}.jpg"
+                        with open(local_image, "rb") as image_file:
+                            images.upload_storage_object(
+                                storage_path, image_file.read(), "image/jpeg"
+                            )
+                        image_path = storage_path
+                except (httpx.HTTPError, OSError, RuntimeError, ValueError):
+                    failed += 1
+                    continue
+                item = dict(record)
+                item.update(
+                    id=str(record.get("id") or ""),
+                    source=str(row.get("source") or record.get("source") or ""),
+                    source_url=url,
+                    title=str(row.get("title") or record.get("title") or ""),
+                    brand=row.get("brand") or record.get("brand"),
+                    price_gbp=price,
+                    description=record.get("description"),
+                    image_url=image_url,
+                    image_path=image_path,
+                    gender_hint=row.get("gender") or record.get("gender_hint"),
+                    condition_hint=row.get("condition") or record.get("condition_hint"),
+                    availability=row.get("availability") or record.get("availability"),
+                    query=record.get("query"),
+                    fetched_at=datetime.now(UTC).isoformat(),
+                )
+                try:
+                    tags, meta = tag_item(item, log_attempts=False)
+                except Exception as exc:
+                    tag_failed += 1
+                    tag_failure_streak += 1
+                    if tag_failure_streak >= max_tag_failure_streak:
+                        return {
+                            "inserted": inserted, "tagged": tagged, "skipped": skipped,
+                            "skipped_out_of_stock": skipped_stock, "tag_failed": tag_failed,
+                            "failed": failed, "tag_failure_streak": tag_failure_streak,
+                            "imports_paused": True,
+                            "pause_reason": f"{type(exc).__name__}: {exc}",
+                            "inserted_urls": inserted_urls,
+                        }
+                    continue
+                tag_failure_streak = 0
+                item["image_path"] = image_path
+                raw_json = record.get("raw_json", record)
+                if not isinstance(raw_json, str):
+                    raw_json = json.dumps(raw_json, ensure_ascii=False)
+                try:
+                    cursor = connection.execute(
+                        """INSERT INTO quenya.items (
+                            id, source, source_url, title, brand, price_gbp, size,
+                            description, image_url, image_path, gender_hint, condition_hint,
+                            availability, query, fetched_at, raw_json, tags_json,
+                            tags_request_id, tagged_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s
+                        ) ON CONFLICT (source_url) DO NOTHING RETURNING source_url""",
+                        (
+                            item["id"], item["source"], item["source_url"], item["title"],
+                            item.get("brand"), item["price_gbp"], item.get("size"),
+                            item.get("description"), item["image_url"], item["image_path"],
+                            item.get("gender_hint"), item.get("condition_hint"),
+                            item.get("availability"), item.get("query"), item["fetched_at"],
+                            raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
+                            meta.request_id, datetime.now(UTC).isoformat(),
+                        ),
+                    )
+                    inserted_row = cursor.fetchone()
+                    connection.commit()
+                except Exception as exc:
+                    try:
+                        connection.rollback()
+                    except Exception:
+                        LOG.exception("Rollback failed after item insert error url=%s", url)
+                        raise
+                    failed += 1
+                    LOG.error(
+                        "Item insert failed source=%s url=%s reason=%s: %s",
+                        item["source"], url, type(exc).__name__, exc,
+                    )
+                    continue
+                known_urls.add(url)
+                if inserted_row:
+                    inserted += 1
+                    tagged += 1
+                    inserted_urls.append(url)
+                    if max_new_items is not None and inserted >= max_new_items:
+                        return {
+                            "inserted": inserted, "tagged": tagged, "skipped": skipped,
+                            "skipped_out_of_stock": skipped_stock, "tag_failed": tag_failed,
+                            "failed": failed, "tag_failure_streak": tag_failure_streak,
+                            "imports_paused": False, "pause_reason": None,
+                            "inserted_urls": inserted_urls,
+                        }
+                else:
+                    skipped += 1
+                    known_urls.add(url)
+    return {
+        "inserted": inserted, "tagged": tagged, "skipped": skipped,
+        "skipped_out_of_stock": skipped_stock, "tag_failed": tag_failed,
+        "failed": failed, "tag_failure_streak": tag_failure_streak,
+        "imports_paused": False, "pause_reason": None, "inserted_urls": inserted_urls,
+    }
 
 
 def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
