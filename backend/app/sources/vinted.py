@@ -1,6 +1,7 @@
 import hashlib
 import os
 import re
+import time
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -99,9 +100,16 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
     }
 
 
-def search_direct(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
+def search_direct(
+    query: str, gender: str, per_page: int = 10, page: int = 1
+) -> list[dict[str, Any]]:
     scraper = VintedScraper("https://www.vinted.co.uk")
-    items = scraper.search({"search_text": query, "per_page": per_page})
+    params = {"search_text": query, "per_page": per_page, "page": page}
+    try:
+        items = scraper.search(params)
+    except Exception:
+        time.sleep(1)
+        items = scraper.search(params)
     return [
         normalized
         for item in items
@@ -109,13 +117,15 @@ def search_direct(query: str, gender: str, per_page: int = 10) -> list[dict[str,
     ]
 
 
-def search(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
+def search(
+    query: str, gender: str, per_page: int = 10, page: int = 1
+) -> list[dict[str, Any]]:
     proxy_url = os.getenv("QUENYA_VINTED_PROXY_URL")
     if not proxy_url:
-        return search_direct(query, gender, per_page)
+        return search_direct(query, gender, per_page, page)
     response = httpx.get(
         f"{proxy_url.rstrip('/')}/internal/vinted/search",
-        params={"q": query, "gender": gender, "per_page": per_page},
+        params={"q": query, "gender": gender, "per_page": per_page, "page": page},
         headers={
             "X-Quenya-Proxy-Key": os.getenv("QUENYA_VINTED_PROXY_KEY", "")
         },

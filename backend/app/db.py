@@ -684,27 +684,40 @@ def list_items(
     return result
 
 
+_LIVE_CATALOGUE_COLUMNS = """id, source, source_url, title, brand, price_gbp, size,
+    description, image_url, image_path, gender_hint, condition_hint,
+    availability, query, fetched_at, tags_json, tags_request_id, tagged_at, tag_error"""
+_LIVE_CATALOGUE_FILTER = """tags_json IS NOT NULL
+    AND (availability IS NULL OR
+         (availability NOT LIKE '%OutOfStock'
+          AND availability NOT LIKE '%SoldOut'
+          AND availability NOT LIKE '%Discontinued'))"""
+
+
 def _load_live_catalogue() -> list[dict[str, Any]]:
+    return _live_catalogue_items()
+
+
+def _live_catalogue_items(query: str | None = None) -> list[dict[str, Any]]:
+    sql = f"SELECT {_LIVE_CATALOGUE_COLUMNS} FROM items WHERE {_LIVE_CATALOGUE_FILTER}"
+    params = ()
+    if query is not None:
+        sql += " AND query=?"
+        params = (query,)
+    sql += " ORDER BY fetched_at DESC"
     with db_connection() as connection:
-        rows = connection.execute(
-            """SELECT id, source, source_url, title, brand, price_gbp, size,
-                      description, image_url, image_path, gender_hint,
-                      condition_hint, availability, query, fetched_at,
-                      tags_json, tags_request_id, tagged_at, tag_error
-               FROM items
-               WHERE tags_json IS NOT NULL
-                 AND (availability IS NULL OR
-                      (availability NOT LIKE '%OutOfStock'
-                       AND availability NOT LIKE '%SoldOut'
-                       AND availability NOT LIKE '%Discontinued'))
-               ORDER BY fetched_at DESC"""
-        ).fetchall()
+        rows = connection.execute(sql, params).fetchall()
     catalogue = []
     for row in rows:
         item = dict(row)
         item["tags"] = json.loads(item["tags_json"])
         catalogue.append(item)
     return catalogue
+
+
+def profile_live_items(profile_id: str) -> list[dict[str, Any]]:
+    init_db()
+    return _live_catalogue_items(f"live:{profile_id}")
 
 
 def _refresh_live_catalogue(generation: int) -> None:
@@ -1446,6 +1459,19 @@ def get_fetch_job(job_id_or_profile_id: str) -> dict[str, Any] | None:
         ).fetchall()
     jobs = [json.loads(row["state_json"]) for row in rows]
     return max(jobs, key=lambda job: job.get("started_at", ""), default=None)
+
+
+def fetch_jobs(profile_id: str, kind: str | None = None) -> list[dict[str, Any]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT state_json FROM fetch_jobs WHERE profile_id=? ORDER BY updated_at DESC",
+            (profile_id,),
+        ).fetchall()
+    jobs = [json.loads(row["state_json"]) for row in rows]
+    if kind is not None:
+        jobs = [job for job in jobs if job.get("kind") == kind]
+    return jobs
 
 
 def unconsumed_signals(profile_id: str) -> dict[str, list[dict[str, Any]]]:

@@ -5,6 +5,7 @@ import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import numpy as np
@@ -276,6 +277,45 @@ def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _tag_pending_live(
+    profile_id: str,
+) -> tuple[int, int, list[str], dict[str, dict[str, int]]]:
+    with db.db_connection() as connection:
+        pending = [
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM items WHERE query=? AND tags_json IS NULL AND tag_error IS NULL",
+                (f"live:{profile_id}",),
+            ).fetchall()
+        ]
+    tagged = failed = 0
+    errors = []
+    domain_counts: dict[str, dict[str, int]] = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(tag_item_with_vectors, item): item for item in pending
+        }
+        for future, item in futures.items():
+            domain = item.get("source", "unknown")
+            domain_counts.setdefault(
+                domain, {"inserted": 0, "tagged": 0, "failed": 0}
+            )
+            try:
+                tags, meta, vectors = future.result()
+                db.save_tags(
+                    item["id"], tags.model_dump(), meta.request_id,
+                    item["image_path"], vectors=vectors,
+                )
+                tagged += 1
+                domain_counts[domain]["tagged"] += 1
+            except Exception as exc:
+                db.save_tag_error(item["id"], str(exc))
+                failed += 1
+                domain_counts[domain]["failed"] += 1
+                errors.append(f"{item['id']}: {exc}")
+    return tagged, failed, errors, domain_counts
+
+
 def _fetch_profile_items(
     job_id: str, profile_id: str, queries: list[str], gender: str, context: str = "other",
     brief: dict[str, Any] | None = None,
@@ -289,6 +329,7 @@ def _fetch_profile_items(
         "errors": [],
     }
     job["status"] = "running"
+    job.setdefault("errors", [])
     db.update_fetch_job(job_id, job)
     try:
         source_domains = CONTEXT_SOURCES.get(
@@ -308,12 +349,18 @@ def _fetch_profile_items(
         records: list[dict[str, Any]] = []
         for query in queries[:4]:
             if "vinted" in source_domains:
-                records.extend(vinted.search(query, _gender_code(gender), per_page=5))
+                try:
+                    records.extend(vinted.search(query, _gender_code(gender), per_page=5))
+                except Exception as exc:
+                    job["errors"].append(f"vinted: {exc}"[:300])
         old_money_queries = []
         if old_money_style and "vinted" in source_domains:
             old_money_queries = catalog.old_money_queries(3)
             for query in old_money_queries:
-                records.extend(vinted.search(query, _gender_code(gender), per_page=5))
+                try:
+                    records.extend(vinted.search(query, _gender_code(gender), per_page=5))
+                except Exception as exc:
+                    job["errors"].append(f"vinted: {exc}"[:300])
         if context in SPORT_CONTEXTS:
             sport_records, sport_report = sport.search_context(
                 queries[:4], context, _gender_code(gender),
@@ -379,52 +426,81 @@ def _fetch_profile_items(
                 if record["source"] == source and record["source_url"] not in cached_urls
             )
         inserted = db.insert_items(records)
-        with db.db_connection() as connection:
-            pending = [
-                dict(row)
-                for row in connection.execute(
-                    "SELECT * FROM items WHERE query=? AND tags_json IS NULL AND tag_error IS NULL",
-                    (f"live:{profile_id}",),
-                ).fetchall()
-            ]
-        tagged = failed = 0
-        domain_counts: dict[str, dict[str, int]] = {
-            source: {"inserted": amount, "tagged": 0, "failed": 0}
-            for source, amount in inserted_sources.items()
-        }
-        errors = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {
-                executor.submit(tag_item_with_vectors, item): item for item in pending
-            }
-            for future, item in futures.items():
-                domain = item.get("source", "unknown")
-                domain_counts.setdefault(domain, {"inserted": 0, "tagged": 0, "failed": 0})
-                try:
-                    tags, meta, vectors = future.result()
-                    db.save_tags(
-                        item["id"], tags.model_dump(), meta.request_id,
-                        item["image_path"], vectors=vectors,
-                    )
-                    tagged += 1
-                    domain_counts[domain]["tagged"] += 1
-                except Exception as exc:
-                    db.save_tag_error(item["id"], str(exc))
-                    failed += 1
-                    domain_counts[domain]["failed"] += 1
-                    errors.append(f"{item['id']}: {exc}")
+        tagged, failed, tag_errors, domain_counts = _tag_pending_live(profile_id)
+        for source, amount in inserted_sources.items():
+            domain_counts.setdefault(
+                source, {"inserted": 0, "tagged": 0, "failed": 0}
+            )
+            domain_counts[source]["inserted"] += amount
         job.update(
             status="done",
             fetched=inserted,
             tagged=tagged,
             failed=failed,
-            errors=errors,
+            errors=[*job["errors"], *tag_errors],
             domain_counts=domain_counts,
         )
         db.update_fetch_job(job_id, job)
     except Exception as exc:
-        job.update(status="failed", errors=[str(exc)])
+        job.update(status="failed", errors=[*job.get("errors", []), str(exc)])
         db.update_fetch_job(job_id, job)
+
+
+def _refill_vinted(job_id: str, profile_id: str, page: int) -> None:
+    job = db.get_fetch_job(job_id) or {
+        "id": job_id,
+        "started_at": db.now_iso(),
+        "status": "running",
+        "fetched": 0,
+        "tagged": 0,
+        "failed": 0,
+        "errors": [],
+        "kind": "vinted_refill",
+        "page": page,
+    }
+    job.setdefault("errors", [])
+    try:
+        profile = db.get_profile(profile_id)
+        brief = profile["brief"]
+        current_taste = db.latest_taste(profile_id)
+        taste_profile = current_taste["profile"] if current_taste else {}
+        queries = list(
+            dict.fromkeys(
+                [*(taste_profile.get("search_queries") or []), brief["text"]]
+            )
+        )[:3]
+        records: list[dict[str, Any]] = []
+        for query in queries:
+            try:
+                records.extend(
+                    vinted.search(
+                        query,
+                        _gender_code(brief["gender"]),
+                        per_page=20,
+                        page=page,
+                    )
+                )
+            except Exception as exc:
+                job["errors"].append(f"vinted: {exc}"[:300])
+        for record in records:
+            record["query"] = f"live:{profile_id}"
+        inserted = db.insert_items(records)
+        tagged, failed, tag_errors, domain_counts = _tag_pending_live(profile_id)
+        domain_counts.setdefault(
+            "vinted", {"inserted": 0, "tagged": 0, "failed": 0}
+        )
+        domain_counts["vinted"]["inserted"] += inserted
+        job.update(
+            status="done",
+            fetched=inserted,
+            tagged=tagged,
+            failed=failed,
+            errors=[*job["errors"], *tag_errors],
+            domain_counts=domain_counts,
+        )
+    except Exception as exc:
+        job.update(status="failed", errors=[*job.get("errors", []), str(exc)])
+    db.update_fetch_job(job_id, job)
 
 
 @router.post("/api/profile")
@@ -753,12 +829,120 @@ def fetch_job(job_id: str) -> dict[str, Any]:
     }
 
 
+def _fetch_job_age_seconds(job: dict[str, Any], now: datetime) -> float | None:
+    try:
+        started_at = datetime.fromisoformat(job["started_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=UTC)
+    return (now - started_at.astimezone(UTC)).total_seconds()
+
+
+def _schedule_vinted_refill(
+    active: dict[str, Any],
+    share: float,
+    live_items: list[dict[str, Any]],
+    swiped: set[str],
+    background_tasks: BackgroundTasks,
+) -> None:
+    context = active.get("context", "other")
+    if share <= 0 or "vinted" not in CONTEXT_SOURCES.get(
+        context, CONTEXT_SOURCES["other"]
+    ):
+        return
+    unseen_vinted = sum(
+        item.get("source") == "vinted" and item.get("id") not in swiped
+        for item in live_items
+    )
+    jobs = db.fetch_jobs(active["id"], kind="vinted_refill")
+    now = datetime.now(UTC)
+    ages = [(job, _fetch_job_age_seconds(job, now)) for job in jobs]
+    recent_running = any(
+        job.get("status") == "running" and age is not None and 0 <= age <= 300
+        for job, age in ages
+    )
+    if recent_running:
+        return
+    last_started_age = min(
+        (age for _job, age in ages if age is not None), default=None
+    )
+    if unseen_vinted >= 10 and (
+        last_started_age is None or last_started_age <= 600
+    ):
+        return
+    page = 1 + len(jobs) % 5
+    job_id = uuid.uuid4().hex
+    db.save_fetch_job(
+        job_id,
+        active["id"],
+        {
+            "id": job_id,
+            "started_at": db.now_iso(),
+            "status": "running",
+            "fetched": 0,
+            "tagged": 0,
+            "failed": 0,
+            "errors": [],
+            "kind": "vinted_refill",
+            "page": page,
+        },
+    )
+    background_tasks.add_task(_refill_vinted, job_id, active["id"], page)
+
+
+def _ensure_live_vinted_items(
+    deck: list[dict[str, Any]],
+    ranked: list[dict[str, Any]],
+    live_items: list[dict[str, Any]],
+    swiped: set[str],
+) -> list[dict[str, Any]]:
+    live_ids = {
+        item["id"] for item in live_items if item.get("source") == "vinted"
+    }
+    if not deck or not live_ids:
+        return deck
+    deck_ids = {item["id"] for item in deck}
+
+    own_live_count = sum(item["id"] in live_ids for item in deck)
+    needed = min(2, len(deck)) - own_live_count
+    if needed <= 0:
+        return deck
+    candidates = []
+    candidate_ids = deck_ids | swiped
+    for item in ranked:
+        if item["id"] in live_ids and item["id"] not in candidate_ids:
+            candidates.append(item)
+            candidate_ids.add(item["id"])
+    for candidate in candidates[:needed]:
+        replaceable = [
+            index
+            for index, item in enumerate(deck)
+            if _is_secondhand(item) and item["id"] not in live_ids
+        ]
+        if not replaceable:
+            replaceable = [
+                index for index, item in enumerate(deck) if item["id"] not in live_ids
+            ]
+        if not replaceable:
+            break
+        index = replaceable[-1]
+        deck_ids.remove(deck[index]["id"])
+        deck[index] = candidate
+        deck_ids.add(candidate["id"])
+    return deck
+
+
 @router.get("/api/deck")
-def deck(n: int = 10) -> list[dict[str, Any]]:
+def deck(
+    n: int = 10, background_tasks: BackgroundTasks = None
+) -> list[dict[str, Any]]:
     if n < 1 or n > 50:
         raise HTTPException(status_code=422, detail="n must be between 1 and 50")
+    background_tasks = background_tasks or BackgroundTasks()
     active = _user_profile()
     taste = _taste(active["id"])
+    share = secondhand_share(active["brief"], taste)
     with db.db_connection() as connection:
         swipe_rows = connection.execute(
             "SELECT item_id FROM swipes WHERE profile_id=?", (active["id"],)
@@ -767,6 +951,13 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     swipe_count = len(swipe_rows)
     # Full catalogue makes the deck ~2x slower until ranking is optimised.
     candidates = _deck_candidates(db.live_catalogue())
+    profile_live_items = db.profile_live_items(active["id"])
+    candidate_by_id = {item["id"]: item for item in candidates}
+    candidate_by_id.update({item["id"]: item for item in profile_live_items})
+    candidates = list(candidate_by_id.values())
+    _schedule_vinted_refill(
+        active, share, profile_live_items, swiped, background_tasks
+    )
     configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
     arm = (
         configured_arm
@@ -842,7 +1033,6 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     else:
         ranked = tag_ranked
         selector = None
-    share = secondhand_share(active["brief"], taste)
     initial_deck = make_deck(
         ranked,
         n,
@@ -860,6 +1050,10 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
             brief=active["brief"],
         )
     )
+    if share > 0:
+        explored_deck = _ensure_live_vinted_items(
+            explored_deck, ranked, profile_live_items, swiped
+        )
     now = db.now_iso()
     db.record_deck_events([
         {
