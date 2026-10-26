@@ -465,7 +465,7 @@ def test_outfit_validator_rejects_missing_shoes_and_reuse():
     }
     valid, errors = validate_outfits([outfit], pool, 1, [], 100)
     assert not valid
-    assert any("missing shoes" in error for error in errors)
+    assert any("needs exactly one pair of shoes" in error for error in errors)
 
 
 def test_outfit_validator_allows_optional_accessories_with_core_piece_limits():

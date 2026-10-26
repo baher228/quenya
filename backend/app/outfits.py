@@ -1,7 +1,28 @@
 import json
-from typing import Any
+import re
+from typing import Any, Literal
 
 from app.rank import rank_items, tags_for
+
+_LAYER_SLOTS = {"top", "knitwear", "outerwear"}
+_LAYER_ROLE_QUOTAS = {"base": 10, "mid": 8, "outer": 6}
+_OUTER_LAYER = re.compile(
+    r"\b(?:coats?|jackets?|parkas?|puffers?|anoraks?|blazers?|gilets?|"
+    r"windbreakers?|raincoats?|shackets?|trenches|trench|cagoules?|"
+    r"ponchos?|mac|suits?)\b",
+    re.I,
+)
+_MID_LAYER = re.compile(
+    r"\b(?:hoodies?|hoody|sweatshirts?|sweat|jumpers?|sweaters?|cardigans?|"
+    r"fleeces?|quarter[\s-]+zip|half[\s-]+zip|1/4\s+zip|zip[- ]neck|"
+    r"pullovers?|overshirts?|waistcoats?|track\s+top|knit\s+sweatshirts?)\b",
+    re.I,
+)
+_BASE_LAYER = re.compile(
+    r"\b(?:t[- ]?shirts?|tees?|tanks?|vests?|polos?|shirts?|blouses?|tops?|"
+    r"camisoles?|camis?|bodysuits?|bras?|henleys?|long[\s-]+sleeve|crops?)\b",
+    re.I,
+)
 
 SLOT_QUOTAS = {
     "outerwear": 6,
@@ -13,6 +34,22 @@ SLOT_QUOTAS = {
     "bag": 4,
     "accessory": 4,
 }
+
+
+def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
+    tags = tags_for(item)
+    slot = str(tags.get("slot") or "").strip().lower()
+    if slot not in _LAYER_SLOTS:
+        return None
+    category = str(tags.get("category") or "").strip()
+    text = (category or str(item.get("title") or "")).lower()
+    if _OUTER_LAYER.search(text):
+        return "outer"
+    if _MID_LAYER.search(text):
+        return "mid"
+    if _BASE_LAYER.search(text):
+        return "base"
+    return {"outerwear": "outer", "knitwear": "mid", "top": "base"}[slot]
 
 
 def build_pool(
@@ -28,15 +65,27 @@ def build_pool(
         items, brief, profile, exclude_ids=set(exclude_ids), core_profile=core_profile
     )
     by_slot: dict[str, list[dict[str, Any]]] = {}
+    by_role: dict[str, list[dict[str, Any]]] = {}
     for item in ranked:
-        by_slot.setdefault(str(tags_for(item).get("slot")), []).append(item)
+        slot = str(tags_for(item).get("slot"))
+        if slot in _LAYER_SLOTS:
+            role = layer_role(item)
+            if role:
+                by_role.setdefault(role, []).append(item)
+        else:
+            by_slot.setdefault(slot, []).append(item)
     pool: dict[str, dict[str, Any]] = {}
     for slot, quota in SLOT_QUOTAS.items():
+        if slot in _LAYER_SLOTS:
+            continue
         if slot == "shoes" and brief.get("include_shoes") is False:
             continue
         if slot == "dress" and brief.get("gender") == "menswear":
             continue
         for item in by_slot.get(slot, [])[:quota]:
+            pool[item["id"]] = item
+    for role, quota in _LAYER_ROLE_QUOTAS.items():
+        for item in by_role.get(role, [])[:quota]:
             pool[item["id"]] = item
     for item_id in locked_ids:
         item = next((item for item in items if item["id"] == item_id), None)
@@ -57,7 +106,7 @@ def stylist_user_content(
     style_notes: list[str] | None = None,
 ) -> str:
     lines = [
-        f"{item['id']} | {tags_for(item).get('slot')} | "
+        f"{item['id']} | {tags_for(item).get('slot')} | {layer_role(item) or '-'} | "
         f"£{float(item['price_gbp']):.0f} | {tags_for(item).get('category')} | "
         f"{', '.join(tags_for(item).get('colours', []))} | "
         f"{', '.join(tags_for(item).get('aesthetics', []))} | "
@@ -122,24 +171,52 @@ def validate_outfits(
         reasons = []
         if index >= count:
             reasons.append("unexpected extra outfit")
-        if not 3 <= len(piece_ids) <= 5:
-            reasons.append("must contain 3-5 pieces")
         if len(piece_ids) != len(set(piece_ids)) or any(piece is None for piece in pieces):
             reasons.append("contains duplicate ids or ids outside the pool")
         if not set(locked_ids).issubset(piece_ids):
             reasons.append("does not include all locked ids")
         existing = [piece for piece in pieces if piece]
         slots = [tags_for(piece).get("slot") for piece in existing]
-        if any(slots.count(slot) > (2 if slot == "accessory" else 1) for slot in set(slots)):
-            reasons.append("breaks slot limits")
-        complete_clothing = "dress" in slots or (
-            {"top", "knitwear"} & set(slots) and "bottom" in slots
+        dress_count = slots.count("dress")
+        bottom_count = slots.count("bottom")
+        if dress_count > 1:
+            reasons.append("more than one dress")
+        layer_counts = {
+            role: sum(layer_role(piece) == role for piece in existing)
+            for role in ("base", "mid", "outer")
+        }
+        if dress_count:
+            if layer_counts["base"]:
+                reasons.append("a dress outfit cannot include a base layer")
+            if bottom_count:
+                reasons.append("a dress outfit cannot include a bottom")
+        else:
+            if layer_counts["base"] != 1:
+                reasons.append("needs exactly one base layer")
+            if bottom_count != 1:
+                reasons.append("needs exactly one bottom")
+        if layer_counts["mid"] > 1:
+            reasons.append(
+                "two mid layers" if layer_counts["mid"] == 2 else "more than two mid layers"
+            )
+        if layer_counts["outer"] > 1:
+            reasons.append(
+                "two outer layers" if layer_counts["outer"] == 2 else "more than two outer layers"
+            )
+        clothing_count = sum(
+            slot not in {"shoes", "bag", "accessory"} for slot in slots
         )
-        if include_shoes:
-            if "shoes" not in slots or not complete_clothing:
-                reasons.append("missing shoes or a complete clothing combination")
-        elif "shoes" in slots or not complete_clothing:
-            reasons.append("must be shoe-less and contain a complete clothing combination")
+        if clothing_count > 4:
+            reasons.append("more than 4 clothing pieces")
+        shoe_count = slots.count("shoes")
+        if include_shoes and shoe_count != 1:
+            reasons.append("needs exactly one pair of shoes")
+        elif not include_shoes and shoe_count:
+            reasons.append("shoes are not allowed")
+        if slots.count("bag") > 1:
+            reasons.append("more than one bag")
+        if slots.count("accessory") > 2:
+            reasons.append("more than two accessories")
         total = sum(float(piece["price_gbp"] or 0) for piece in existing)
         if total > price_ceiling:
             reasons.append("exceeds the price ceiling")
