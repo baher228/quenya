@@ -1,0 +1,154 @@
+import json
+from urllib.parse import urlencode, urljoin
+
+from .common import ShopSession, is_clothing, make_row, request_succeeded, unique_rows
+
+
+def gender_for(product: dict, rule: str, default: str = "m") -> str:
+    text = " ".join(
+        [str(product.get("title") or ""), str(product.get("product_type") or "")]
+        + [str(tag) for tag in product.get("tags", [])]
+    ).lower()
+    product_type = str(product.get("product_type") or "").lower()
+    if rule == "women":
+        return "w"
+    if rule == "men":
+        return "m"
+    if rule == "belstaff":
+        return "w" if product_type.endswith(" - w") else "m"
+    if rule == "sunspel":
+        return "w" if product_type.startswith("womens") else "m"
+    if rule == "selfportrait":
+        return "w"
+    if rule == "represent" and any(word in text for word in ("women", "womens", "female")):
+        return "w"
+    return default
+
+
+def _available_variant(product: dict):
+    variants = [
+        variant
+        for variant in product.get("variants", [])
+        if isinstance(variant, dict) and variant.get("available") is True
+    ]
+    priced = []
+    for variant in variants:
+        try:
+            price = float(variant.get("price") or 0)
+        except (TypeError, ValueError):
+            continue
+        if price > 0:
+            priced.append((price, variant))
+    return min(priced, key=lambda item: item[0]) if priced else (0.0, None)
+
+
+def _products(data):
+    products = data.get("products", []) if isinstance(data, dict) else []
+    return products if isinstance(products, list) else []
+
+
+def scrape(shop: dict, session: ShopSession, probe: bool = False):
+    host = shop["host"]
+    meta_url = f"https://{host}/meta.json"
+    fetched = session.get(meta_url)
+    if fetched is None:
+        shop["_status"] = "robots"
+        shop["_reason"] = "meta.json disallowed by robots.txt"
+        return []
+    if not request_succeeded(session):
+        shop["_status"] = "error"
+        shop["_reason"] = "meta.json request failed"
+        return []
+    meta_text, _, _ = fetched
+    meta = json.loads(meta_text)
+    if str(meta.get("currency", "")).upper() != "GBP":
+        shop["_status"] = "non_gbp"
+        shop["_reason"] = f"meta.json currency={meta.get('currency')!r}"
+        return []
+    base_domain = str(meta.get("domain") or host).lower()
+    product_base = shop.get("product_base") or f"https://{base_domain}"
+    if not product_base.startswith("https://"):
+        product_base = "https://" + product_base
+    collections = shop.get("collections") or [None]
+    max_pages = 1 if probe else int(shop.get("max_pages", 20))
+    rows = []
+    for collection in collections:
+        gender = (
+            collection.get("gender", shop.get("default_gender", "m"))
+            if collection
+            else shop.get("default_gender", "m")
+        )
+        collection_handle = collection.get("handle") if collection else None
+        for page in range(1, max_pages + 1):
+            endpoint = (
+                f"https://{host}/collections/{collection_handle}/products.json"
+                if collection_handle
+                else f"https://{host}/products.json"
+            )
+            url = endpoint + "?" + urlencode({"limit": 250, "page": page})
+            fetched = session.get(url)
+            if fetched is None:
+                shop["_status"] = "robots"
+                shop["_reason"] = "products.json disallowed by robots.txt"
+                return unique_rows(rows)
+            if not request_succeeded(session):
+                continue
+            response, _, _ = fetched
+            products = _products(json.loads(response))
+            if probe:
+                shop["_probe_products"] = len(products)
+            if not products:
+                break
+            page_rows = []
+            for product in products:
+                if not isinstance(product, dict):
+                    continue
+                title = str(product.get("title") or "").strip()
+                product_type = str(product.get("product_type") or "")
+                tags = product.get("tags") or []
+                if isinstance(tags, str):
+                    tags = [tag.strip() for tag in tags.split(",")]
+                evidence = " ".join([title, product_type, " ".join(map(str, tags))])
+                if not title or not is_clothing(evidence):
+                    continue
+                if any(str(tag).lower() in {"kids", "kid", "jewellery", "jewelry"} for tag in tags):
+                    continue
+                price, variant = _available_variant(product)
+                if not variant:
+                    continue
+                images = product.get("images") or []
+                image = images[0].get("src", "") if images and isinstance(images[0], dict) else ""
+                if image.startswith("http://"):
+                    image = "https://" + image[7:]
+                product_handle = str(product.get("handle") or "")
+                url = urljoin(product_base.rstrip("/") + "/", f"products/{product_handle}")
+                compare = variant.get("compare_at_price")
+                extra = {
+                    "availability": "InStock",
+                    "product_id": product.get("id"),
+                    "product_type": product_type,
+                    "price_source": "shopify_variant_gbp",
+                    "shopify_product": product,
+                }
+                try:
+                    if compare and float(compare) > price:
+                        extra["compare_at_price"] = float(compare)
+                except (TypeError, ValueError):
+                    pass
+                row = make_row(
+                    shop,
+                    title,
+                    price,
+                    image,
+                    url,
+                    gender_for(product, shop.get("gender_rule", "default"), gender),
+                    url,
+                    extra,
+                )
+                if row:
+                    page_rows.append(row)
+            rows.extend(page_rows)
+            session.emit(page_rows)
+            if probe:
+                break
+    return unique_rows(rows)

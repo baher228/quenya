@@ -1,0 +1,25 @@
+[
+  {
+    "products": [
+      {
+        "handle": "first-shirt",
+        "title": "First Shirt",
+        "product_type": "Shirts",
+        "variants": [{"available": true, "price": "25"}],
+        "images": [{"src": "https://images.example.test/first.jpg"}]
+      }
+    ]
+  },
+  {
+    "products": [
+      {
+        "handle": "second-shirt",
+        "title": "Second Shirt",
+        "product_type": "Shirts",
+        "variants": [{"available": true, "price": "30"}],
+        "images": [{"src": "https://images.example.test/second.jpg"}]
+      }
+    ]
+  },
+  {"products": []}
+]

@@ -213,9 +213,16 @@ def test_cursor_is_error_raises_task_error_without_retry(monkeypatch, tmp_path):
 
 def test_cursor_timeout_retries_once_then_raises(monkeypatch, tmp_path):
     count_path, _capture_path = configure_cursor(
-        monkeypatch, tmp_path, [cursor_response(json.dumps(VALID_TAGS))], delay=0.2
+        monkeypatch, tmp_path, [cursor_response(json.dumps(VALID_TAGS))]
     )
-    monkeypatch.setattr(llm, "QUENYA_CURSOR_TIMEOUT_S", "0.05")
+    binary = tmp_path / "cursor-agent"
+    binary.write_text(
+        '#!/bin/sh\nprintf "call\\n" >> "$FAKE_CURSOR_COUNT"\nexec sleep 10\n',
+        encoding="utf-8",
+    )
+    binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_BIN", str(binary))
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_TIMEOUT_S", "1")
 
     with pytest.raises(llm.TaskError, match="timed out"):
         llm.call_task("tagger", "system", "model", "listing", ItemTags)

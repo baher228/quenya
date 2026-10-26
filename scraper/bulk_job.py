@@ -232,7 +232,9 @@ def _file_records(path: Path) -> list[dict]:
     return rows
 
 
-def load_seen_and_pending(root: Path, known_urls: set[str]) -> tuple[set[str], dict[str, list[dict]]]:
+def load_seen_and_pending(
+    root: Path, known_urls: set[str]
+) -> tuple[set[str], dict[str, list[dict]]]:
     seen: set[str] = set()
     pending: dict[str, list[dict]] = defaultdict(list)
     for path in root.glob("*.jsonl"):
@@ -400,9 +402,10 @@ def scrape_vinted(
     page_limit: int, chunk_size: int, known_urls: set[str], budget: int,
     tag_streak: int,
 ) -> int:
+    from vinted_scraper import VintedScraper
+
     from app.sources import STOCK_PHRASE
     from app.sources.vinted import normalize_item
-    from vinted_scraper import VintedScraper
 
     if state.get("blocked", {}).get("vinted"):
         return tag_streak
@@ -599,7 +602,10 @@ def parse_product_page(
             self.scripts: list[str] = []
 
         def handle_starttag(self, tag, attrs):
-            if tag.lower() == "script" and dict(attrs).get("type", "").lower() == "application/ld+json":
+            if (
+                tag.lower() == "script"
+                and dict(attrs).get("type", "").lower() == "application/ld+json"
+            ):
                 self.active = True
                 self.data = []
 
@@ -736,7 +742,11 @@ def scrape_sitemaps(
             try:
                 response = client.get(url, interval=1)
                 if response.status_code in {403, 429}:
-                    LOG.warning("sitemap host blocked source=%s status=%s", source, response.status_code)
+                    LOG.warning(
+                        "sitemap host blocked source=%s status=%s",
+                        source,
+                        response.status_code,
+                    )
                     mark_blocked(state, source, str(response.status_code), state_path)
                     break
                 if response.status_code >= 400:
@@ -888,7 +898,12 @@ def _shopify_get(
         if retry == 3:
             LOG.error("shopify store skipped after four 429s: %s", urlsplit(url).hostname)
             return None
-        LOG.warning("shopify 429 host=%s retry=%d backoff=%ds", urlsplit(url).hostname, retry + 1, backoff)
+        LOG.warning(
+            "shopify 429 host=%s retry=%d backoff=%ds",
+            urlsplit(url).hostname,
+            retry + 1,
+            backoff,
+        )
         time.sleep(backoff)
     return None
 
@@ -935,7 +950,11 @@ def scrape_shopify(
                 mark_blocked(state, host, "network-error-or-retries-exhausted", state_path)
                 break
             if response.status_code in {403, 404, 429}:
-                LOG.warning("shopify feed unavailable host=%s status=%s", host, response.status_code)
+                LOG.warning(
+                    "shopify feed unavailable host=%s status=%s",
+                    host,
+                    response.status_code,
+                )
                 mark_blocked(state, host, str(response.status_code), state_path)
                 break
             products = _shopify_products(response.content)
@@ -1042,7 +1061,9 @@ def run_job(args) -> dict:
                     tag_streak = import_pending(
                         root, source, pending, known_urls, state, state_path,
                         args.chunk_size, tag_streak,
-                        max_new_items=max(0, budgets[source] - count_for(state, source)["imported"]),
+                        max_new_items=max(
+                            0, budgets[source] - count_for(state, source)["imported"]
+                        ),
                     )
         family_jobs = {
             "vinted": lambda: run_family(

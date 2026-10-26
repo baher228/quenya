@@ -1,0 +1,1434 @@
+[[shop]]
+key = "represent"
+brand = "Represent"
+host = "uk.representclo.com"
+domain = "uk.representclo.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "represent"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "corteiz"
+brand = "Corteiz"
+host = "www.corteiz.com"
+domain = "corteiz.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "roadman"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "trapstar"
+brand = "Trapstar"
+host = "uk.trapstarlondon.com"
+domain = "uk.trapstarlondon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "roadman"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "sunspel"
+brand = "Sunspel"
+host = "www.sunspel.com"
+domain = "www.sunspel.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "sunspel"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "selfportrait"
+brand = "Self-Portrait"
+host = "www.self-portrait.com"
+domain = "www.self-portrait.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "selfportrait"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "belstaff"
+brand = "Belstaff"
+host = "belstaff.com"
+domain = "belstaff.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; /en-gb product URLs accepted."
+gender_rule = "belstaff"
+product_base = "https://belstaff.com/en-gb"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "oliverspencer"
+brand = "Oliver Spencer"
+host = "oliverspencer.co.uk"
+domain = "oliverspencer.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "montirex"
+brand = "Montirex"
+host = "montirex.com"
+domain = "montirex.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; /en-gb product URLs accepted."
+gender_rule = "men"
+product_base = "https://montirex.com/en-gb"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "waxlondon"
+brand = "Wax London"
+host = "waxlondon.com"
+domain = "waxlondon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "percival"
+brand = "Percival"
+host = "percivalclo.com"
+domain = "percivalclo.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "universalworks"
+brand = "Universal Works"
+host = "universalworks.co.uk"
+domain = "universalworks.co.uk"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "heritage"
+status = "empty"
+note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "folk"
+brand = "Folk"
+host = "folkclothing.com"
+domain = "folkclothing.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "kestin"
+brand = "Kestin"
+host = "kestin.co"
+domain = "kestin.co"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "finisterre"
+brand = "Finisterre"
+host = "finisterre.com"
+domain = "finisterre.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "pangaia"
+brand = "PANGAIA"
+host = "pangaia.com"
+domain = "pangaia.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "streetwear"
+status = "non_gbp"
+note = "Probe 2026-10-25: meta.json currency USD."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "nfd"
+brand = "Never Fully Dressed"
+host = "neverfullydressed.co.uk"
+domain = "neverfullydressed.co.uk"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "women"
+status = "empty"
+note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "rixo"
+brand = "Rixo"
+host = "rixo.co.uk"
+domain = "rixo.co.uk"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "women"
+status = "empty"
+note = "Probe 2026-10-25: GBP Shopify feed, but no accepted clothing rows."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "kitri"
+brand = "KITRI"
+host = "kitristudio.com"
+domain = "kitristudio.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "damsonmadder"
+brand = "Damson Madder"
+host = "damsonmadder.com"
+domain = "damsonmadder.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "hush"
+brand = "Hush"
+host = "www.hush-uk.com"
+domain = "www.hush-uk.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "women"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "gymshark"
+brand = "Gymshark"
+host = "uk.gymshark.com"
+domain = "uk.gymshark.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "sport"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "nicce"
+brand = "Nicce"
+host = "nicce.com"
+domain = "nicce.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "streetwear"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "dailypaper"
+brand = "Daily Paper"
+host = "www.dailypaperclothing.com"
+domain = "www.dailypaperclothing.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "streetwear"
+status = "non_gbp"
+note = "Probe 2026-10-25: meta.json currency EUR."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "unknownlondon"
+brand = "Unknown London"
+host = "unknownlondon.com"
+domain = "unknownlondon.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "roadman"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "colebuxton"
+brand = "Cole Buxton"
+host = "colebuxton.com"
+domain = "colebuxton.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "elevendegrees"
+brand = "11 Degrees"
+host = "11degrees.co.uk"
+domain = "11degrees.co.uk"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "sport"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "gymking"
+brand = "Gym King"
+host = "gym-king.com"
+domain = "gym-king.com"
+adapter = "shopify"
+enabled = false
+where = "any"
+group = "sport"
+status = "error"
+note = "Probe 2026-10-25: meta.json request failed."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "drakes"
+brand = "Drake's"
+host = "www.drakes.com"
+domain = "www.drakes.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "privatewhite"
+brand = "Private White V.C."
+host = "privatewhitevc.com"
+domain = "privatewhitevc.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "albam"
+brand = "Albam"
+host = "albamclothing.com"
+domain = "albamclothing.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "men"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "communityclothing"
+brand = "Community Clothing"
+host = "communityclothing.co.uk"
+domain = "communityclothing.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "omnes"
+brand = "Omnes"
+host = "omnes.com"
+domain = "omnes.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "nobodyschild"
+brand = "Nobody's Child"
+host = "www.nobodyschild.com"
+domain = "www.nobodyschild.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "adanola"
+brand = "Adanola"
+host = "adanola.com"
+domain = "adanola.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "sport"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "women"
+default_gender = "w"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "aries"
+brand = "Aries"
+host = "www.ariesarise.com"
+domain = "www.ariesarise.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
+gender_rule = "default"
+default_gender = "m"
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "ganni"
+brand = "GANNI"
+host = "www.ganni.com"
+domain = "ganni.com"
+adapter = "jsonld"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+
+[[shop.pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/clothing/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/dresses/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/knitwear/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ganni.com/en-gb/coats-and-jackets/"
+
+[[shop]]
+key = "whistles"
+brand = "Whistles"
+host = "www.whistles.com"
+domain = "whistles.com"
+adapter = "jsonld"
+enabled = true
+where = "any"
+group = "women"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+
+[[shop.pages]]
+gender = "w"
+url = "https://www.whistles.com/clothing/dresses/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.whistles.com/clothing/knitwear/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.whistles.com/clothing/coats-jackets/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.whistles.com/clothing/tops/"
+
+[[shop]]
+key = "nike"
+brand = "Nike"
+host = "www.nike.com"
+domain = "nike.com"
+adapter = "nike"
+enabled = true
+where = "any"
+group = "sport"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.nike.com/gb/w/nike-tech-clothing-6ymx6z7lrxu"
+[[shop.pages]]
+gender = "m"
+url = "https://www.nike.com/gb/w/mens-tracksuits-1ll2wznik1"
+[[shop.pages]]
+gender = "m"
+url = "https://www.nike.com/gb/w/mens-hoodies-sweatshirts-6riveznik1"
+[[shop.pages]]
+gender = "m"
+url = "https://www.nike.com/gb/w/mens-jackets-gilets-50r7yznik1"
+[[shop.pages]]
+gender = "w"
+url = "https://www.nike.com/gb/w/womens-tech-clothing-6ymx6z9x6"
+[[shop.pages]]
+gender = "w"
+url = "https://www.nike.com/gb/w/womens-tracksuits-1ll2wz5e1x6"
+[[shop.pages]]
+gender = "w"
+url = "https://www.nike.com/gb/w/womens-hoodies-sweatshirts-5e1x6"
+
+[[shop]]
+key = "stoneisland"
+brand = "Stone Island"
+host = "www.stoneisland.com"
+domain = "stoneisland.com"
+adapter = "sfcc"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing rows accepted."
+browser = true
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.stoneisland.com/en-gb/collection/coats-and-jackets"
+[[shop.pages]]
+gender = "m"
+url = "https://www.stoneisland.com/en-gb/collection/knitwear"
+
+[[shop]]
+key = "tnf"
+brand = "The North Face"
+host = "www.thenorthface.com"
+domain = "thenorthface.com"
+adapter = "sfcc"
+enabled = false
+where = "any"
+group = "outdoor"
+status = "challenge"
+note = "Probe 2026-10-25: px-captcha challenge on the first UK category request."
+browser = true
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.thenorthface.com/en-gb/c/men/jackets-and-coats-211702"
+[[shop.pages]]
+gender = "w"
+url = "https://www.thenorthface.com/en-gb/c/women/jackets-and-coats-211702"
+
+[[shop]]
+key = "lacoste"
+brand = "Lacoste"
+host = "www.lacoste.com"
+domain = "lacoste.com"
+adapter = "sfcc"
+enabled = true
+where = "uk"
+group = "highstreet"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing rows; UK laptop for image-host access."
+browser = true
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.lacoste.com/gb/lacoste/men/clothing/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.lacoste.com/gb/lacoste/women/clothing/"
+
+[[shop]]
+key = "burberry"
+brand = "Burberry"
+host = "uk.burberry.com"
+domain = "burberry.com"
+adapter = "burberry"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "Probe 2026-10-25: 20 GBP clothing rows from the UK product API."
+max_pages = 2
+
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/knitwear/"
+url = "https://uk.burberry.com/l/mens-clothing/knitwear/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/shirts/"
+url = "https://uk.burberry.com/l/mens-clothing/shirts/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/polos-t-shirts/"
+url = "https://uk.burberry.com/l/mens-clothing/polos-t-shirts/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/hoodies-sweatshirts/"
+url = "https://uk.burberry.com/l/mens-clothing/hoodies-sweatshirts/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/trousers-shorts/"
+url = "https://uk.burberry.com/l/mens-clothing/trousers-shorts/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/denim/"
+url = "https://uk.burberry.com/l/mens-clothing/denim/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/blazers-tailored-trousers/"
+url = "https://uk.burberry.com/l/mens-clothing/blazers-tailored-trousers/"
+[[shop.pages]]
+gender = "m"
+path = "/l/mens-clothing/outerwear/"
+url = "https://uk.burberry.com/l/mens-clothing/outerwear/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/knitwear/"
+url = "https://uk.burberry.com/l/womens-clothing/knitwear/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/shirts-tops/"
+url = "https://uk.burberry.com/l/womens-clothing/shirts-tops/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/sweatshirts/"
+url = "https://uk.burberry.com/l/womens-clothing/sweatshirts/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/dresses/"
+url = "https://uk.burberry.com/l/womens-clothing/dresses/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/pants-shorts/"
+url = "https://uk.burberry.com/l/womens-clothing/pants-shorts/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/denim/"
+url = "https://uk.burberry.com/l/womens-clothing/denim/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/blazers-tailored-trousers/"
+url = "https://uk.burberry.com/l/womens-clothing/blazers-tailored-trousers/"
+[[shop.pages]]
+gender = "w"
+path = "/l/womens-clothing/outerwear/"
+url = "https://uk.burberry.com/l/womens-clothing/outerwear/"
+
+[[shop]]
+key = "ralphlauren"
+brand = "Ralph Lauren"
+host = "www.ralphlauren.co.uk"
+domain = "ralphlauren.co.uk"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "premium"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the browser category request."
+browser = true
+max_pages = 3
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/casual-shirts/10202?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/polo-shirts/10201?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/formal-shirts/10207?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/t-shirts/10203?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/hoodies-sweatshirts/10204?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/jackets-coats/10205?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/trousers/102015?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/jeans/102010?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/blazers/10209?start=0&sz=30"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/shorts/102013?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/jumpers-cardigans/202025?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/dresses-jumpsuits/20201?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/t-shirts-tops/20202?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/shirts-blouses/20204?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/jackets-coats/20205?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/trousers/20209?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/jeans/202010?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/skirts-shorts/20208?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/blazers/20206?start=0&sz=30"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ralphlauren.co.uk/en/women/clothing/hoodies-sweatshirts/202017?start=0&sz=30"
+
+[[shop]]
+key = "boss"
+brand = "BOSS"
+host = "www.hugoboss.com"
+domain = "hugoboss.com"
+adapter = "jsonld"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "Probe 2026-10-25: 44 GBP clothing rows from UK category listings."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.hugoboss.com/uk/men-clothing/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.hugoboss.com/uk/women-clothing/"
+
+[[shop]]
+key = "paulsmith"
+brand = "Paul Smith"
+host = "www.paulsmith.com"
+domain = "paulsmith.com"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "heritage"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.paulsmith.com/uk/mens/clothing"
+[[shop.pages]]
+gender = "w"
+url = "https://www.paulsmith.com/uk/womens/clothing"
+
+[[shop]]
+key = "carharttwip"
+brand = "Carhartt WIP"
+host = "www.carhartt-wip.com"
+domain = "carhartt-wip.com"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "streetwear"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.carhartt-wip.com/en-gb/c/men"
+[[shop.pages]]
+gender = "w"
+url = "https://www.carhartt-wip.com/en-gb/c/women"
+
+[[shop]]
+key = "reiss"
+brand = "Reiss"
+host = "www.reiss.com"
+domain = "reiss.com"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "blocked"
+note = "Probe 2026-10-25: 403 on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.reiss.com/shop/gender-men-category-shirts-0"
+[[shop.pages]]
+gender = "w"
+url = "https://www.reiss.com/shop/gender-women-category-dresses-0"
+
+[[shop]]
+key = "cpcompany"
+brand = "C.P. Company"
+host = "www.cpcompany.com"
+domain = "cpcompany.com"
+adapter = "sfcc"
+enabled = false
+where = "uk"
+group = "premium"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+browser = true
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.cpcompany.com/en-gb/shop/main-collection/clothing/"
+
+[[shop]]
+key = "moncler"
+brand = "Moncler"
+host = "www.moncler.com"
+domain = "moncler.com"
+adapter = "sfcc"
+enabled = false
+where = "uk"
+group = "premium"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+browser = true
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.moncler.com/en-gb/men/ready-to-wear/sweaters-and-cardigans"
+
+[[shop]]
+key = "arcteryx"
+brand = "Arc'teryx"
+host = "arcteryx.com"
+domain = "arcteryx.com"
+adapter = "jsonld"
+enabled = false
+where = "any"
+group = "outdoor"
+status = "empty"
+note = "Probe 2026-10-25: 200 UK page, but no accepted GBP clothing rows."
+
+[[shop.pages]]
+gender = "m"
+url = "https://arcteryx.com/gb/en/c/mens/shell-jackets"
+[[shop.pages]]
+gender = "w"
+url = "https://arcteryx.com/gb/en/c/womens/shell-jackets"
+
+[[shop]]
+key = "allsaints"
+brand = "AllSaints"
+host = "www.allsaints.com"
+domain = "allsaints.com"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.allsaints.com/men/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.allsaints.com/women/"
+
+[[shop]]
+key = "fredperry"
+brand = "Fred Perry"
+host = "www.fredperry.com"
+domain = "fredperry.com"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "heritage"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.fredperry.com/men"
+[[shop.pages]]
+gender = "w"
+url = "https://www.fredperry.com/women"
+
+[[shop]]
+key = "jdsports"
+brand = "JD Sports"
+host = "www.jdsports.co.uk"
+domain = "jdsports.co.uk"
+adapter = "jsonld"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "blocked"
+note = "Probe 2026-10-25: 403 on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.jdsports.co.uk/men/mens-clothing/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.jdsports.co.uk/women/womens-clothing/"
+
+[[shop]]
+key = "palace"
+brand = "Palace"
+host = "www.palaceskateboards.com"
+domain = "palaceskateboards.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP Shopify meta and clothing rows."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "aimeleondore"
+brand = "Aimé Leon Dore"
+host = "www.aimeleondore.com"
+domain = "aimeleondore.com"
+adapter = "shopify"
+enabled = false
+where = "uk"
+group = "streetwear"
+status = "non_gbp"
+note = "US storefront / currency; do not enable without GBP meta."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "tedbaker"
+brand = "Ted Baker"
+host = "www.tedbaker.com"
+domain = "tedbaker.com"
+adapter = "shopify"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "non_gbp"
+note = "US storefront / currency; do not enable without GBP meta."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "meandem"
+brand = "ME+EM"
+host = "www.meandem.com"
+domain = "meandem.com"
+adapter = "shopify"
+enabled = false
+where = "uk"
+group = "women"
+status = "error"
+note = "Probe 2026-10-25: meta.json response was not valid JSON."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "canadagoose"
+brand = "Canada Goose"
+host = "www.canadagoose.com"
+domain = "canadagoose.com"
+adapter = "shopify"
+enabled = false
+where = "uk"
+group = "outdoor"
+status = "non_gbp"
+note = "US storefront / currency; do not enable without GBP meta."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "sp5der"
+brand = "Sp5der"
+host = "www.sp5der.com"
+domain = "sp5der.com"
+adapter = "shopify"
+enabled = false
+where = "uk"
+group = "streetwear"
+status = "error"
+note = "Probe 2026-10-25: meta.json connection failed."
+max_pages = 20
+max_requests = 30
+
+[[shop]]
+key = "ssense"
+brand = ""
+host = "www.ssense.com"
+domain = "ssense.com"
+adapter = "ssense"
+enabled = true
+where = "any"
+group = "multibrand"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP JSON-LD clothing rows; real brands retained."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/burberry"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/burberry"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/polo-ralph-lauren"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/polo-ralph-lauren"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/stone-island"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/stone-island"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/moncler"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/moncler"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/c-p-company"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/c-p-company"
+[[shop.pages]]
+gender = "m"
+url = "https://www.ssense.com/en-gb/men/designers/canada-goose"
+[[shop.pages]]
+gender = "w"
+url = "https://www.ssense.com/en-gb/women/designers/canada-goose"
+
+[[shop]]
+key = "cos"
+brand = "COS"
+host = "www.cos.com"
+domain = "cos.com"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "blocked"
+note = "Probe 2026-10-25: 403 on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.cos.com/en-gb/men/knitwear"
+[[shop.pages]]
+gender = "m"
+url = "https://www.cos.com/en-gb/men/shirts"
+[[shop.pages]]
+gender = "m"
+url = "https://www.cos.com/en-gb/men/trousers"
+[[shop.pages]]
+gender = "m"
+url = "https://www.cos.com/en-gb/men/jackets-and-coats"
+[[shop.pages]]
+gender = "w"
+url = "https://www.cos.com/en-gb/women/knitwear"
+[[shop.pages]]
+gender = "w"
+url = "https://www.cos.com/en-gb/women/trousers"
+[[shop.pages]]
+gender = "w"
+url = "https://www.cos.com/en-gb/women/tops"
+[[shop.pages]]
+gender = "w"
+url = "https://www.cos.com/en-gb/women/dresses"
+
+[[shop]]
+key = "arket"
+brand = "ARKET"
+host = "www.arket.com"
+domain = "arket.com"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "blocked"
+note = "Probe 2026-10-25: 403 on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.arket.com/en-gb/men/clothing/knitwear/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.arket.com/en-gb/men/clothing/trousers/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.arket.com/en-gb/men/clothing/jackets-coats/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.arket.com/en-gb/men/clothing/shirts/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.arket.com/en-gb/women/clothing/knitwear/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.arket.com/en-gb/women/clothing/trousers/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.arket.com/en-gb/women/clothing/jackets-coats/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.arket.com/en-gb/women/clothing/dresses/"
+
+[[shop]]
+key = "stories"
+brand = "& Other Stories"
+host = "www.stories.com"
+domain = "stories.com"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "women"
+status = "blocked"
+note = "Probe 2026-10-25: 403 on the first UK category request."
+
+[[shop.pages]]
+gender = "w"
+url = "https://www.stories.com/en-gb/clothing/knitwear/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.stories.com/en-gb/clothing/trousers/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.stories.com/en-gb/clothing/jackets-coats/"
+[[shop.pages]]
+gender = "w"
+url = "https://www.stories.com/en-gb/clothing/dresses/"
+
+[[shop]]
+key = "barbour"
+brand = "Barbour"
+host = "www.barbour.com"
+domain = "barbour.com"
+adapter = "tiles"
+enabled = true
+where = "uk"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing tiles; UK laptop configuration."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.barbour.com/gb/mens/clothing/knitwear"
+[[shop.pages]]
+gender = "m"
+url = "https://www.barbour.com/gb/mens/clothing/shirts"
+[[shop.pages]]
+gender = "m"
+url = "https://www.barbour.com/gb/mens/clothing/jackets"
+[[shop.pages]]
+gender = "m"
+url = "https://www.barbour.com/gb/mens/clothing/trousers"
+[[shop.pages]]
+gender = "w"
+url = "https://www.barbour.com/gb/womens/clothing/knitwear"
+[[shop.pages]]
+gender = "w"
+url = "https://www.barbour.com/gb/womens/clothing/shirts"
+[[shop.pages]]
+gender = "w"
+url = "https://www.barbour.com/gb/womens/clothing/jackets"
+[[shop.pages]]
+gender = "w"
+url = "https://www.barbour.com/gb/womens/clothing/dresses"
+
+[[shop]]
+key = "johnsmedley"
+brand = "John Smedley"
+host = "www.johnsmedley.com"
+domain = "johnsmedley.com"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "heritage"
+status = "error"
+note = "Probe 2026-10-25: listing request failed."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.johnsmedley.com/uk/mens/knitwear"
+[[shop.pages]]
+gender = "m"
+url = "https://www.johnsmedley.com/uk/mens/shop-by-style"
+[[shop.pages]]
+gender = "m"
+url = "https://www.johnsmedley.com/uk/mens/polo-shirts"
+[[shop.pages]]
+gender = "w"
+url = "https://www.johnsmedley.com/uk/womens/view-all-women"
+[[shop.pages]]
+gender = "w"
+url = "https://www.johnsmedley.com/uk/womens/knitwear"
+[[shop.pages]]
+gender = "w"
+url = "https://www.johnsmedley.com/uk/womens/dresses"
+
+[[shop]]
+key = "charlestyrwhitt"
+brand = "Charles Tyrwhitt"
+host = "www.charlestyrwhitt.com"
+domain = "charlestyrwhitt.com"
+adapter = "tiles"
+enabled = true
+where = "uk"
+group = "heritage"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing tiles; UK laptop configuration."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.charlestyrwhitt.com/uk/mens-shirts/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.charlestyrwhitt.com/uk/mens-trousers/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.charlestyrwhitt.com/uk/mens-jumpers/"
+[[shop.pages]]
+gender = "m"
+url = "https://www.charlestyrwhitt.com/uk/mens-suits/"
+
+[[shop]]
+key = "asos"
+brand = "ASOS"
+host = "www.asos.com"
+domain = "asos.com"
+adapter = "tiles"
+enabled = false
+where = "uk"
+group = "highstreet"
+status = "challenge"
+note = "Probe 2026-10-25: challenge page on the first UK category request."
+
+[[shop.pages]]
+gender = "m"
+url = "https://www.asos.com/men/jumpers-cardigans/cat/?cid=7617"
+[[shop.pages]]
+gender = "m"
+url = "https://www.asos.com/men/shirts/cat/?cid=3602"
+[[shop.pages]]
+gender = "m"
+url = "https://www.asos.com/men/trousers-chinos/cat/?cid=4910"
+[[shop.pages]]
+gender = "m"
+url = "https://www.asos.com/men/coats-jackets/cat/?cid=3606"
+[[shop.pages]]
+gender = "w"
+url = "https://www.asos.com/women/trousers-leggings/cat/?cid=2640"
+[[shop.pages]]
+gender = "w"
+url = "https://www.asos.com/women/dresses/cat/?cid=8799"
+[[shop.pages]]
+gender = "w"
+url = "https://www.asos.com/women/coats-jackets/cat/?cid=2641"
+[[shop.pages]]
+gender = "w"
+url = "https://www.asos.com/women/tops/cat/?cid=4169"
+
+[[shop]]
+key = "mango"
+brand = "Mango"
+host = "shop.mango.com"
+domain = "mango.com"
+adapter = "tiles"
+enabled = true
+where = "uk"
+group = "highstreet"
+status = "ok"
+note = "Probe 2026-10-25: 200 GBP clothing tiles; UK laptop configuration."
+
+[[shop.pages]]
+gender = "w"
+url = "https://shop.mango.com/gb/en/c/women/trousers/0bf28b3b"
+[[shop.pages]]
+gender = "w"
+url = "https://shop.mango.com/gb/en/c/women/jeans_0bf28b3b"
+[[shop.pages]]
+gender = "w"
+url = "https://shop.mango.com/gb/en/c/women/dresses-and-jumpsuits_d0c8fdc1"
+[[shop.pages]]
+gender = "w"
+url = "https://shop.mango.com/gb/en/c/women/jackets_0d4b5eb2"
