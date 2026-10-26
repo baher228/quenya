@@ -501,7 +501,7 @@ def test_outfit_validator_allows_optional_accessories_with_core_piece_limits():
     too_many = core + [accessory(f"extra-{index}", "accessory") for index in range(3)]
     valid, errors = validate([item["id"] for item in too_many], too_many)
     assert not valid
-    assert any("must contain 3-5 pieces" in error for error in errors)
+    assert any("more than two accessories" in error for error in errors)
 
 
 def test_taste_update_clamps_weights_versions_and_consumes_signals(monkeypatch, tmp_path):
