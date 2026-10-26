@@ -1,9 +1,11 @@
 import hashlib
+import os
 import re
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
+import httpx
 from vinted_scraper import VintedScraper
 
 
@@ -97,7 +99,7 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
     }
 
 
-def search(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
+def search_direct(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
     scraper = VintedScraper("https://www.vinted.co.uk")
     items = scraper.search({"search_text": query, "per_page": per_page})
     return [
@@ -105,3 +107,22 @@ def search(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
         for item in items
         if (normalized := normalize_item(item, query, gender)) is not None
     ]
+
+
+def search(query: str, gender: str, per_page: int = 10) -> list[dict[str, Any]]:
+    proxy_url = os.getenv("QUENYA_VINTED_PROXY_URL")
+    if not proxy_url:
+        return search_direct(query, gender, per_page)
+    response = httpx.get(
+        f"{proxy_url.rstrip('/')}/internal/vinted/search",
+        params={"q": query, "gender": gender, "per_page": per_page},
+        headers={
+            "X-Quenya-Proxy-Key": os.getenv("QUENYA_VINTED_PROXY_KEY", "")
+        },
+        timeout=60,
+    )
+    if not response.is_success:
+        raise RuntimeError(
+            f"Vinted proxy HTTP {response.status_code}: {response.text[:200]}"
+        )
+    return response.json()["items"]
