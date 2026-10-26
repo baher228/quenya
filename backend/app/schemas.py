@@ -113,6 +113,7 @@ class OutfitRequest(StrictModel):
 
 class SwapRequest(StrictModel):
     item_id: str = Field(min_length=1)
+    exclude_ids: list[str] = Field(default_factory=list, max_length=300)
 
 
 class VerdictRequest(StrictModel):

@@ -22,7 +22,16 @@ from app.embedding_ranker import (
     rank_candidates,
 )
 from app.llm import TaskError, call_task
-from app.outfits import build_pool, layer_role, stylist_user_content, validate_outfits
+from app.outfits import (
+    base_layer_subtype,
+    build_pool,
+    is_outfit_eligible,
+    layer_role,
+    order_outfit_pieces,
+    outfit_errors,
+    stylist_user_content,
+    validate_outfits,
+)
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import add_exploration, make_deck, rank_items, score_item, secondhand_share, tags_for
 from app.routing import route_input
@@ -209,11 +218,13 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
-    pieces = [
-        item
-        for item_id in outfit["piece_ids"]
-        if (item := db.get_item_with_tags(item_id))
-    ]
+    pieces = order_outfit_pieces(
+        [
+            item
+            for item_id in outfit["piece_ids"]
+            if (item := db.get_item_with_tags(item_id))
+        ]
+    )
     return {
         "id": outfit["id"],
         "title": outfit["title"],
@@ -953,12 +964,18 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
             },
         ) from exc
     saved = []
+    pieces_by_id = {item["id"]: item for item in pool}
     for outfit in validated:
+        outfit["piece_ids"] = [
+            item["id"]
+            for item in order_outfit_pieces(
+                [pieces_by_id[item_id] for item_id in outfit["piece_ids"]]
+            )
+        ]
         outfit_id = db.save_outfit(
             active["id"], current["version"], outfit, outfit["piece_ids"],
             outfit["total_gbp"], request_ids[-1]
         )
-        pieces_by_id = {item["id"]: item for item in pool}
         saved.append(
             {
                 "id": outfit_id,
@@ -987,6 +1004,23 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
     }
 
 
+def _interleave_base_candidates(
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    subtype_order = ("tee", "shirt", "polo", "other")
+    groups = {subtype: [] for subtype in subtype_order}
+    for item in candidates:
+        groups[base_layer_subtype(item)].append(item)
+    interleaved = []
+    for index in range(max((len(group) for group in groups.values()), default=0)):
+        interleaved.extend(
+            groups[subtype][index]
+            for subtype in subtype_order
+            if index < len(groups[subtype])
+        )
+    return interleaved
+
+
 @router.post("/api/outfits/{outfit_id}/swap")
 def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     active = _user_profile()
@@ -1001,23 +1035,39 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     slot = tags_for(replaced).get("slot")
     current = _taste(active["id"])
     core = _core()
-    candidates = [
-        item for item in rank_items(
-            items,
-            active["brief"],
-            current,
-            core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
-        )
-        if tags_for(item).get("slot") == slot
-        and layer_role(item) == layer_role(replaced)
-        and item["id"] not in outfit["piece_ids"]
+    excluded_ids = set(body.exclude_ids)
+    include_shoes = active["brief"].get("include_shoes", True)
+    other_pieces = [
+        item for item in existing if item and item["id"] != body.item_id
     ]
+    candidates = []
+    for item in rank_items(
+        items,
+        active["brief"],
+        current,
+        core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
+    ):
+        if (
+            tags_for(item).get("slot") != slot
+            or layer_role(item) != layer_role(replaced)
+            or not is_outfit_eligible(item)
+            or item["id"] in outfit["piece_ids"]
+        ):
+            continue
+        total = (
+            float(outfit["total_gbp"])
+            - float(replaced.get("price_gbp") or 0)
+            + float(item.get("price_gbp") or 0)
+        )
+        if total > float(current["price_ceiling_gbp"]):
+            continue
+        if outfit_errors([*other_pieces, item], include_shoes):
+            continue
+        candidates.append(item)
+    if layer_role(replaced) == "base":
+        candidates = _interleave_base_candidates(candidates)
     replacement = next(
-        (
-            item for item in candidates
-            if outfit["total_gbp"] - replaced["price_gbp"] + item["price_gbp"]
-            <= current["price_ceiling_gbp"]
-        ),
+        (item for item in candidates if item["id"] not in excluded_ids),
         None,
     )
     if not replacement:
@@ -1027,7 +1077,17 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         for item_id in outfit["piece_ids"]
     ]
     total = outfit["total_gbp"] - replaced["price_gbp"] + replacement["price_gbp"]
-    db.update_outfit_pieces(outfit_id, ids, total)
+    pieces_by_id = {
+        item["id"]: item for item in [*existing, replacement] if item
+    }
+    ordered_ids = [
+        item["id"]
+        for item in order_outfit_pieces(
+            [pieces_by_id[item_id] for item_id in ids if item_id in pieces_by_id]
+        )
+    ]
+    ordered_ids.extend(item_id for item_id in ids if item_id not in pieces_by_id)
+    db.update_outfit_pieces(outfit_id, ordered_ids, total)
     updated = db.get_outfit(outfit_id)
     return _public_outfit(updated)
 

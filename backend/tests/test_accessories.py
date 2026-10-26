@@ -190,6 +190,17 @@ def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(mon
         "price_gbp": 35,
         "tags": {"slot": "accessory"},
     }
+    top = {"id": "top", "price_gbp": 10, "tags": {"slot": "top", "category": "t-shirt"}}
+    bottom = {
+        "id": "bottom",
+        "price_gbp": 20,
+        "tags": {"slot": "bottom", "category": "jeans"},
+    }
+    shoes = {"id": "shoes", "price_gbp": 30, "tags": {"slot": "shoes", "category": "boots"}}
+    items_by_id = {
+        item["id"]: item
+        for item in (replaced, too_expensive, replacement, top, bottom, shoes)
+    }
     monkeypatch.setattr(phase2_api, "_user_profile", lambda: {"id": "profile", "brief": {}})
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: {"price_ceiling_gbp": 100})
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
@@ -198,7 +209,7 @@ def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(mon
     monkeypatch.setattr(
         phase2_api.db,
         "get_item_with_tags",
-        lambda item_id: replaced if item_id == "belt" else None,
+        lambda item_id: items_by_id.get(item_id),
     )
     monkeypatch.setattr(
         phase2_api,
