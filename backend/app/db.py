@@ -205,6 +205,7 @@ CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
 ON deck_events(profile_id, created_at);
 """
 _INIT_LOCK = Lock()
+_POSTGRES_INIT_ADVISORY_LOCK_KEY = 7301442001
 _INITIALIZED_DATABASES: set[str] = set()
 _LIVE_CATALOGUE_LOCK = Lock()
 _LIVE_CATALOGUE_CACHE: list[dict[str, Any]] | None = None
@@ -235,6 +236,12 @@ class _PostgresConnection:
     def __init__(self, connection):
         self._connection = connection
         self._in_transaction = False
+
+    def acquire_advisory_xact_lock(self, lock_key: int) -> None:
+        self._connection.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            (lock_key,),
+        )
 
     @staticmethod
     def _translate(sql: str, params):
@@ -374,6 +381,9 @@ def init_db() -> None:
             return
         with db_connection() as connection:
             if database_url:
+                connection.acquire_advisory_xact_lock(
+                    _POSTGRES_INIT_ADVISORY_LOCK_KEY
+                )
                 connection.execute("CREATE SCHEMA IF NOT EXISTS quenya")
                 connection.execute("CREATE SCHEMA IF NOT EXISTS extensions")
                 connection.execute(

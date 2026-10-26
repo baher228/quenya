@@ -79,6 +79,43 @@ def test_postgres_connect_disables_prepared_statements_and_sets_search_path(
     connection.close()
 
 
+def test_postgres_init_db_takes_advisory_lock_as_first_statement(monkeypatch):
+    statements = []
+    commits = []
+
+    class FakeConnection:
+        def execute(self, sql, params=None):
+            statements.append((sql, params))
+
+        def commit(self):
+            commits.append(len(statements))
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    fake_connection = FakeConnection()
+    monkeypatch.setattr(
+        db,
+        "connect_postgres",
+        lambda url, **kwargs: fake_connection,
+    )
+    monkeypatch.setenv("QUENYA_DATABASE_URL", "postgresql://test/database")
+    monkeypatch.delenv("QUENYA_SKIP_DB_INIT", raising=False)
+    monkeypatch.setattr(db, "_INITIALIZED_DATABASES", set())
+
+    db.init_db()
+
+    assert statements[0] == (
+        "SELECT pg_advisory_xact_lock(%s)",
+        (db._POSTGRES_INIT_ADVISORY_LOCK_KEY,),
+    )
+    assert statements[1] == ("SET LOCAL search_path TO quenya, extensions", None)
+    assert commits == [len(statements)]
+
+
 def test_postgres_connect_redacts_password_from_malformed_dsn_error(monkeypatch):
     import psycopg
 
