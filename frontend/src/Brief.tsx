@@ -30,7 +30,7 @@ function budgetIndex(value: number) {
 export const DEFAULT_BRIEF: Brief = {
   text: "Autumn in London. Workwear but cleaner, Japanese labels, things that age well. No big logos.",
   looking_for: "outfits",
-  pieces: ["outerwear", "knitwear", "bottom", "shoes"],
+  pieces: ["outerwear", "top", "knitwear", "bottom", "shoes"],
   include_shoes: true,
   gender: "menswear",
   condition: "both",

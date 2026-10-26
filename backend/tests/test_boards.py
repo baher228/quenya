@@ -919,8 +919,9 @@ def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
     ] + [
         _item(f"bottom-{index}", "bottom", [f"bottom{index}"]) for index in range(6)
     ] + [_item(f"shoe-{index}", "shoes") for index in range(4)]
-    deck8 = make_deck(ranked, 8, _brief(pieces=["top", "bottom"]))
-    deck16 = make_deck(ranked, 16, _brief(pieces=["top", "bottom"]))
+    brief = _brief(looking_for="pieces", pieces=["top", "bottom"])
+    deck8 = make_deck(ranked, 8, brief)
+    deck16 = make_deck(ranked, 16, brief)
     assert sum(item["tags"]["slot"] == "shoes" for item in deck8) <= 1
     assert sum(item["tags"]["slot"] == "shoes" for item in deck16) <= 2
     assert [item["tags"]["slot"] for item in deck8[:4]] == [
@@ -951,6 +952,63 @@ def test_shoe_cap_slot_round_robin_and_shoe_free_validation():
     )
 
 
+def test_outfits_deck_rotates_across_all_ranked_slots():
+    ranked = [
+        *(_item(f"outerwear-{index}", "outerwear") for index in range(12)),
+        *(_item(f"bottom-{index}", "bottom") for index in range(12)),
+        *(_item(f"top-{index}", "top") for index in range(12)),
+    ]
+    brief = _brief(
+        looking_for="outfits",
+        pieces=["outerwear", "knitwear", "bottom", "shoes"],
+    )
+
+    deck = make_deck(ranked, 10, brief, include_shoes=False)
+
+    assert len(deck) == 10
+    assert any(item["tags"]["slot"] == "top" for item in deck)
+
+
+def test_pieces_deck_rotation_stays_with_requested_slots():
+    ranked = [
+        *(_item(f"outerwear-{index}", "outerwear") for index in range(12)),
+        *(_item(f"bottom-{index}", "bottom") for index in range(12)),
+        *(_item(f"top-{index}", "top") for index in range(12)),
+    ]
+    brief = _brief(looking_for="pieces", pieces=["outerwear", "bottom"])
+
+    deck = make_deck(ranked, 10, brief, include_shoes=False)
+
+    assert len(deck) == 10
+    assert [item["tags"]["slot"] for item in deck] == ["outerwear", "bottom"] * 5
+
+
+def test_deck_candidates_cap_clothing_and_accessories_preserving_order():
+    clothing = [_item(f"clothing-{index}", "top") for index in range(6000)]
+    accessories = [
+        _item(
+            f"accessory-{index}",
+            "bag" if index % 2 else "accessory",
+        )
+        for index in range(800)
+    ]
+    items = [
+        item
+        for pair in zip(clothing[: len(accessories)], accessories, strict=True)
+        for item in pair
+    ] + clothing[len(accessories) :]
+
+    candidates = phase2_api._deck_candidates(items)
+
+    assert len(candidates) == 5500
+    assert [item["id"] for item in candidates[:5000]] == [
+        item["id"] for item in clothing[:5000]
+    ]
+    assert [item["id"] for item in candidates[5000:]] == [
+        item["id"] for item in accessories[:500]
+    ]
+
+
 def test_default_accessory_cap_applies_with_and_without_selector():
     ranked = []
     for index in range(20):
@@ -968,7 +1026,7 @@ def test_default_accessory_cap_applies_with_and_without_selector():
             item["tags"]["slot"] in {"bag", "accessory"} for item in deck
         ) <= 1
 
-    accessory_brief = _brief(pieces=["accessory"])
+    accessory_brief = _brief(looking_for="pieces", pieces=["accessory"])
     accessory_deck = make_deck(
         ranked, 10, accessory_brief, include_shoes=False
     )

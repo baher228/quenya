@@ -200,9 +200,13 @@ def make_deck(
         if tags_for(item).get("slot") != "shoes"
         and (accessory_limit > 0 or not is_accessory_slot(tags_for(item).get("slot")))
     ]
-    slots = list(dict.fromkeys(
-        slot for slot in brief.get("pieces", []) if slot != "shoes"
-    ))
+    slots = (
+        list(dict.fromkeys(
+            slot for slot in brief.get("pieces", []) if slot != "shoes"
+        ))
+        if brief.get("looking_for") == "pieces"
+        else []
+    )
     if not slots:
         slots = list(dict.fromkeys(
             str(tags_for(item).get("slot"))
