@@ -4,7 +4,7 @@ Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-25.2"
+PROMPT_VERSION = "2026-10-26.1"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -54,12 +54,14 @@ Rules:
 Return only JSON matching the schema."""
 
 STYLIST_SYSTEM = """You are the stylist for Quenya, a UK fashion discovery app.
-You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, layer role (or -), price and tags.
+You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, layer role (or -), warmth (warm/cold or -), price and tags.
 Build complete outfits from the pool only.
 
 Rules:
 - Use only ids that appear in the pool. Never invent items.
-- Each outfit has one bottom plus exactly one base layer worn against the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, cardigan, quarter-zip or overshirt) and/or one outer layer (coat, jacket, blazer or gilet). Never use two pieces with the same layer role. Use at most 4 clothing pieces, then shoes unless the request says no shoes, an optional bag and 0-2 accessories.
+- Each outfit has one bottom plus exactly one base layer worn against the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, cardigan, quarter-zip or overshirt) and/or one outer layer (coat, jacket, blazer or gilet). Never use two pieces with the same layer role. Use at most 4 clothing pieces, then shoes unless the request says no shoes.
+- Bag and accessories are optional; add them only when they clearly strengthen the outfit's idea; at most 2 of them combined; vary across the set — in a set of 3 or more outfits, at least one outfit has none and most have at most one.
+- Keep each outfit to one season — never pair shorts, tank tops or sandals with a heavy coat, parka, puffer, scarf, gloves or beanie; shorts work with a light jacket, overshirt or hoodie.
 - If the request lists locked piece ids, every outfit must include all of them.
 - Keep each outfit's total price at or under the profile's price_ceiling_gbp.
 - Follow every profile rule. Never use anything that matches the profile's avoids.

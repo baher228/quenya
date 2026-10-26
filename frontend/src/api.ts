@@ -90,8 +90,8 @@ export const api = {
   taste: () => req<TasteState>("/api/taste"),
   outfits: (count: number, locked_ids: string[] = [], exclude_ids: string[] = []) =>
     post<OutfitsResponse>("/api/outfits", { count, locked_ids, exclude_ids }),
-  swap: (outfitId: string, item_id: string) =>
-    post<Outfit | { outfit: Outfit }>(`/api/outfits/${outfitId}/swap`, { item_id }).then(r => ("outfit" in r ? r.outfit : r)),
+  swap: (outfitId: string, item_id: string, exclude_ids: string[] = []) =>
+    post<Outfit | { outfit: Outfit }>(`/api/outfits/${outfitId}/swap`, { item_id, exclude_ids }).then(r => ("outfit" in r ? r.outfit : r)),
   verdict: (outfitId: string, verdict: "like" | "reject", reason?: string) =>
     post<{ outfit: Outfit; taste?: TasteVersion | null }>(`/api/outfits/${outfitId}/verdict`, { verdict, reason }),
   correctTags: (itemId: string, note: string) =>

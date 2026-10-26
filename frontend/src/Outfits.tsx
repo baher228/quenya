@@ -20,6 +20,7 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
   const [locked, setLocked] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [rowErr, setRowErr] = useState<Record<string, unknown>>({});
+  const [seen, setSeen] = useState<Record<string, string[]>>({});
 
   const toggleLock = (o: Outfit, id: string) =>
     setLocked(l => ({ ...l, [o.id]: (l[o.id] ?? []).includes(id) ? l[o.id].filter(x => x !== id) : [...(l[o.id] ?? []), id] }));
@@ -29,9 +30,15 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
     try {
       const next = await fn();
       setLocked(l => ({ ...l, [next.id]: l[o.id] ?? [] }));
+      if (key.startsWith("swap")) {
+        setSeen(v => ({ ...v, [next.id]: [...new Set([...(v[o.id] ?? []), ...o.pieces.map(p => p.id)])] }));
+      }
       onReplace(o, next);
     } catch (e) { setRowErr(r => ({ ...r, [o.id]: e })); } finally { setBusy(null); }
   };
+
+  const swap = (o: Outfit, id: string) =>
+    run(o, "swap" + id, () => api.swap(o.id, id, (seen[o.id] ?? []).slice(-300)));
 
   const rebuild = (o: Outfit) => run(o, "rebuild", async () => {
     const keep = locked[o.id] ?? [];
@@ -71,7 +78,7 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
                         <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><img src={img(p)} alt={p.title} loading="lazy" /></button>
                         <figcaption><b>{p.brand || p.tags?.category || "Piece"}</b><span>{gbp(p.price_gbp)}</span></figcaption>
                         <button className="pbtn lock" onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
-                        <button className="pbtn swap" disabled={!!busy} onClick={() => run(o, "swap" + p.id, () => api.swap(o.id, p.id))}>
+                        <button className="pbtn swap" disabled={!!busy} onClick={() => swap(o, p.id)}>
                           {busy === o.id + "swap" + p.id ? "…" : "Swap"}</button>
                       </figure>
                     ))}
@@ -88,7 +95,7 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
                         </button>
                         <div className="minor-actions">
                           <button onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
-                          <button disabled={!!busy} onClick={() => run(o, "swap" + p.id, () => api.swap(o.id, p.id))}>
+                          <button disabled={!!busy} onClick={() => swap(o, p.id)}>
                             {busy === o.id + "swap" + p.id ? "…" : "Swap"}
                           </button>
                         </div>

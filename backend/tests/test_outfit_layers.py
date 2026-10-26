@@ -117,7 +117,7 @@ def _validate(piece_ids, pool, *, include_shoes=True):
         (
             [
                 "tee", "jumper", "coat", "jeans", "shoes", "bag",
-                "accessory-1", "accessory-2",
+                "accessory-1",
             ],
             True,
         ),
@@ -198,11 +198,14 @@ def test_stylist_pool_lines_include_layer_roles_and_system_rules():
     bag = _piece("bag", "bag", "tote bag")
     content = stylist_user_content({}, 1, [], [tee, bag])
 
-    assert "tee | top | base | £30 | graphic t-shirt" in content
-    assert "bag | bag | - | £30 | tote bag" in content
-    assert PROMPT_VERSION == "2026-10-25.2"
+    assert "tee | top | base | - | £30 | graphic t-shirt" in content
+    assert "bag | bag | - | - | £30 | tote bag" in content
+    assert PROMPT_VERSION == "2026-10-26.1"
     assert "one bottom plus exactly one base layer" in STYLIST_SYSTEM
     assert "Never use two pieces with the same layer role" in STYLIST_SYSTEM
+    assert "at most 2 of them combined" in STYLIST_SYSTEM
+    assert "shorts work with a light jacket, overshirt or hoodie" in STYLIST_SYSTEM
+    assert "warmth (warm/cold or -)" in STYLIST_SYSTEM
 
 
 def test_swap_keeps_the_replaced_layer_role(monkeypatch):
