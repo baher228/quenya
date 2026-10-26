@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2",
     "pillow>=10",
     "vinted-scraper>=5",
-    "scrapling[fetchers]>=0.2",
+    "scrapling>=0.2",
     "tavily-python>=0.5",
     "python-dotenv>=1",
     "python-multipart>=0.0.9",
@@ -27,6 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.9"]
+scrape = ["scrapling[fetchers]>=0.2"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

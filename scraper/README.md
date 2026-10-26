@@ -9,7 +9,7 @@ Install with Python 3.13:
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e '..\backend[scrape]'
 ```
 
 Create `scraper\.env` (ignored by git) with `SUPABASE_URL`,
