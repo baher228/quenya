@@ -186,6 +186,8 @@ def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+DECK_CANDIDATE_LIMIT = 5000
+
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result = dict(item)
     tags = result.get("tags")
@@ -195,6 +197,7 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, json.JSONDecodeError):
             tags = None
     result.pop("tags_json", None)
+    result.pop("raw_json", None)
     result["tags"] = tags
     image_url = result.get("image_url")
     local_image = f"/img/{images.image_key(image_url)}.jpg" if image_url else None
@@ -714,7 +717,8 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
         ).fetchall()
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
-    candidates = db.list_items(limit=5000)
+    # Full catalogue makes the deck ~2x slower until ranking is optimised.
+    candidates = db.live_catalogue()[:DECK_CANDIDATE_LIMIT]
     configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
     arm = (
         configured_arm
@@ -869,7 +873,7 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
     active = _user_profile()
     current = db.latest_taste(active["id"])
     profile = current["profile"]
-    items = db.list_items(limit=5000)
+    items = db.live_catalogue()
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     pool = build_pool(
@@ -988,7 +992,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     outfit = db.get_outfit(outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
-    items = db.list_items(limit=5000)
+    items = db.live_catalogue()
     existing = [db.get_item_with_tags(item_id) for item_id in outfit["piece_ids"]]
     replaced = next((item for item in existing if item and item["id"] == body.item_id), None)
     if not replaced:
@@ -1082,7 +1086,7 @@ def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dic
     current = _taste(active["id"])
     needle = q.strip().lower()
     matches = [
-        item for item in db.list_items(limit=5000)
+        item for item in db.live_catalogue()
         if needle in " ".join(
             [item["title"], str(tags_for(item).get("category", ""))]
             + list(tags_for(item).get("aesthetics", []))
