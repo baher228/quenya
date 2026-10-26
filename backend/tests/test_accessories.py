@@ -89,12 +89,15 @@ def test_excluded_and_non_accessory_titles(title, product_type):
         ("Leather Belt", "Bookmark"),
         ("Leather Belt", "Watch Case"),
         ("Leather Belt", "Care Kit"),
-        ("Water Glass", ""),
+        ("Glassware", ""),
         ("Luxury Gift Box", ""),
         ("Gift Box", ""),
         ("Gift Set", ""),
         ("Gift Wrap", ""),
         ("Gift Card Socks", ""),
+        ("Playing Cards", ""),
+        ("Il Bisonte Leather Playing Card Case", ""),
+        ("Crystal Wine Glasses", ""),
     ],
 )
 def test_non_fashion_leaks_are_strictly_excluded(title, product_type):
@@ -106,6 +109,12 @@ def test_non_fashion_leaks_are_strictly_excluded(title, product_type):
     ("title", "expected"),
     [
         ("Brush Print Silk Bandana", ("accessory", "bandana")),
+        ("Glass Bead Necklace", ("accessory", "necklace")),
+        (
+            "July Birthstone Pendant Necklace | 18ct Gold Vermeil/Glass Filled Ruby",
+            ("accessory", "necklace"),
+        ),
+        ("Men's Playing Cards Cotton Socks", ("accessory", "socks")),
         ("Il Bisonte Leather Card Case", ("accessory", "card case")),
         ("Crossbody Strap", ("bag", "crossbody bag")),
         ("Mako Bottle Bag", ("bag", "bag")),

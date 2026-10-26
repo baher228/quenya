@@ -83,7 +83,9 @@ _EXCLUDED_PATTERNS = tuple(
         r"\bfragrance\b|\bperfumes?\b|\bparfum\b|\beau\s+de\s+toilette\b",
         r"\beau\s+de\s+parfum\b|\bcolognes?\b|\bcandles?\b|\bdiffusers?\b|\bincense\b",
         r"\bhomeware\b|\bhome\b|\bcushions?\b|\bblankets?\b|\bthrows?\b|\btowels?\b",
-        r"\bmugs?\b|\bcups?\b|\bglass(?:es)?\b|\bplates?\b|\bbowls?\b|\bvases?\b",
+        r"\bmugs?\b|\bcups?\b|\bglassware\b|"
+        r"\b(?:drinking|wine|pint|shot|champagne|tumbler)\s+glass(?:es)?\b|\bglasses\b|"
+        r"\bplates?\b|\bbowls?\b|\bvases?\b",
         r"\brugs?\b|\bposters?\b|\bframes?\b|\bornaments?\b|\blaundry\b",
         r"\bdust\s+bags?\b|\bgift\s+bags?\b|\bshoe\s+bags?\b|\bsleeping\s+bags?\b",
         r"\bbean\s+bags?\b|\bbooks?\b|\bmagazines?\b|\bzines?\b|\bjournals?\b",
@@ -105,12 +107,13 @@ _EXCLUDED_PATTERNS = tuple(
         r"\bsprays?\b|\bprotectors?\b|\bstickers?(?:\s+packs?)?\b|\baprons?\b",
         r"\btrinkets?\b|\btrays?\b|\bbristles?\b",
         r"\b(?:hat|shoe|clothes|lint)\s+brush(?:es)?\b",
-        r"\bwatch\s+cases?\b|\bwatch\s+rolls?\b|\bplaying\s+cards?\b",
+        r"\bwatch\s+cases?\b|\bwatch\s+rolls?\b|\bplaying\s+cards?\s+cases?\b",
         r"\bcare\s+kits?\b|\bcleaners?\b",
     )
 )
-_GIFT_PACKAGING_PATTERN = re.compile(
-    r"\bgift\s+(?:wrap(?:ping)?|box(?:es)?|sets?)\b|\bbox\s+sets?\b",
+_CONDITIONAL_EXCLUSION_PATTERN = re.compile(
+    r"\bgift\s+(?:wrap(?:ping)?|box(?:es)?|sets?)\b|\bbox\s+sets?\b|"
+    r"\bplaying\s+cards?\b",
     re.IGNORECASE,
 )
 
@@ -121,7 +124,10 @@ def is_excluded(title: str, product_type: str = "") -> bool:
     combined = f"{title} {product_type}"
     if any(pattern.search(combined) for pattern in _EXCLUDED_PATTERNS):
         return True
-    if _GIFT_PACKAGING_PATTERN.search(combined) and _accessory_match(title) is None:
+    if (
+        _CONDITIONAL_EXCLUSION_PATTERN.search(combined)
+        and _accessory_match(title) is None
+    ):
         return True
     return bool(re.search(r"\bprint\b", product_type, re.IGNORECASE))
 
