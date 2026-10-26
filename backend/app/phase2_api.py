@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
 from app import db, images
+from app.accessories import is_accessory_slot
 from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
 from app.embedding_ranker import (
@@ -196,6 +197,20 @@ def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 DECK_CANDIDATE_LIMIT = 5000
+DECK_ACCESSORY_LIMIT = 500
+
+
+def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    clothing = [
+        item for item in items
+        if not is_accessory_slot(tags_for(item).get("slot"))
+    ]
+    extras = [
+        item for item in items
+        if is_accessory_slot(tags_for(item).get("slot"))
+    ]
+    return clothing[:DECK_CANDIDATE_LIMIT] + extras[:DECK_ACCESSORY_LIMIT]
+
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result = dict(item)
@@ -729,7 +744,7 @@ def deck(n: int = 10) -> list[dict[str, Any]]:
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
     # Full catalogue makes the deck ~2x slower until ranking is optimised.
-    candidates = db.live_catalogue()[:DECK_CANDIDATE_LIMIT]
+    candidates = _deck_candidates(db.live_catalogue())
     configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
     arm = (
         configured_arm
