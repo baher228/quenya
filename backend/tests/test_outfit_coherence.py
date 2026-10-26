@@ -307,6 +307,34 @@ def test_swap_accepts_exclusions_and_interleaves_base_subtypes(monkeypatch):
     assert stored["piece_ids"] == ["shirt", "jeans", "shoes"]
 
 
+def test_swap_allows_base_replacement_with_legacy_accessory_violation(monkeypatch):
+    old_tee = _piece("old-tee", "top", "t-shirt")
+    jeans = _piece("jeans", "bottom", "jeans")
+    shoes = _piece("shoes", "shoes", "boots")
+    bag = _piece("bag", "bag", "tote bag")
+    accessory_one = _piece("accessory-one", "accessory", "belt")
+    accessory_two = _piece("accessory-two", "accessory", "bracelet")
+    new_tee = _piece("new-tee", "top", "graphic t-shirt")
+
+    result, stored, _updates = _run_swap(
+        monkeypatch,
+        [old_tee, jeans, shoes, bag, accessory_one, accessory_two],
+        [new_tee],
+        "old-tee",
+    )
+
+    assert {item["id"] for item in result["pieces"]} == {
+        "new-tee",
+        "jeans",
+        "shoes",
+        "bag",
+        "accessory-one",
+        "accessory-two",
+    }
+    assert "new-tee" in stored["piece_ids"]
+    assert "old-tee" not in stored["piece_ids"]
+
+
 def test_swap_skips_candidates_that_create_a_weather_clash(monkeypatch):
     tee = _piece("tee", "top", "t-shirt")
     coat = _piece("coat", "outerwear", "wool coat")
@@ -331,19 +359,19 @@ def test_swap_skips_candidates_that_create_a_weather_clash(monkeypatch):
     assert "shorts" not in stored["piece_ids"]
 
 
-def test_swap_keeps_409_when_no_candidate_preserves_the_outfit(monkeypatch):
+def test_swap_keeps_409_when_shorts_clash_with_existing_parka(monkeypatch):
     tee = _piece("tee", "top", "t-shirt")
-    coat = _piece("coat", "outerwear", "wool coat")
-    jeans = _piece("jeans", "bottom", "jeans")
+    parka = _piece("parka", "outerwear", "parka")
+    trousers = _piece("trousers", "bottom", "trousers")
     shoes = _piece("shoes", "shoes", "boots")
     shorts = _piece("shorts", "bottom", "cargo shorts")
 
     with pytest.raises(HTTPException) as exc_info:
         _run_swap(
             monkeypatch,
-            [tee, coat, jeans, shoes],
+            [tee, parka, trousers, shoes],
             [shorts],
-            "jeans",
+            "trousers",
         )
 
     assert exc_info.value.status_code == 409

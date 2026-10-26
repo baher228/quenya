@@ -1037,6 +1037,9 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     core = _core()
     excluded_ids = set(body.exclude_ids)
     include_shoes = active["brief"].get("include_shoes", True)
+    before = set(
+        outfit_errors([piece for piece in existing if piece], include_shoes)
+    )
     other_pieces = [
         item for item in existing if item and item["id"] != body.item_id
     ]
@@ -1061,7 +1064,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         )
         if total > float(current["price_ceiling_gbp"]):
             continue
-        if outfit_errors([*other_pieces, item], include_shoes):
+        if set(outfit_errors([*other_pieces, item], include_shoes)) - before:
             continue
         candidates.append(item)
     if layer_role(replaced) == "base":
