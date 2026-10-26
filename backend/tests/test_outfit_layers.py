@@ -2,10 +2,12 @@ import pytest
 
 from app import outfits, phase2_api
 from app.outfits import (
+    base_layer_subtype,
     build_pool,
     layer_role,
     stylist_user_content,
     validate_outfits,
+    warmth,
 )
 from app.prompts import PROMPT_VERSION, STYLIST_SYSTEM
 from app.schemas import SwapRequest
@@ -61,6 +63,72 @@ def test_layer_role_uses_title_only_when_category_is_empty():
     assert layer_role(
         _piece("piece", "top", "", title="Graphic Hoodie")
     ) == "mid"
+
+
+@pytest.mark.parametrize(
+    ("slot", "category", "title", "expected"),
+    [
+        ("top", "camo print t-shirt", "Aged Column Camo Sweat", "mid"),
+        (
+            "top",
+            "graphic long sleeve tee",
+            "Metal Tie Dye Puff Sleeve Sweatshirt",
+            "mid",
+        ),
+        (
+            "top",
+            "graphic long sleeve t-shirt",
+            "LINE IT UP HOOD BLACK",
+            "mid",
+        ),
+        ("outerwear", "insulated vest", "Arcteryx Atom LT vest", "outer"),
+        (
+            "knitwear",
+            "mesh knit vest",
+            "VICE MESH KNIT VEST [OLIVE]",
+            "mid",
+        ),
+        ("top", "vest top", "Ribbed Vest", "base"),
+        ("outerwear", "", "Hooded Shell Jacket", "outer"),
+    ],
+)
+def test_layer_role_prefers_title_and_recognizes_special_vests(
+    slot, category, title, expected
+):
+    item = _piece("piece", slot, category, title=title)
+
+    assert layer_role(item) == expected
+    if title == "Ribbed Vest":
+        assert warmth(item) == "warm"
+
+
+@pytest.mark.parametrize("slot", ["top", "outerwear"])
+def test_insulated_vest_is_not_a_warm_top(slot):
+    item = _piece(
+        "insulated-vest",
+        slot,
+        "insulated vest",
+        title="Arcteryx Atom LT vest",
+    )
+
+    assert warmth(item) is None
+
+
+@pytest.mark.parametrize(
+    ("category", "title", "expected"),
+    [
+        ("cotton t-shirt", "Heavyweight Tee", "tee"),
+        ("rugby shirt", "Big Fit Polo Sport Rugby Shirt", "polo"),
+        ("camo print t-shirt", "Relaxed Oxford Shirt", "shirt"),
+    ],
+)
+def test_base_layer_subtype_prefers_title(category, title, expected):
+    assert (
+        base_layer_subtype(
+            _piece("base", "top", category, title=title)
+        )
+        == expected
+    )
 
 
 @pytest.mark.parametrize(
