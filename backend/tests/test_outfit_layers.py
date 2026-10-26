@@ -10,6 +10,7 @@ from app.outfits import (
     warmth,
 )
 from app.prompts import PROMPT_VERSION, STYLIST_SYSTEM
+from app.rank import rank_items
 from app.schemas import SwapRequest
 
 
@@ -35,6 +36,12 @@ def _piece(
             "fit": "regular",
         },
     }
+
+
+def _womenswear_piece(item_id: str, slot: str, category: str) -> dict:
+    item = _piece(item_id, slot, category)
+    item["tags"].update(gender="womenswear", condition="new")
+    return item
 
 
 @pytest.mark.parametrize(
@@ -259,6 +266,81 @@ def test_build_pool_keeps_base_items_beyond_top_ten_hoodies(monkeypatch):
 
     assert "low-ranked-tee" in {item["id"] for item in pool}
     assert sum(layer_role(item) == "mid" for item in pool) == 8
+
+
+def test_build_pool_pieces_mode_fills_unselected_bottoms_and_shoes():
+    brief = {
+        "looking_for": "pieces",
+        "pieces": ["outerwear", "top"],
+        "include_shoes": True,
+        "gender": "womenswear",
+        "budget_gbp": 300,
+    }
+    profile = {"condition_preference": "both", "price_ceiling_gbp": 300}
+    items = [
+        _womenswear_piece("jacket", "outerwear", "puffer jacket"),
+        _womenswear_piece("tee", "top", "graphic t-shirt"),
+        _womenswear_piece("trousers", "bottom", "jeans"),
+        _womenswear_piece("boots", "shoes", "boots"),
+    ]
+
+    selected_ranked = rank_items(items, brief, profile)
+    pool = build_pool(items, brief, profile, [], [])
+
+    assert {
+        item["tags"]["slot"] for item in selected_ranked
+    } == {"outerwear", "top"}
+    assert {item["id"] for item in pool} >= {"trousers", "boots"}
+
+
+def test_build_pool_pieces_mode_keeps_original_ranking_first_within_slot():
+    brief = {
+        "looking_for": "pieces",
+        "pieces": ["top"],
+        "gender": "womenswear",
+        "budget_gbp": 300,
+    }
+    profile = {"condition_preference": "both", "price_ceiling_gbp": 300}
+    items = [
+        _womenswear_piece("tee-a", "top", "graphic t-shirt"),
+        _womenswear_piece("tee-b", "top", "plain tee"),
+    ]
+
+    original_ranking = rank_items(items, brief, profile)
+    pool = build_pool(items, brief, profile, [], [])
+    top_ids = [
+        item["id"] for item in pool if item["tags"]["slot"] == "top"
+    ]
+
+    assert top_ids[0] == original_ranking[0]["id"]
+
+
+def test_build_pool_outfits_mode_keeps_its_existing_pool(monkeypatch):
+    brief = {
+        "looking_for": "outfits",
+        "pieces": ["top"],
+        "include_shoes": True,
+    }
+    ranked = [
+        _piece("jacket", "outerwear", "puffer jacket"),
+        _piece("tee", "top", "graphic t-shirt"),
+        _piece("trousers", "bottom", "jeans"),
+        _piece("boots", "shoes", "boots"),
+    ]
+    calls = []
+
+    def fake_rank(items, current_brief, profile, **kwargs):
+        calls.append(current_brief)
+        return ranked
+
+    monkeypatch.setattr(outfits, "rank_items", fake_rank)
+
+    pool = build_pool(ranked, brief, {}, [], [])
+
+    assert calls == [brief]
+    assert [item["id"] for item in pool] == [
+        "trousers", "boots", "tee", "jacket"
+    ]
 
 
 def test_stylist_pool_lines_include_layer_roles_and_system_rules():
