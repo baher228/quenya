@@ -13,13 +13,16 @@ _NON_OUTFIT_BASE = re.compile(
     re.I,
 )
 _OUTER_LAYER = re.compile(
-    r"\b(?:coats?|jackets?|parkas?|puffers?|anoraks?|blazers?|gilets?|"
+    r"\b(?:(?:insulated|puffer|padded|down|quilted|fleece|synthetic)\s+vests?|"
+    r"coats?|jackets?|parkas?|puffers?|anoraks?|blazers?|gilets?|"
     r"windbreakers?|raincoats?|shackets?|trenches|trench|cagoules?|"
     r"ponchos?|mac|suits?)\b",
     re.I,
 )
 _MID_LAYER = re.compile(
-    r"\b(?:hoodies?|hoody|sweatshirts?|sweat|jumpers?|sweaters?|cardigans?|"
+    r"\b(?:hoodies?|hoody|hoods?|sweatshirts?|sweat|"
+    r"(?:(?:knit(?:ted)?|sweater|mesh\s+knit|cable(?:\s+knit)?)\s+vests?)|"
+    r"jumpers?|sweaters?|cardigans?|"
     r"fleeces?|quarter[\s-]+zip|half[\s-]+zip|1/4\s+zip|zip[- ]neck|"
     r"pullovers?|overshirts?|waistcoats?|track\s+top|knit\s+sweatshirts?)\b",
     re.I,
@@ -29,9 +32,10 @@ _BASE_LAYER = re.compile(
     r"camisoles?|camis?|bodysuits?|bras?|henleys?|long[\s-]+sleeve|crops?)\b",
     re.I,
 )
+_VEST_WORD = re.compile(r"\bvests?\b", re.I)
 _WARM_SHORTS = re.compile(r"\bshorts?\b", re.I)
 _WARM_TOP = re.compile(
-    r"\b(?:tanks?(?:\s+tops?)?|vests?(?:\s+tops?)?|camisoles?|camis?|strappy)\b",
+    r"\b(?:tanks?(?:\s+tops?)?|vests?\s+tops?|camisoles?|camis?|strappy)\b",
     re.I,
 )
 _WARM_SHOES = re.compile(
@@ -78,13 +82,21 @@ def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
     slot = str(tags.get("slot") or "").strip().lower()
     if slot not in _LAYER_SLOTS:
         return None
-    category = str(tags.get("category") or "").strip()
-    text = (category or str(item.get("title") or "")).lower()
-    if _OUTER_LAYER.search(text):
+    category = str(tags.get("category") or "").strip().lower()
+    title = str(item.get("title") or "").strip().lower()
+    if _OUTER_LAYER.search(title):
         return "outer"
-    if _MID_LAYER.search(text):
+    if _MID_LAYER.search(title):
         return "mid"
-    if _BASE_LAYER.search(text):
+    if _OUTER_LAYER.search(category):
+        return "outer"
+    if _MID_LAYER.search(category):
+        return "mid"
+    category_base = category if slot == "top" else _VEST_WORD.sub("", category)
+    title_base = title if slot == "top" else _VEST_WORD.sub("", title)
+    if _BASE_LAYER.search(category_base):
+        return "base"
+    if _BASE_LAYER.search(title_base):
         return "base"
     return {"outerwear": "outer", "knitwear": "mid", "top": "base"}[slot]
 
@@ -126,13 +138,15 @@ def warmth(item: dict[str, Any]) -> Literal["warm", "cold"] | None:
 
 
 def base_layer_subtype(item: dict[str, Any]) -> Literal["tee", "shirt", "polo", "other"]:
-    text = " ".join(_item_texts(item)).strip().lower()
-    if _BASE_TEE.search(text):
-        return "tee"
-    if _BASE_POLO.search(text):
-        return "polo"
-    if _BASE_SHIRT.search(text):
-        return "shirt"
+    texts = (item.get("title"), tags_for(item).get("category"))
+    for value in texts:
+        text = str(value or "").strip().lower()
+        if _BASE_TEE.search(text):
+            return "tee"
+        if _BASE_POLO.search(text):
+            return "polo"
+        if _BASE_SHIRT.search(text):
+            return "shirt"
     return "other"
 
 
