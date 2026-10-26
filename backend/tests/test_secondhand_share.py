@@ -17,6 +17,25 @@ def test_secondhand_share(brief, profile, expected):
     assert secondhand_share(brief, profile) == expected
 
 
+def test_secondhand_share_increases_with_niche_without_reaching_extremes():
+    niches = [0, 0.25, 0.5, 0.75, 1.0]
+    shares = [
+        secondhand_share(
+            {"looking_for": "outfits"},
+            {"condition_preference": "both", "niche_level": niche},
+        )
+        for niche in niches
+    ]
+
+    assert all(
+        lower <= upper
+        for lower, upper in zip(shares[:-1], shares[1:], strict=True)
+    )
+    assert shares[-1] < 1.0
+    assert shares[-1] >= 0.65
+    assert shares[0] <= 0.35
+
+
 def _item(index: int, secondhand: bool) -> dict:
     return {
         "id": str(index),
