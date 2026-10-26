@@ -200,16 +200,31 @@ def make_deck(
         if tags_for(item).get("slot") != "shoes"
         and (accessory_limit > 0 or not is_accessory_slot(tags_for(item).get("slot")))
     ]
-    slots = (
-        list(dict.fromkeys(
-            slot for slot in brief.get("pieces", []) if slot != "shoes"
-        ))
-        if brief.get("looking_for") == "pieces"
-        else []
-    )
-    if not slots:
+    pieces = brief.get("pieces") or []
+    pieces_mode = brief.get("looking_for") == "pieces" and bool(pieces)
+    if pieces_mode:
+        rotation_key_by_id = {
+            item["id"]: tags_for(item).get("slot") for item in remaining
+        }
+        slots = list(dict.fromkeys(slot for slot in pieces if slot != "shoes"))
+        if not slots:
+            slots = list(dict.fromkeys(
+                str(rotation_key_by_id[item["id"]])
+                for item in remaining
+                if rotation_key_by_id[item["id"]] not in (None, "shoes")
+            ))
+    else:
+        from app.outfits import layer_role
+
+        def _deck_kind(item: dict[str, Any]) -> str:
+            role = layer_role(item)
+            return role or str(tags_for(item).get("slot"))
+
+        rotation_key_by_id = {
+            item["id"]: _deck_kind(item) for item in remaining
+        }
         slots = list(dict.fromkeys(
-            str(tags_for(item).get("slot"))
+            rotation_key_by_id[item["id"]]
             for item in remaining
             if tags_for(item).get("slot") not in (None, "shoes")
         ))
@@ -220,14 +235,17 @@ def make_deck(
     while len(deck) < non_shoe_goal and remaining:
         candidates = [
             item for item in remaining
-            if tags_for(item).get("slot") == slots[next_slot % len(slots)]
+            if rotation_key_by_id[item["id"]] == slots[next_slot % len(slots)]
         ] if slots else list(remaining)
         next_slot += 1
         if not candidates:
             if slots and next_slot >= len(slots) * (len(deck) + len(slots) + 1):
                 slots = [
                     slot for slot in slots
-                    if any(tags_for(item).get("slot") == slot for item in remaining)
+                    if any(
+                        rotation_key_by_id[item["id"]] == slot
+                        for item in remaining
+                    )
                 ]
                 next_slot = 0
                 if not slots:

@@ -969,6 +969,33 @@ def test_outfits_deck_rotates_across_all_ranked_slots():
     assert any(item["tags"]["slot"] == "top" for item in deck)
 
 
+def test_outfits_deck_rotates_top_slot_by_layer_role():
+    ranked = []
+    for index in range(6):
+        item = _item(f"layered-top-{index}", "top")
+        item["title"] = (
+            f"Ranked {index} Hoodie"
+            if index < 3
+            else f"Ranked {index} Sweatshirt"
+        )
+        ranked.append(item)
+    for index in range(3):
+        item = _item(f"base-top-{index}", "top")
+        item["title"] = f"Ranked {index} T-Shirt"
+        ranked.append(item)
+    ranked.extend(_item(f"outerwear-{index}", "outerwear") for index in range(6))
+    ranked.extend(_item(f"bottom-{index}", "bottom") for index in range(6))
+    brief = _brief(
+        looking_for="outfits",
+        pieces=["outerwear", "knitwear", "bottom", "shoes"],
+    )
+
+    deck = make_deck(ranked, 10, brief, include_shoes=False)
+
+    assert len(deck) == 10
+    assert sum("T-Shirt" in item.get("title", "") for item in deck) >= 2
+
+
 def test_pieces_deck_rotation_stays_with_requested_slots():
     ranked = [
         *(_item(f"outerwear-{index}", "outerwear") for index in range(12)),
