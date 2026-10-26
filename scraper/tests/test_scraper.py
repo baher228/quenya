@@ -255,6 +255,91 @@ def test_tee_category_rejects_non_tee_title_path_titles(title):
 @pytest.mark.parametrize(
     ("title", "product_type", "tags"),
     [
+        ("HUF 89 Pullover Windshirt Black", "T-Shirt", ["t-shirt"]),
+        ("Former Oscillating Hood Black", "T-Shirt", ["t-shirt"]),
+        ("Spitfire Babygrow Blue", "T-Shirt", ["t-shirt"]),
+        (
+            "Columbia Women's Brea Falls Woven Short Sleeve - Safari",
+            "Short Sleeve T-Shirts",
+            ["Women's T-Shirts"],
+        ),
+        ("Trojan Racing Stripe Fine Gauge Turtle Ecru", "T Shirts", ["T Shirts"]),
+        ("W ORTank Cropped - Harbor", "ORTank", ["t-shirts"]),
+        ("Leti Denim Jeans - blue", "Denim - Jeans", ["t-shirt"]),
+        ("aries end. moto-dodgem scarf - Black", "Accessories - Scarves", ["t-shirt"]),
+        ("Aries x Umbro Training Pant - Black / White", "Jersey - Tees LS", ["t-shirt"]),
+    ],
+)
+def test_tee_category_rejects_non_tee_garments_from_title_or_product_type(
+    title, product_type, tags
+):
+    assert tee_category(title, product_type, tags) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type"),
+    [
+        ("Dime MTL Kids T-Shirt Canyon Brown", "T-Shirts"),
+        ("Dime MTL Classic Skull Kids T Shirt White", "T-Shirts"),
+        ("Weekend Offender Saturdays Kids Graphic Tee White", "T Shirts"),
+        ("Toddler T-shirt", "Kidswear"),
+    ],
+)
+def test_tee_category_rejects_kids_and_toddlers_anywhere_in_title(title, product_type):
+    assert tee_category(title, product_type) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type", "tags", "category"),
+    [
+        ("Tanker T-Shirt - White", "T-Shirts", (), "t-shirt"),
+        ("April AP Kid T-Shirt - Brown", "T-Shirts", (), "t-shirt"),
+        ("Hockey Car Kid Tee Green", "T-Shirts", (), "t-shirt"),
+        (
+            "Vintage Kidrobot Limited Edition Bones Heavyweight Crewneck T-Shirt - XXL",
+            "T-Shirts",
+            (),
+            "t-shirt",
+        ),
+        (
+            "Vintage Polo Ralph Lauren Big Pony Heavyweight Single Stitch Crewneck T-Shirt - L",
+            "T-Shirts",
+            (),
+            "t-shirt",
+        ),
+        (
+            "Vintage Polo Ralph Lauren Women's Heavyweight Striped Woven Crewneck Henley "
+            "T-Shirt - L",
+            "T-Shirts",
+            (),
+            "t-shirt",
+        ),
+        ("W DLYTShirt - Dusty Turquoise", "W DLYTshirt", ["t-shirts"], "t-shirt"),
+        (
+            "Men's Eco Tech T | Yellow",
+            "August 26 launches",
+            ["t-shirt"],
+            "t-shirt",
+        ),
+        ("Men's Breton - Navy/Ecru", "LS T-Shirts", ["T-Shirts"], "t-shirt"),
+        (
+            "WINNERS LONG SLEEVE - WASHED YELLOW",
+            "Long Sleeve T-Shirts",
+            (),
+            "long sleeve t-shirt",
+        ),
+        ("Kid T-Shirt", "T-Shirts", (), "t-shirt"),
+    ],
+)
+def test_tee_category_keeps_valid_garment_words_and_singular_kid(
+    title, product_type, tags, category
+):
+    assert tee_category(title, product_type, tags) == category
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type", "tags"),
+    [
         ("Logo Tee", "Boy's T-Shirts", ()),
         ("Logo Tee", "Girl's T-Shirts", ()),
         ("Logo Tee", "Baby T-Shirts", ()),

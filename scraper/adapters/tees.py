@@ -19,7 +19,8 @@ REJECTED_PRODUCT_TYPE = re.compile(
     r"swim\w*|gift)\b",
     re.I,
 )
-TITLE_START_KIDS = re.compile(r"^\s*(?:boys?|girls?|kids?|youth)\b", re.I)
+TITLE_START_KIDS = re.compile(r"^\s*(?:boys?|girls?|kids|youth)\b", re.I)
+TITLE_KIDS_OR_TODDLERS = re.compile(r"\bkids\b|\btoddlers?\b", re.I)
 MULTIPACK = re.compile(
     r"\b\d+\s*-?\s*packs?\b|\bpack\s+of\s+\d+\b|\bmulti-?packs?\b",
     re.I,
@@ -27,7 +28,13 @@ MULTIPACK = re.compile(
 NON_TEE_TITLE = re.compile(
     r"\b(?:tops?|henley\w*|jersey|turtle\s?neck|roll\s?neck|funnel\s?neck|"
     r"mock\s?neck|blouses?|bandeau|peplum|wrap|rugby|mesh|bodycon|corset|"
-    r"bustier|crop)\b",
+    r"bustier|crop|\w*tanks?|singlets?|hood(?:ie)?s?|windshirts?|babygrows?|"
+    r"jeans?|pants?|trousers?|scarf|scarves|turtles?|woven|vests?|bodysuits?|"
+    r"sweat\w*)\b",
+    re.I,
+)
+NON_TEE_PRODUCT_TYPE = re.compile(
+    r"\b(?:denim|jeans?|trousers?|pants?|accessor(?:y|ies)|scarf|scarves|scarfs?)\b",
     re.I,
 )
 LONG_SLEEVE = re.compile(
@@ -61,6 +68,7 @@ def tee_category(title, product_type="", tags=()) -> str | None:
         or MULTIPACK.search(title)
         or MULTIPACK.search(product_type)
         or TITLE_START_KIDS.search(title)
+        or TITLE_KIDS_OR_TODDLERS.search(title)
     ):
         return None
     tag_tokens = {
@@ -89,7 +97,11 @@ def tee_category(title, product_type="", tags=()) -> str | None:
     if not has_tee_evidence:
         return None
     if not title_has_tee:
-        if NEGATIVE.search(TEE.sub(" TEE ", product_type)) or NON_TEE_TITLE.search(title):
+        if (
+            NEGATIVE.search(TEE.sub(" TEE ", product_type))
+            or NON_TEE_PRODUCT_TYPE.search(product_type)
+            or NON_TEE_TITLE.search(title)
+        ):
             return None
     return "long sleeve t-shirt" if LONG_SLEEVE.search(title) else "t-shirt"
 
