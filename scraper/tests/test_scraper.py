@@ -7,6 +7,7 @@ import scrape
 import store
 from adapters import burberry, common, jsonld, nike, sfcc, shopify, ssense, tiles
 from adapters.common import ShopSession, make_row, unique_rows
+from adapters.tees import tee_category, tee_gender
 from scrape import _images_broken, _shard_shops, _shop_filter, split_batches
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -162,6 +163,181 @@ def test_shopify_accessory_mode_filters_exclusions_and_keeps_apparel_unchanged()
     )
     assert [row["title"] for row in apparel_rows] == ["Shampoo Gift Set"]
     assert all(common.accessory_kind(row["title"]) is None for row in apparel_rows)
+
+
+@pytest.mark.parametrize(
+    ("title", "category"),
+    [
+        ("Logo Tee", "t-shirt"),
+        ("Heavyweight T-Shirt", "t-shirt"),
+        ("Dragon LS Tee", "long sleeve t-shirt"),
+        ("Pocket T Shirt", "t-shirt"),
+        ("Ringer Tee", "t-shirt"),
+        ("Raglan Tee", "t-shirt"),
+        ("Baby Tee", "t-shirt"),
+        ("Beastie Boys Tee", "t-shirt"),
+        ("Merino Running Tee", "t-shirt"),
+        ("Polo Ralph Lauren Jersey T-Shirt", "t-shirt"),
+    ],
+)
+def test_tee_category_accepts_tshirts(title, category):
+    assert tee_category(title) == category
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Loopback Sweatshirt",
+        "Logo Hoodie",
+        "Oxford Shirt",
+        "Piqué Polo",
+        "Ribbed Vest",
+        "Tank Top",
+        "T-Shirt Dress",
+        "Kids Logo Tee",
+        "3 Pack Boxer",
+        "Muscle Tee",
+        "Tee + Vinyl Bundle",
+        "Gift Card",
+    ],
+)
+def test_tee_category_rejects_non_tshirts(title):
+    assert tee_category(title) is None
+
+
+def test_tee_category_supports_product_type_and_tag_evidence():
+    assert tee_category("Logo Longsleeve", "T-Shirts") == "long sleeve t-shirt"
+    assert tee_category("Logo Longsleeve", "Sweatshirts") is None
+    assert tee_category("Logo Longsleeve", tags=["category: long sleeve t-shirts"]) == (
+        "long sleeve t-shirt"
+    )
+
+
+def test_tee_gender_evidence_and_shop_fallback_order():
+    assert tee_gender(
+        {"gender_rule": "men"},
+        {"title": "Women's Logo Tee"},
+        "https://example.test/products/womens-logo-tee",
+    ) == "w"
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee"},
+        "https://example.test/products/logo-tee",
+    ) is None
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee", "tags": ["Gender:Mens", "Gender:Womens"]},
+        "https://example.test/products/logo-tee",
+    ) is None
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee", "tags": ["womens"]},
+        "https://example.test/products/logo-tee",
+    ) == "w"
+    assert tee_gender(
+        {"gender_rule": "default"},
+        {"title": "Logo Tee"},
+        "https://example.test/products/logo-tee",
+        "m",
+    ) == "m"
+    assert tee_gender(
+        {"gender_rule": "men", "default_gender": "w"},
+        {"title": "Logo Tee"},
+        "https://example.test/products/logo-tee",
+    ) == "m"
+
+
+def test_shopify_tee_colour_splitting_and_vendor_brand():
+    config = shop(
+        "test",
+        "Fallback Brand",
+        "shopify",
+        "example-shop.test",
+        max_pages=1,
+        brand_from_vendor=True,
+        _category_set="tees",
+    )
+    rows = shopify.scrape(
+        config,
+        FakeSession(
+            [
+                fixture("shopify-meta-gbp.json"),
+                fixture("shopify-tee-colours.json"),
+            ]
+        ),
+    )
+
+    split_rows = [row for row in rows if row["record"]["raw_json"]["product_id"] == 10]
+    assert [row["title"] for row in split_rows] == ["Classic Tee - Blue", "Classic Tee - Red"]
+    assert [row["price_gbp"] for row in split_rows] == [24, 30]
+    assert [row["brand"] for row in split_rows] == ["Vendor Brand", "Vendor Brand"]
+    assert [row["record"]["raw_json"]["colour"] for row in split_rows] == ["Blue", "Red"]
+    assert [row["record"]["raw_json"]["variant_id"] for row in split_rows] == [102, 103]
+    assert [row["url"].split("?variant=")[-1] for row in split_rows] == ["102", "103"]
+    assert split_rows[0]["image_url_original"].endswith("blue-tee.jpg")
+    assert split_rows[1]["image_url_original"].endswith("red-tee.jpg")
+    assert split_rows[0]["record"]["id"] != split_rows[1]["record"]["id"]
+    assert all(row["record"]["raw_json"]["category_set"] == "tees" for row in rows)
+    assert all(row["category"] == "t-shirt" for row in rows)
+    assert all(row["gender"] is None for row in rows)
+
+    shared_rows = [row for row in rows if row["record"]["raw_json"]["product_id"] == 11]
+    assert len(shared_rows) == 1
+    assert shared_rows[0]["title"] == "Shared Image Tee"
+    assert shared_rows[0]["url"] == "https://example-shop.test/products/shared-image-tee"
+    assert shared_rows[0]["brand"] == "Fallback Brand"
+
+
+def test_jsonld_uses_tee_pages():
+    body = """<script type="application/ld+json">{
+      "@type":"Product","name":"Logo Tee",
+      "url":"https://example.test/products/logo-tee",
+      "image":"https://images.example.test/logo-tee.jpg",
+      "offers":{"priceCurrency":"GBP","price":"25",
+      "availability":"https://schema.org/InStock"}
+    }</script>"""
+    config = shop(
+        "tees",
+        "Example",
+        "jsonld",
+        "example.test",
+        _category_set="tees",
+        pages=[{"gender": "m", "url": "https://example.test/apparel"}],
+        tee_pages=[{"gender": "w", "url": "https://example.test/tees"}],
+    )
+    fake = FakeSession([body])
+
+    rows = jsonld.scrape(config, fake)
+
+    assert fake.requests[0]["url"] == "https://example.test/tees"
+    assert rows[0]["gender"] == "w"
+    assert rows[0]["category"] == "t-shirt"
+    assert rows[0]["record"]["raw_json"]["category_set"] == "tees"
+
+
+def test_shopify_tees_stop_requesting_pages_when_session_is_full():
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-gbp.json"),
+            fixture("shopify-tee-colours.json"),
+            '{"products": []}',
+        ]
+    )
+    fake.full = False
+    fake.on_emit = lambda _rows: setattr(fake, "full", True)
+    config = shop(
+        "test",
+        "Test",
+        "shopify",
+        "example-shop.test",
+        max_pages=4,
+        _category_set="tees",
+    )
+
+    rows = shopify.scrape(config, fake)
+
+    assert rows
+    assert len(fake.requests) == 2
 
 
 def test_accessory_jsonld_pages_and_tile_acceptance():
@@ -838,6 +1014,83 @@ def test_accessory_shop_selection_and_sharding():
     ]
     with pytest.raises(ValueError, match="0 <= K < N"):
         _shard_shops(shops, "2/2")
+
+
+def test_apparel_and_tee_shop_selection():
+    shops = [
+        shop("legacy", adapter="shopify", enabled=True),
+        shop(
+            "apparel-and-tees",
+            adapter="shopify",
+            enabled=True,
+            category_sets=["apparel", "tees"],
+        ),
+        shop("tees-only", adapter="shopify", enabled=True, category_sets=["tees"]),
+        shop("accessories-only", adapter="shopify", enabled=True, category_sets=["accessories"]),
+    ]
+    args = SimpleNamespace(
+        shops=None,
+        group=None,
+        category_set="tees",
+        uk=False,
+        all_enabled=False,
+    )
+    tee_keys = [item["key"] for item in _shop_filter(shops, args)]
+    args.category_set = "apparel"
+    apparel_keys = [item["key"] for item in _shop_filter(shops, args)]
+
+    assert tee_keys == ["apparel-and-tees", "tees-only"]
+    assert apparel_keys == ["legacy", "apparel-and-tees"]
+
+
+def test_run_caps_accepted_rows_per_shop(monkeypatch, tmp_path):
+    monkeypatch.setattr(scrape, "ROOT", tmp_path)
+    config = shop(
+        "capped",
+        adapter="test",
+        domain="example.test",
+        _category_set="tees",
+    )
+    rows = [
+        make_row(
+            config,
+            f"Logo Tee {index}",
+            20,
+            "https://images.example.test/tee.jpg",
+            f"https://example.test/products/tee-{index}",
+            None,
+            "https://example.test/tees",
+        )
+        for index in range(4)
+    ]
+
+    def emit_rows(_shop, session):
+        session.emit(rows)
+        assert session.full
+
+    monkeypatch.setitem(scrape.REGISTRY, "test", emit_rows)
+    args = SimpleNamespace(
+        category_set="tees",
+        shard=None,
+        resume=None,
+        known=None,
+        time_budget=1,
+        upload=False,
+        workers=1,
+        max_pages=0,
+        max_requests=10,
+        delay=0,
+        jitter=0,
+        max_rows_per_shop=2,
+        check_images=0,
+        batch_size=10,
+    )
+
+    summary = scrape._run([config], args)
+
+    assert summary["total_rows"] == 2
+    assert summary["shops"][0]["rows"] == 2
+    assert len((tmp_path / "out" / summary["run_id"] / "all.jsonl").read_text().splitlines()) == 2
 
 
 def test_resume_loads_url_and_record_id_dedupes_and_skips_done_shops(tmp_path, monkeypatch):

@@ -5,11 +5,13 @@ import re
 import threading
 import time
 import urllib.robotparser
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from scrapling.fetchers import Fetcher
 
 from app.accessories import accessory_gender, accessory_kind
+
+from .tees import tee_category
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -78,6 +80,7 @@ class ShopSession:
         jitter: float | None = None,
         check_robots: bool = True,
         probe: bool = False,
+        row_cap: int | None = None,
     ):
         self.shop = shop
         self.max_requests = (
@@ -86,6 +89,8 @@ class ShopSession:
         self.delay = float(shop.get("delay", 5.0) if delay is None else delay)
         self.jitter = float(shop.get("jitter", 1.5) if jitter is None else jitter)
         self.check_robots = check_robots and not probe
+        self.row_cap = row_cap if row_cap and row_cap > 0 else None
+        self.full = False
         self.count = 0
         self.last_request = 0.0
         self.errors = 0
@@ -212,14 +217,19 @@ class ShopSession:
         return self._request(url, browser=browser)
 
 
-def canonical_url(value: str, base: str, domain: str) -> str | None:
+def canonical_url(
+    value: str, base: str, domain: str, keep_variant: bool = False
+) -> str | None:
     url = urljoin(base, str(value or ""))
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
     allowed = domain.lower().lstrip(".")
     if parts.scheme != "https" or not (host == allowed or host.endswith("." + allowed)):
         return None
-    return urlunsplit(("https", parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
+    query = urlencode(
+        [(key, value) for key, value in parse_qsl(parts.query) if key == "variant"]
+    ) if keep_variant else ""
+    return urlunsplit(("https", parts.netloc.lower(), parts.path.rstrip("/"), query, ""))
 
 
 def is_clothing(value: str) -> bool:
@@ -244,8 +254,11 @@ def is_clothing(value: str) -> bool:
 
 
 def accepts(shop: dict, text: str, title="", product_type="", tags=()) -> bool:
-    if shop.get("_category_set", "apparel") == "accessories":
+    category_set = shop.get("_category_set", "apparel")
+    if category_set == "accessories":
         return accessory_kind(title or text, product_type, tags) is not None
+    if category_set == "tees":
+        return tee_category(title, product_type, tags) is not None
     return is_clothing(text)
 
 
@@ -268,7 +281,8 @@ def make_row(
 
     extra = dict(extra or {})
     domain = shop["domain"]
-    clean_url = canonical_url(url, page, domain)
+    category_set = shop.get("_category_set", "apparel")
+    clean_url = canonical_url(url, page, domain, keep_variant=category_set == "tees")
     image = urljoin(page, str(image or ""))
     availability = str((extra or {}).get("availability") or "InStock")
     product_type = str(extra.get("product_type") or "")
@@ -276,9 +290,10 @@ def make_row(
     tags = shopify_product.get("tags") or extra.get("tags") or ()
     kind = (
         accessory_kind(title, product_type, tags)
-        if shop.get("_category_set", "apparel") == "accessories"
+        if category_set == "accessories"
         else None
     )
+    tee = tee_category(title, product_type, tags) if category_set == "tees" else None
     try:
         price = float(price)
     except (TypeError, ValueError):
@@ -305,6 +320,8 @@ def make_row(
         slot, category = kind
         label = accessory_gender_for_shop(shop, title, product_type, clean_url, category)
         row_gender = {"menswear": "m", "womenswear": "w"}.get(label)
+    elif category_set == "tees":
+        category = tee
     record = {
         "id": f"{domain}:{hashlib.sha1(clean_url.encode()).hexdigest()[:18]}",
         "source": domain,
@@ -332,6 +349,7 @@ def make_row(
                 if kind
                 else {}
             ),
+            **({"category_set": "tees"} if category_set == "tees" else {}),
             **extra,
         },
     }
@@ -344,9 +362,11 @@ def make_row(
         "gender": (
             row_gender
             if kind
+            else gender if category_set == "tees" and gender in {"m", "w"}
+            else None if category_set == "tees"
             else gender if gender in {"m", "w"} else "m"
         ),
-        "category": category if kind else infer_category(title, page),
+        "category": category if kind or category_set == "tees" else infer_category(title, page),
         "condition": "new",
         "image_url_original": image,
         "record": record,
