@@ -101,6 +101,8 @@ cd backend
 | `QUENYA_LLM_DAILY_CAP` | Maximum logged LLM attempts per UTC day; default 300 |
 | `QUENYA_TAGGER` | `local` (default) or `llm` |
 | `TAVILY_API_KEY` | Tavily Extract/Search for retail pages and live search |
+| `QUENYA_VINTED_PROXY_KEY` | Shared authentication key for VPS-to-Vercel Vinted searches |
+| `QUENYA_VINTED_PROXY_URL` | VPS-only Vinted search proxy URL; do not set on Vercel |
 | `QUENYA_DATABASE_URL` | Postgres URL. When set, data lives in the `quenya` schema (Supabase pooler in production) |
 | `QUENYA_IMAGE_STORE=supabase` + `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Store images in the Supabase Storage bucket `quenya-img` |
 | `SUPABASE_DB_URL` | Used by the importer and the scraper worker |
@@ -113,6 +115,8 @@ Two Vercel projects deploy automatically from `main`:
 
 - `quenya-api` (root `backend/`): Python function `api/index.py` in region `dub1`, installed from `requirements-vercel.txt`, with `app/data/**` bundled.
 - `quenya` (root `frontend/`): Vite static build. `frontend/vercel.json` rewrites `/api` and `/img` to the API.
+
+Set `QUENYA_VINTED_PROXY_KEY` on Vercel `quenya-api` and set both `QUENYA_VINTED_PROXY_URL=https://quenya-api.vercel.app` and the same key in `/etc/quenya/quenya.env` on the VPS; never set `QUENYA_VINTED_PROXY_URL` on Vercel.
 
 Data is in Supabase Postgres (schema `quenya`) and Supabase Storage (`quenya-img`). The Supabase project is shared with other apps, so only touch the `quenya` schema.
 Cursor CLI and the optional Torch/OpenCLIP image encoder are not installed in the Vercel bundle; run Cursor and local image tagging on a real server with the `embed` extra.
