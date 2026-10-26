@@ -136,10 +136,24 @@ def test_shopify_accessory_mode_filters_exclusions_and_keeps_apparel_unchanged()
     ]
     assert rows[-1]["gender"] == "w"
     assert rows[0]["gender"] is None
+    assert rows[0]["record"]["gender_hint"] is None
     assert rows[3]["record"]["raw_json"]["accessory_category"] == "earrings"
     assert all(row["record"]["raw_json"]["category_set"] == "accessories" for row in rows)
     for row in rows:
         assert_worker_row(row)
+    assert common.accessory_gender_for_shop(
+        {"gender_rule": "selfportrait", "accessory_default_gender": "w"},
+        "Leather Belt",
+    ) == "womenswear"
+
+    women_accessories = dict(accessories, gender_rule="women")
+    women_rows = shopify.scrape(
+        women_accessories,
+        FakeSession([fixture("shopify-meta-gbp.json"), product_page]),
+    )
+    assert women_rows[0]["title"] == "Leather Belt"
+    assert women_rows[0]["gender"] == "w"
+    assert women_rows[0]["record"]["gender_hint"] == "w"
 
     apparel = shop("test", "Test", "shopify", "example-shop.test", max_pages=1)
     apparel_rows = shopify.scrape(

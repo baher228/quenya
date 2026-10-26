@@ -75,6 +75,7 @@ status = "ok"
 note = "Probe 2026-10-25: 200 GBP Shopify; clothing rows accepted."
 gender_rule = "selfportrait"
 default_gender = "w"
+accessory_default_gender = "w"
 max_pages = 20
 max_requests = 30
 

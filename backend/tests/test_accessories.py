@@ -20,6 +20,11 @@ from app.schemas import SwapRequest
         ("Leather Belt", ("accessory", "belt")),
         ("Canvas Tote Bag", ("bag", "tote bag")),
         ("Ribbed Wool Beanie", ("accessory", "beanie")),
+        ("Cotton Bonnet", ("accessory", "bonnet")),
+        ("Cashmere Bonnets", ("accessory", "bonnet")),
+        ("Pearl Headband", ("accessory", "headband")),
+        ("Gold Hair Clip", ("accessory", "hair clip")),
+        ("Gold Hair Clips", ("accessory", "hair clip")),
         ("Silk Twill Scarf", ("accessory", "scarf")),
         ("Tortoiseshell Sunglasses", ("accessory", "sunglasses")),
         ("Gold Hoop Earrings", ("accessory", "earrings")),
@@ -65,6 +70,54 @@ def test_accessory_kind(title, expected):
 )
 def test_excluded_and_non_accessory_titles(title, product_type):
     assert is_excluded(title, product_type) or accessory_kind(title, product_type) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type"),
+    [
+        ("The Miffy Face Bookmark", ""),
+        ("The Luggage Tag - Red with Harvard H", ""),
+        ("The Passport Cover - Strawberry Ice Cream", ""),
+        ("Kevin Leather Key Lanyard in Bog", ""),
+        ("Carbon Pro Spray", ""),
+        ("Aries x LAIKA Wildwood Sticker Pack", ""),
+        ("Organic Cotton-Canvas Apron", ""),
+        ("Shrimps Pink Trinket Tray", ""),
+        ("Hard Bristle Hat Brush", ""),
+        ("Il Bisonte Leather Watch Case", ""),
+        ("Il Bisonte Leather Playing Card Case", ""),
+        ("Leather Belt", "Bookmark"),
+        ("Leather Belt", "Watch Case"),
+        ("Leather Belt", "Care Kit"),
+        ("Water Glass", ""),
+        ("Luxury Gift Box", ""),
+        ("Gift Box", ""),
+        ("Gift Set", ""),
+        ("Gift Wrap", ""),
+        ("Gift Card Socks", ""),
+    ],
+)
+def test_non_fashion_leaks_are_strictly_excluded(title, product_type):
+    assert is_excluded(title, product_type)
+    assert accessory_kind(title, product_type) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Brush Print Silk Bandana", ("accessory", "bandana")),
+        ("Il Bisonte Leather Card Case", ("accessory", "card case")),
+        ("Crossbody Strap", ("bag", "crossbody bag")),
+        ("Mako Bottle Bag", ("bag", "bag")),
+        ("Charm Pin Brooch", ("accessory", "brooch")),
+        ("Socks Gift Box", ("accessory", "socks")),
+        ("Men's 4-Pair Socks Gift Box", ("accessory", "socks")),
+        ("Box Set Beanie and Scarf", ("accessory", "scarf")),
+    ],
+)
+def test_accessory_titles_survive_gift_packaging_exclusions(title, expected):
+    assert not is_excluded(title)
+    assert accessory_kind(title) == expected
 
 
 def test_product_type_fallback_tags_and_exclusions():

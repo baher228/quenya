@@ -104,7 +104,17 @@ def test_accessories_use_rules_without_accessory_reference_slots():
     ], k=2)
 
     belt = tagger.tag(
-        {"title": "Leather Belt", "gender_hint": "m"},
+        {"title": "Leather Belt"},
+        None,
+        np.asarray([1, 0, 0, 0]),
+    )
+    hinted_belt = tagger.tag(
+        {"title": "Leather Belt", "gender_hint": "w"},
+        None,
+        np.asarray([1, 0, 0, 0]),
+    )
+    titled_belt = tagger.tag(
+        {"title": "Men's Belt", "gender_hint": "w"},
         None,
         np.asarray([1, 0, 0, 0]),
     )
@@ -122,6 +132,8 @@ def test_accessories_use_rules_without_accessory_reference_slots():
     assert (belt.slot, belt.category, belt.gender, belt.fit) == (
         "accessory", "belt", "unisex", "unknown"
     )
+    assert hinted_belt.gender == "womenswear"
+    assert titled_belt.gender == "menswear"
     assert (tote.slot, tote.category, tote.fit) == ("bag", "tote bag", "unknown")
     assert (tee.slot, tee.category) == ("top", "tee")
 

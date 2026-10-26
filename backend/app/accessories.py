@@ -22,10 +22,13 @@ _ACCESSORY_PATTERNS = (
     ("accessory", "baseball cap", r"\bbaseball\s+caps?\b"),
     ("accessory", "flat cap", r"\bflat\s+caps?\b"),
     ("accessory", "beanie", r"\bbeanies?\b"),
+    ("accessory", "bonnet", r"\bbonnets?\b"),
     ("accessory", "beret", r"\bberets?\b"),
     ("accessory", "fedora", r"\bfedoras?\b"),
     ("accessory", "cap", r"\bcaps?\b"),
     ("accessory", "hat", r"\bhats?\b"),
+    ("accessory", "headband", r"\bheadbands?\b"),
+    ("accessory", "hair clip", r"\bhair\s+clips?\b"),
     ("accessory", "scarf", r"\bscarves\b|\bscarfs?\b"),
     ("accessory", "snood", r"\bsnoods?\b"),
     ("accessory", "bandana", r"\bbandanas?\b"),
@@ -80,7 +83,7 @@ _EXCLUDED_PATTERNS = tuple(
         r"\bfragrance\b|\bperfumes?\b|\bparfum\b|\beau\s+de\s+toilette\b",
         r"\beau\s+de\s+parfum\b|\bcolognes?\b|\bcandles?\b|\bdiffusers?\b|\bincense\b",
         r"\bhomeware\b|\bhome\b|\bcushions?\b|\bblankets?\b|\bthrows?\b|\btowels?\b",
-        r"\bmugs?\b|\bcups?\b|\bglasses?\b|\bplates?\b|\bbowls?\b|\bvases?\b",
+        r"\bmugs?\b|\bcups?\b|\bglass(?:es)?\b|\bplates?\b|\bbowls?\b|\bvases?\b",
         r"\brugs?\b|\bposters?\b|\bframes?\b|\bornaments?\b|\blaundry\b",
         r"\bdust\s+bags?\b|\bgift\s+bags?\b|\bshoe\s+bags?\b|\bsleeping\s+bags?\b",
         r"\bbean\s+bags?\b|\bbooks?\b|\bmagazines?\b|\bzines?\b|\bjournals?\b",
@@ -88,7 +91,7 @@ _EXCLUDED_PATTERNS = tuple(
         r"\bgreeting\s+cards?\b|\bphone\s+cases?\b|\biphone\b|\bairpods?\b",
         r"\bheadphones\b|\bearbuds\b|\bchargers?\b|\bcables\b|\bpower\s+banks?\b",
         r"\bspeakers?\b|\blaptops?\b|\btech\b|\bgift\s+cards?\b|\be[\s-]?gift\b",
-        r"\bvouchers?\b|\bgift\s+wrap\b|\bgift\s+boxes?\b|\bgift\s+sets?\b",
+        r"\bvouchers?\b",
         r"\bkids?\b|\bkid['’]s\b|\bchildren\b|\bbabies\b|\binfants?\b|\btoddlers?\b",
         r"\bjuniors?\b|\byouth\b|\bboys?\b|\bgirls?\b|\bage\s*\d{1,2}\b|\d{1,2}\s*yrs?\b",
         r"\bpets?\b|\bdogs?\b|\bcats?\b|\bleads?\b|\bcollars?\b",
@@ -96,16 +99,29 @@ _EXCLUDED_PATTERNS = tuple(
         r"\bsamples?\b|\bbundle\s+fees?\b|\binsurance\b|\brepairs?\b|\bservices?\b",
         r"\bshipping\b|\bmemberships?\b|\bsubscriptions?\b|\bdonations?\b",
         r"\bglasses\s+cases?\b|\bsunglasses\s+cases?\b|\bcleaning\s+cloths?\b|\blenses\b",
-        r"\bjewellery\s+boxes?\b|\bjewelry\s+boxes?\b|\bjewellery\s+dishes\b",
-        r"\bwatch\s+boxes?\b|\bwatch\s+winders?\b|\bwatch\s+straps?\b",
+        r"\bjewellery\s+box(?:es)?\b|\bjewelry\s+box(?:es)?\b|\bjewellery\s+dishes\b",
+        r"\bwatch\s+box(?:es)?\b|\bwatch\s+winders?\b|\bwatch\s+straps?\b",
+        r"\bbookmarks?\b|\bluggage\s+tags?\b|\bpassport\s+covers?\b|\blanyards?\b",
+        r"\bsprays?\b|\bprotectors?\b|\bstickers?(?:\s+packs?)?\b|\baprons?\b",
+        r"\btrinkets?\b|\btrays?\b|\bbristles?\b",
+        r"\b(?:hat|shoe|clothes|lint)\s+brush(?:es)?\b",
+        r"\bwatch\s+cases?\b|\bwatch\s+rolls?\b|\bplaying\s+cards?\b",
+        r"\bcare\s+kits?\b|\bcleaners?\b",
     )
+)
+_GIFT_PACKAGING_PATTERN = re.compile(
+    r"\bgift\s+(?:wrap(?:ping)?|box(?:es)?|sets?)\b|\bbox\s+sets?\b",
+    re.IGNORECASE,
 )
 
 
 def is_excluded(title: str, product_type: str = "") -> bool:
     title = str(title or "")
     product_type = str(product_type or "")
-    if any(pattern.search(f"{title} {product_type}") for pattern in _EXCLUDED_PATTERNS):
+    combined = f"{title} {product_type}"
+    if any(pattern.search(combined) for pattern in _EXCLUDED_PATTERNS):
+        return True
+    if _GIFT_PACKAGING_PATTERN.search(combined) and _accessory_match(title) is None:
         return True
     return bool(re.search(r"\bprint\b", product_type, re.IGNORECASE))
 

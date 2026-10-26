@@ -249,6 +249,18 @@ def accepts(shop: dict, text: str, title="", product_type="", tags=()) -> bool:
     return is_clothing(text)
 
 
+def accessory_gender_for_shop(
+    shop: dict, title: str, product_type: str = "", url: str = "", category: str = ""
+) -> str:
+    gender = accessory_gender(title, product_type, url, category)
+    if gender != "unisex":
+        return gender
+    default = shop.get("accessory_default_gender")
+    if default not in {"m", "w"}:
+        default = {"men": "m", "women": "w"}.get(shop.get("gender_rule"))
+    return {"m": "menswear", "w": "womenswear"}.get(default, gender)
+
+
 def make_row(
     shop: dict, title: str, price: float, image: str, url: str, gender: str, page: str, extra=None
 ):
@@ -291,7 +303,7 @@ def make_row(
     category = None
     if kind:
         slot, category = kind
-        label = accessory_gender(title, product_type, clean_url, category)
+        label = accessory_gender_for_shop(shop, title, product_type, clean_url, category)
         row_gender = {"menswear": "m", "womenswear": "w"}.get(label)
     record = {
         "id": f"{domain}:{hashlib.sha1(clean_url.encode()).hexdigest()[:18]}",

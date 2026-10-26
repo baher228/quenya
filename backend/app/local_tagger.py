@@ -130,13 +130,16 @@ class LocalTagger:
             "w": "womenswear", "women": "womenswear", "womenswear": "womenswear",
             "u": "unisex", "unisex": "unisex",
         }
-        gender = (
-            accessory_gender(title, product_type, item.get("source_url"), kind[1])
-            if kind
-            else text_gender(title, product_type, item.get("source_url"))
-        )
-        if gender is None:
-            gender = gender_hints.get(hint) or vote("gender")
+        if kind:
+            gender = text_gender(title, product_type, item.get("source_url"))
+            if gender is None:
+                gender = {"m": "menswear", "w": "womenswear"}.get(hint)
+            if gender is None:
+                gender = accessory_gender("", category=kind[1])
+        else:
+            gender = text_gender(title, product_type, item.get("source_url"))
+            if gender is None:
+                gender = gender_hints.get(hint) or vote("gender")
         condition_hint = str(item.get("condition_hint") or "").strip().lower()
         condition = (
             condition_hint if condition_hint in {"second-hand", "new"}
