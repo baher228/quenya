@@ -902,39 +902,7 @@ def _ensure_live_vinted_items(
     }
     if not deck or not live_ids:
         return deck
-    ranked_positions = {item["id"]: index for index, item in enumerate(ranked)}
     deck_ids = {item["id"] for item in deck}
-    in_deck_live = [
-        item
-        for item in deck
-        if item["id"] in live_ids and item["id"] not in swiped
-    ]
-    keep_live_ids = {
-        item["id"]
-        for item in sorted(
-            in_deck_live,
-            key=lambda item: ranked_positions.get(item["id"], len(ranked)),
-        )[:2]
-    }
-    for index in range(len(deck) - 1, -1, -1):
-        item = deck[index]
-        if item["id"] not in live_ids or item["id"] in keep_live_ids:
-            continue
-        replacement = next(
-            (
-                candidate
-                for candidate in ranked
-                if candidate["id"] not in live_ids
-                and candidate["id"] not in deck_ids
-                and candidate["id"] not in swiped
-            ),
-            None,
-        )
-        if replacement is None:
-            continue
-        deck[index] = replacement
-        deck_ids.remove(item["id"])
-        deck_ids.add(replacement["id"])
 
     own_live_count = sum(item["id"] in live_ids for item in deck)
     needed = min(2, len(deck)) - own_live_count

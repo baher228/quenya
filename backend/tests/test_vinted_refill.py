@@ -449,7 +449,7 @@ def test_deck_treats_running_refills_older_than_five_minutes_as_stale(monkeypatc
         ("embed", True),
     ],
 )
-def test_deck_includes_at_most_two_low_ranked_own_live_vinted_items(
+def test_deck_tops_up_to_two_low_ranked_own_live_vinted_items(
     monkeypatch, arm, include_global_secondhand
 ):
     retail_cards = [_item(f"retail-{index}") for index in range(10)]
@@ -498,3 +498,29 @@ def test_deck_includes_at_most_two_low_ranked_own_live_vinted_items(
         assert not any(item_id.startswith("global-vinted-") for item_id in result_ids)
     assert len(events) == 10
     assert len(rank_inputs[0]) == len(set(rank_inputs[0]))
+
+
+@pytest.mark.parametrize("arm", ["tags", "embed"])
+def test_deck_preserves_existing_own_live_vinted_items(monkeypatch, arm):
+    retail_cards = [_item(f"retail-{index}") for index in range(7)]
+    live_items = [
+        _item(
+            f"live-vinted-{index}",
+            source="vinted",
+            condition="second-hand",
+            query="live:board",
+        )
+        for index in range(3)
+    ]
+    deck = [*retail_cards, *live_items]
+
+    result, _tasks, _saved, _events, _fetch_calls, _rank_inputs = _run_deck(
+        monkeypatch,
+        cached_items=deck,
+        base_deck=deck,
+        ranked_items=deck,
+        live_items=live_items,
+        arm=arm,
+    )
+
+    assert [item["id"] for item in result] == [item["id"] for item in deck]
