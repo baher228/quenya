@@ -77,3 +77,51 @@ def test_postgres_connect_disables_prepared_statements_and_sets_search_path(
         ("SELECT 3", None),
     ]
     connection.close()
+
+
+def test_postgres_connect_redacts_password_from_malformed_dsn_error(monkeypatch):
+    import psycopg
+
+    dsn = "postgresql://importer:test-password@db.example.invalid/postgres"
+
+    def connect(url, **kwargs):
+        raise psycopg.ProgrammingError(
+            f'missing "=" after "{url}" in connection info string'
+        )
+
+    monkeypatch.setattr(psycopg, "connect", connect)
+    monkeypatch.setenv("QUENYA_DATABASE_URL", dsn)
+
+    try:
+        db.connect()
+    except psycopg.ProgrammingError as exc:
+        assert "test-password" not in str(exc)
+        assert "importer" not in str(exc)
+        assert "[REDACTED]@" in str(exc)
+    else:
+        raise AssertionError("expected a malformed DSN error")
+
+
+def test_supabase_import_connect_redacts_password_from_dsn_error(monkeypatch):
+    import psycopg
+
+    from app import supabase_import
+
+    dsn = "postgresql://importer:test-password@db.example.invalid/postgres"
+
+    def connect(url, **kwargs):
+        raise psycopg.ProgrammingError(
+            f'missing "=" after "{url}" in connection info string'
+        )
+
+    monkeypatch.setattr(psycopg, "connect", connect)
+    monkeypatch.setenv("SUPABASE_DB_URL", dsn)
+
+    try:
+        supabase_import._connect()
+    except psycopg.ProgrammingError as exc:
+        assert "test-password" not in str(exc)
+        assert "importer" not in str(exc)
+        assert "[REDACTED]@" in str(exc)
+    else:
+        raise AssertionError("expected a malformed DSN error")

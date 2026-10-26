@@ -20,13 +20,14 @@ LOG = logging.getLogger(__name__)
 
 
 def _connect():
-    import psycopg
     from psycopg.rows import dict_row
 
     dsn = os.getenv("SUPABASE_DB_URL")
     if not dsn:
         raise RuntimeError("SUPABASE_DB_URL is required")
-    return psycopg.connect(dsn, row_factory=dict_row, prepare_threshold=None)
+    return db.connect_postgres(
+        dsn, row_factory=dict_row, prepare_threshold=None
+    )
 
 
 def _pending_rows(limit: int | None) -> list[dict[str, Any]]:

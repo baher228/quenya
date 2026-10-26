@@ -13,3 +13,4 @@ def test_health_reports_llm_provider_readiness(monkeypatch):
     assert {"llm_provider", "llm_ready"} <= response.keys()
     assert response["items_total"] == 12
     assert response["items_tagged"] == 8
+    assert any(route.path == "/health" for route in main.app.routes)

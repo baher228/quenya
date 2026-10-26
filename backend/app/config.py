@@ -24,6 +24,9 @@ QUENYA_LLM_BASE_URL = os.getenv(
 )
 QUENYA_LLM_DAILY_CAP = os.getenv("QUENYA_LLM_DAILY_CAP", "300")
 QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
+QUENYA_CORS_ORIGINS = os.getenv(
+    "QUENYA_CORS_ORIGINS", "http://localhost:5173"
+)
 CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "")
 QUENYA_CURSOR_MODEL = os.getenv(
     "QUENYA_CURSOR_MODEL", "gemini-3.7-flash-high"

@@ -12,6 +12,7 @@ from app import db
 from app.config import (
     CURSOR_API_KEY,
     PROMPT_VERSION,
+    QUENYA_CORS_ORIGINS,
     QUENYA_LLM_API_KEY,
     QUENYA_LLM_PROVIDER,
     TAVILY_API_KEY,
@@ -34,7 +35,11 @@ from app.taste import update_taste
 app = FastAPI(title="Quenya API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        origin.strip()
+        for origin in QUENYA_CORS_ORIGINS.split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,6 +83,7 @@ def startup() -> None:
     db.init_db()
 
 
+@app.get("/health", include_in_schema=False)
 @app.get("/api/health")
 def health() -> dict:
     total, tagged = db.total_counts()

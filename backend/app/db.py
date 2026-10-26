@@ -299,12 +299,39 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _redact_dsn(value: str) -> str:
+    value = re.sub(
+        r"(?i)(postgres(?:ql)?://)[^/\s@'\"<>]*@",
+        r"\1[REDACTED]@",
+        value,
+    )
+    return re.sub(
+        r"(?i)\b(password|sslpassword)\s*=\s*(?:'[^']*'|\"[^\"]*\"|[^\s]+)",
+        r"\1=[REDACTED]",
+        value,
+    )
+
+
+def connect_postgres(dsn: str, **kwargs):
+    import psycopg
+
+    try:
+        return psycopg.connect(dsn, **kwargs)
+    except Exception as exc:
+        message = _redact_dsn(str(exc))
+        if message == str(exc):
+            raise
+        try:
+            safe_exception = type(exc)(message)
+        except Exception:
+            safe_exception = RuntimeError(message)
+        raise safe_exception from None
+
+
 def connect():
     database_url = os.getenv("QUENYA_DATABASE_URL")
     if database_url:
-        import psycopg
-
-        connection = psycopg.connect(
+        connection = connect_postgres(
             database_url,
             prepare_threshold=None,
             row_factory=_postgres_row_factory,
