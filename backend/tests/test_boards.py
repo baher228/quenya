@@ -1012,6 +1012,8 @@ def test_pieces_deck_rotation_stays_with_requested_slots():
 
 def test_deck_candidates_cap_clothing_and_accessories_preserving_order():
     clothing = [_item(f"clothing-{index}", "top") for index in range(6000)]
+    for item in clothing:
+        item["tags"]["condition"] = "new"
     accessories = [
         _item(
             f"accessory-{index}",
@@ -1034,6 +1036,51 @@ def test_deck_candidates_cap_clothing_and_accessories_preserving_order():
     assert [item["id"] for item in candidates[5000:]] == [
         item["id"] for item in accessories[:500]
     ]
+
+
+def test_deck_candidates_reserve_secondhand_capacity():
+    new = [_item(f"new-{index}", "top") for index in range(6000)]
+    for item in new:
+        item["tags"]["condition"] = "new"
+    secondhand = [_item(f"vinted-{index}", "top") for index in range(100)]
+    for item in secondhand:
+        item["source"] = "vinted"
+    accessories = [
+        _item(f"accessory-{index}", "bag" if index % 2 else "accessory")
+        for index in range(600)
+    ]
+    items = [*new, *secondhand, *accessories]
+
+    candidates = phase2_api._deck_candidates(items)
+    clothing = [
+        item for item in candidates
+        if item["tags"]["slot"] not in {"bag", "accessory"}
+    ]
+    extras = [
+        item for item in candidates
+        if item["tags"]["slot"] in {"bag", "accessory"}
+    ]
+
+    assert len(clothing) == 5000
+    assert sum(item.get("source") == "vinted" for item in clothing) == 100
+    assert len(extras) == 500
+    assert [item["id"] for item in clothing[:100]] == [
+        item["id"] for item in secondhand
+    ]
+
+
+def test_deck_candidates_cap_secondhand_items_at_2000():
+    new = [_item(f"new-{index}", "top") for index in range(6000)]
+    for item in new:
+        item["tags"]["condition"] = "new"
+    secondhand = [_item(f"vinted-{index}", "top") for index in range(3000)]
+    for item in secondhand:
+        item["source"] = "vinted"
+
+    candidates = phase2_api._deck_candidates([*new, *secondhand])
+
+    assert sum(item.get("source") == "vinted" for item in candidates) == 2000
+    assert sum(item["tags"]["condition"] == "new" for item in candidates) == 3000
 
 
 def test_default_accessory_cap_applies_with_and_without_selector():

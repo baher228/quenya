@@ -34,7 +34,15 @@ from app.outfits import (
     validate_outfits,
 )
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
-from app.rank import add_exploration, make_deck, rank_items, score_item, secondhand_share, tags_for
+from app.rank import (
+    _is_secondhand,
+    add_exploration,
+    make_deck,
+    rank_items,
+    score_item,
+    secondhand_share,
+    tags_for,
+)
 from app.routing import route_input
 from app.schemas import (
     BoardBriefRequest,
@@ -198,6 +206,7 @@ def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
 
 DECK_CANDIDATE_LIMIT = 5000
 DECK_ACCESSORY_LIMIT = 500
+DECK_SECONDHAND_LIMIT = 2000
 
 
 def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -209,7 +218,20 @@ def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item for item in items
         if is_accessory_slot(tags_for(item).get("slot"))
     ]
-    return clothing[:DECK_CANDIDATE_LIMIT] + extras[:DECK_ACCESSORY_LIMIT]
+    secondhand = []
+    new = []
+    for item in clothing:
+        if _is_secondhand(item):
+            secondhand.append(item)
+        else:
+            new.append(item)
+    secondhand_taken = secondhand[:DECK_SECONDHAND_LIMIT]
+    new_taken = new[:DECK_CANDIDATE_LIMIT - len(secondhand_taken)]
+    return (
+        secondhand_taken
+        + new_taken
+        + extras[:DECK_ACCESSORY_LIMIT]
+    )
 
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
