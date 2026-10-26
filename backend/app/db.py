@@ -8,7 +8,7 @@ import uuid
 from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from threading import Lock
+from threading import Lock, Thread
 from time import monotonic
 from typing import Any
 
@@ -210,6 +210,8 @@ _INITIALIZED_DATABASES: set[str] = set()
 _LIVE_CATALOGUE_LOCK = Lock()
 _LIVE_CATALOGUE_CACHE: list[dict[str, Any]] | None = None
 _LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
+_LIVE_CATALOGUE_REFRESHING = False
+_LIVE_CATALOGUE_GENERATION = 0
 logger = logging.getLogger(__name__)
 
 
@@ -682,47 +684,90 @@ def list_items(
     return result
 
 
+def _load_live_catalogue() -> list[dict[str, Any]]:
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT id, source, source_url, title, brand, price_gbp, size,
+                      description, image_url, image_path, gender_hint,
+                      condition_hint, availability, query, fetched_at,
+                      tags_json, tags_request_id, tagged_at, tag_error
+               FROM items
+               WHERE tags_json IS NOT NULL
+                 AND (availability IS NULL OR
+                      (availability NOT LIKE '%OutOfStock'
+                       AND availability NOT LIKE '%SoldOut'
+                       AND availability NOT LIKE '%Discontinued'))
+               ORDER BY fetched_at DESC"""
+        ).fetchall()
+    catalogue = []
+    for row in rows:
+        item = dict(row)
+        item["tags"] = json.loads(item["tags_json"])
+        catalogue.append(item)
+    return catalogue
+
+
+def _refresh_live_catalogue(generation: int) -> None:
+    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+    global _LIVE_CATALOGUE_REFRESHING
+    try:
+        catalogue = _load_live_catalogue()
+    except Exception:
+        logger.exception("Failed to refresh live catalogue")
+    else:
+        with _LIVE_CATALOGUE_LOCK:
+            if generation == _LIVE_CATALOGUE_GENERATION:
+                _LIVE_CATALOGUE_CACHE = catalogue
+                _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
+                    monotonic() + QUENYA_CATALOGUE_TTL_S
+                )
+    finally:
+        with _LIVE_CATALOGUE_LOCK:
+            _LIVE_CATALOGUE_REFRESHING = False
+
+
+def _start_live_catalogue_refresh_locked() -> None:
+    global _LIVE_CATALOGUE_REFRESHING
+    _LIVE_CATALOGUE_REFRESHING = True
+    try:
+        Thread(
+            target=_refresh_live_catalogue,
+            args=(_LIVE_CATALOGUE_GENERATION,),
+            daemon=True,
+            name="live-catalogue-refresh",
+        ).start()
+    except Exception:
+        _LIVE_CATALOGUE_REFRESHING = False
+        logger.exception("Failed to start live catalogue refresh")
+
+
 def invalidate_live_catalogue() -> None:
     global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+    global _LIVE_CATALOGUE_GENERATION
     with _LIVE_CATALOGUE_LOCK:
         _LIVE_CATALOGUE_CACHE = None
         _LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
+        _LIVE_CATALOGUE_GENERATION += 1
 
 
 def live_catalogue() -> list[dict[str, Any]]:
     global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
     init_db()
     with _LIVE_CATALOGUE_LOCK:
-        if (
-            _LIVE_CATALOGUE_CACHE is not None
-            and monotonic() < _LIVE_CATALOGUE_CACHE_EXPIRES_AT
-        ):
-            return [dict(item) for item in _LIVE_CATALOGUE_CACHE]
+        if _LIVE_CATALOGUE_CACHE is None:
+            catalogue = _load_live_catalogue()
+            _LIVE_CATALOGUE_CACHE = catalogue
+            _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
+                monotonic() + QUENYA_CATALOGUE_TTL_S
+            )
+            return [dict(item) for item in catalogue]
 
-        with db_connection() as connection:
-            rows = connection.execute(
-                """SELECT id, source, source_url, title, brand, price_gbp, size,
-                          description, image_url, image_path, gender_hint,
-                          condition_hint, availability, query, fetched_at,
-                          tags_json, tags_request_id, tagged_at, tag_error
-                   FROM items
-                   WHERE tags_json IS NOT NULL
-                     AND (availability IS NULL OR
-                          (availability NOT LIKE '%OutOfStock'
-                           AND availability NOT LIKE '%SoldOut'
-                           AND availability NOT LIKE '%Discontinued'))
-                   ORDER BY fetched_at DESC"""
-            ).fetchall()
-        catalogue = []
-        for row in rows:
-            item = dict(row)
-            item["tags"] = json.loads(item["tags_json"])
-            catalogue.append(item)
-        _LIVE_CATALOGUE_CACHE = catalogue
-        _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
-            monotonic() + QUENYA_CATALOGUE_TTL_S
-        )
-        return [dict(item) for item in catalogue]
+        if (
+            monotonic() >= _LIVE_CATALOGUE_CACHE_EXPIRES_AT
+            and not _LIVE_CATALOGUE_REFRESHING
+        ):
+            _start_live_catalogue_refresh_locked()
+        return [dict(item) for item in _LIVE_CATALOGUE_CACHE]
 
 
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:

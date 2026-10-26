@@ -1,6 +1,8 @@
 import hashlib
+import logging
 import os
-import time
+from threading import Lock, Thread
+from time import monotonic
 from typing import Any
 
 import numpy as np
@@ -9,7 +11,11 @@ from app.rank import score_item
 
 BLEND_K = 8.0
 PRODUCTION_WEIGHT = 0.5
+_CATALOGUE_SAMPLE_TTL_S = 3600
+_catalogue_cache_lock = Lock()
+_catalogue_refresh_in_flight = False
 _catalogue_cache: tuple[float, np.ndarray] | None = None
+logger = logging.getLogger(__name__)
 
 
 def fallback_arm(profile_id: str, mode: str | None = None) -> str:
@@ -75,15 +81,56 @@ def history_query(swipes: list[dict], embeddings: dict[str, dict]) -> np.ndarray
     return _history_query(swipes, embeddings)
 
 
+def _load_catalogue_sample() -> np.ndarray:
+    from app import db
+
+    vectors = db.random_item_mix_vectors(3000)
+    return np.asarray(vectors, dtype=np.float32)
+
+
+def _refresh_catalogue_sample() -> None:
+    global _catalogue_cache, _catalogue_refresh_in_flight
+    try:
+        sample = _load_catalogue_sample()
+    except Exception:
+        logger.exception("Failed to refresh embedding catalogue sample")
+    else:
+        with _catalogue_cache_lock:
+            _catalogue_cache = (monotonic(), sample)
+    finally:
+        with _catalogue_cache_lock:
+            _catalogue_refresh_in_flight = False
+
+
+def _start_catalogue_refresh_locked() -> None:
+    global _catalogue_refresh_in_flight
+    _catalogue_refresh_in_flight = True
+    try:
+        Thread(
+            target=_refresh_catalogue_sample,
+            daemon=True,
+            name="catalogue-sample-refresh",
+        ).start()
+    except Exception:
+        _catalogue_refresh_in_flight = False
+        logger.exception("Failed to start embedding catalogue sample refresh")
+
+
 def catalogue_sample() -> np.ndarray:
     global _catalogue_cache
-    now = time.monotonic()
-    if _catalogue_cache is None or now - _catalogue_cache[0] >= 900:
-        from app import db
+    with _catalogue_cache_lock:
+        if _catalogue_cache is None:
+            sample = _load_catalogue_sample()
+            _catalogue_cache = (monotonic(), sample)
+            return sample
 
-        vectors = db.random_item_mix_vectors(3000)
-        _catalogue_cache = (now, np.asarray(vectors, dtype=np.float32))
-    return _catalogue_cache[1]
+        cached_at, sample = _catalogue_cache
+        if (
+            monotonic() - cached_at >= _CATALOGUE_SAMPLE_TTL_S
+            and not _catalogue_refresh_in_flight
+        ):
+            _start_catalogue_refresh_locked()
+        return sample
 
 
 def rank_candidates(
