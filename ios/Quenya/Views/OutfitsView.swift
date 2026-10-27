@@ -142,9 +142,9 @@ struct OutfitsView: View {
                     disabled: busy != nil
                 ) { Task { await rebuild(outfit) } }
                 if outfit.verdict == "like" {
-                    verdictLabel("Kept", color: QuenyaTheme.webText, outlined: true)
+                    verdictLabel("Saved", color: QuenyaTheme.webText, outlined: true)
                 } else {
-                    compactButton("Keep", primary: true, disabled: busy != nil) {
+                    compactButton("Love it", primary: true, disabled: busy != nil) {
                         Task { await state.verdict(outfit, like: true) }
                     }
                 }
