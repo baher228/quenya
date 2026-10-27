@@ -139,7 +139,7 @@ struct BriefView: View {
                                 .overlay(alignment: .topTrailing) {
                                     Image(systemName: "xmark.circle.fill")
                                         .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, QuenyaTheme.ink)
+                                        .foregroundStyle(QuenyaTheme.webPhone, QuenyaTheme.webText)
                                         .padding(4)
                                 }
                             }
