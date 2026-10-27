@@ -128,6 +128,17 @@ final class APIClientTests: XCTestCase {
         }
     }
 
+    func testCancelledTransportThrowsCancellationError() async {
+        StubURLProtocol.setFailure(URLError(.cancelled))
+        do {
+            _ = try await client.me()
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
     func testDeckArrayAndWrappedDecodingAndNullableTags() async throws {
         StubURLProtocol.setResponse(json: "[\(realItem)]")
         let array = try await client.deck()

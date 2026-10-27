@@ -9,12 +9,22 @@ final class StubURLProtocol: URLProtocol {
 
     private static let lock = NSLock()
     private static var storedResponse = StubResponse(status: 200, headers: [:], body: Data())
+    private static var storedFailure: URLError?
     private(set) static var lastRequest: URLRequest?
     private(set) static var lastBody: Data?
 
     static func setResponse(status: Int = 200, json: String, headers: [String: String] = ["Content-Type": "application/json"]) {
         lock.lock()
         storedResponse = StubResponse(status: status, headers: headers, body: Data(json.utf8))
+        storedFailure = nil
+        lastRequest = nil
+        lastBody = nil
+        lock.unlock()
+    }
+
+    static func setFailure(_ error: URLError) {
+        lock.lock()
+        storedFailure = error
         lastRequest = nil
         lastBody = nil
         lock.unlock()
@@ -33,12 +43,22 @@ final class StubURLProtocol: URLProtocol {
         return storedResponse
     }
 
+    private static func failure() -> URLError? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedFailure
+    }
+
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         let body = Self.readBody(from: request)
         Self.record(request, body: body)
+        if let error = Self.failure() {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
         let response = Self.response()
         let http = HTTPURLResponse(
             url: request.url!,

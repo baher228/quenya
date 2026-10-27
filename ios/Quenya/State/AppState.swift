@@ -55,6 +55,10 @@ enum PresentedSheet: Identifiable {
 final class AppState {
     private(set) var api: APIClient
     private let tokenStore: TokenStore
+    private var launchID = UUID()
+    private var boardsRefreshID = UUID()
+    private var tasteRefreshID = UUID()
+    private var outfitBuildID = UUID()
 
     var authPhase: AuthPhase = .loading
     var user: User?
@@ -98,19 +102,28 @@ final class AppState {
     }
 
     func launch() async {
+        let requestID = UUID()
+        launchID = requestID
         guard tokenStore.token() != nil else {
             authPhase = .signedOut(nil)
             return
         }
         do {
             user = try await api.me()
+            guard !Task.isCancelled, launchID == requestID else { return }
             authPhase = .signedIn
             await refreshBoards()
+            guard !Task.isCancelled, launchID == requestID else { return }
             await refreshTaste()
+            guard !Task.isCancelled, launchID == requestID else { return }
             syncBriefWithActiveBoard()
+        } catch is CancellationError {
+            return
         } catch let error as APIError where error.status == 401 {
+            guard !Task.isCancelled, launchID == requestID else { return }
             authPhase = .signedOut(nil)
         } catch {
+            guard !Task.isCancelled, launchID == requestID else { return }
             authPhase = .failed(error.localizedDescription)
         }
     }
@@ -165,13 +178,32 @@ final class AppState {
     }
 
     func refreshBoards() async {
-        do { boards = try await api.boards() }
-        catch { }
+        let requestID = UUID()
+        boardsRefreshID = requestID
+        do {
+            let result = try await api.boards()
+            guard !Task.isCancelled, boardsRefreshID == requestID else { return }
+            boards = result
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, boardsRefreshID == requestID else { return }
+        }
     }
 
     func refreshTaste() async {
-        do { taste = try await api.taste() }
-        catch { taste = TasteState(current: nil, history: [], counts: [:], core: nil) }
+        let requestID = UUID()
+        tasteRefreshID = requestID
+        do {
+            let result = try await api.taste()
+            guard !Task.isCancelled, tasteRefreshID == requestID else { return }
+            taste = result
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, tasteRefreshID == requestID else { return }
+            taste = TasteState(current: nil, history: [], counts: [:], core: nil)
+        }
     }
 
     func setTab(_ tab: AppTab) {
@@ -282,8 +314,15 @@ final class AppState {
     }
 
     func loadDeck() async -> [Item] {
-        do { return try await api.deck(n: 10) }
+        do {
+            let result = try await api.deck(n: 10)
+            guard !Task.isCancelled else { return [] }
+            return result
+        } catch is CancellationError {
+            return []
+        }
         catch {
+            guard !Task.isCancelled else { return [] }
             showToast("Couldn't load the deck", lines: [error.localizedDescription])
             return []
         }
@@ -337,12 +376,23 @@ final class AppState {
     }
 
     func buildOutfits() async {
+        let requestID = UUID()
+        outfitBuildID = requestID
         selectedTab = .outfits
         outfitLoading = true
         outfitError = nil
-        defer { outfitLoading = false }
-        do { outfits = try await api.outfits(count: 3).outfits }
-        catch { outfitError = error.localizedDescription }
+        do {
+            let result = try await api.outfits(count: 3).outfits
+            guard !Task.isCancelled, outfitBuildID == requestID else { return }
+            outfits = result
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, outfitBuildID == requestID else { return }
+            outfitError = error.localizedDescription
+        }
+        guard !Task.isCancelled, outfitBuildID == requestID else { return }
+        outfitLoading = false
     }
 
     func replace(_ old: Outfit, with next: Outfit) {

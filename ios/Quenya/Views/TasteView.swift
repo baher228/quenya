@@ -131,6 +131,7 @@ struct TasteView: View {
     private func refresh() async {
         loading = true
         await state.refreshTaste()
+        guard !Task.isCancelled else { return }
         loading = false
     }
 }

@@ -222,6 +222,9 @@ final class APIClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled {
+                throw CancellationError()
+            }
             let timedOut = (error as? URLError)?.code == .timedOut
             throw APIError(
                 status: 0,

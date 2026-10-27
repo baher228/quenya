@@ -11,6 +11,7 @@ struct FindView: View {
     @State private var selection: PhotosPickerItem?
     @State private var uploading = false
     @State private var uploadError: String?
+    @State private var searchGeneration = 0
 
     private let examples = ["brown suede loafers", "cable knit jumper", "wax jacket", "wide-leg trousers"]
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
@@ -113,13 +114,27 @@ struct FindView: View {
     private func search(live: Bool, value: String? = nil) async {
         let term = (value ?? query).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return }
+        searchGeneration += 1
+        let generation = searchGeneration
         query = term
         mode = live ? "live" : "saved"
         error = nil
         items = nil
-        defer { mode = nil }
-        do { items = live ? try await state.api.searchLive(q: term) : try await state.api.search(q: term) }
-        catch { self.error = error.localizedDescription }
+        defer {
+            if !Task.isCancelled, generation == searchGeneration {
+                mode = nil
+            }
+        }
+        do {
+            let result = live ? try await state.api.searchLive(q: term) : try await state.api.search(q: term)
+            guard !Task.isCancelled, generation == searchGeneration else { return }
+            items = result
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, generation == searchGeneration else { return }
+            self.error = error.localizedDescription
+        }
     }
 
     private func upload(_ item: PhotosPickerItem) async {

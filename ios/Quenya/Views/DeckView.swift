@@ -9,6 +9,7 @@ struct DeckView: View {
     @State private var seen = 0
     @State private var selectedItem: Item?
     @State private var retryKey = 0
+    @State private var loadGeneration = 0
     @State private var swipeCommand: SwipeCommand?
 
     private var liked: [(String, Double)] {
@@ -139,15 +140,23 @@ struct DeckView: View {
     }
 
     private func load() async {
+        loadGeneration += 1
+        let generation = loadGeneration
         loading = true
         error = nil
         do {
-            items = try await state.api.deck(n: 10)
+            let result = try await state.api.deck(n: 10)
+            guard !Task.isCancelled, generation == loadGeneration else { return }
+            items = result
             if seen == 0 { seen = state.activeBoard?.counts.swipes ?? 0 }
             ImageCache.shared.prefetch(items.map(\.imagePath))
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             self.error = error.localizedDescription
         }
+        guard !Task.isCancelled, generation == loadGeneration else { return }
         loading = false
     }
 
