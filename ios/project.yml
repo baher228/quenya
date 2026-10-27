@@ -7,7 +7,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     CODE_SIGNING_ALLOWED: YES
-    CODE_SIGN_IDENTITY: "-"
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     QUENYA_API_BASE_URL: https://app.quenya.co.uk
@@ -21,9 +21,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: uk.co.quenya.app
         INFOPLIST_KEY_CFBundleDisplayName: Quenya
+        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
     info:
       path: Quenya/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
         QuenyaAPIBaseURL: $(QUENYA_API_BASE_URL)
         NSPhotoLibraryUsageDescription: Choose inspiration photos to personalise your style.
         UILaunchScreen:
