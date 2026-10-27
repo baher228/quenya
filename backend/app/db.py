@@ -107,6 +107,20 @@ CREATE TABLE IF NOT EXISTS deck_events (
 );
 CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
 ON deck_events(profile_id, created_at);
+CREATE TABLE IF NOT EXISTS waitlist (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT,
+    handle TEXT,
+    style_text TEXT,
+    wants_testing INTEGER NOT NULL DEFAULT 1,
+    devices TEXT,
+    source TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    consent_at TEXT NOT NULL
+);
 """
 POSTGRES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -203,6 +217,20 @@ CREATE TABLE IF NOT EXISTS deck_events (
 );
 CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
 ON deck_events(profile_id, created_at);
+CREATE TABLE IF NOT EXISTS waitlist (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT,
+    handle TEXT,
+    style_text TEXT,
+    wants_testing INTEGER NOT NULL DEFAULT 1,
+    devices TEXT,
+    source TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    consent_at TEXT NOT NULL
+);
 """
 _INIT_LOCK = Lock()
 _POSTGRES_INIT_ADVISORY_LOCK_KEY = 7301442001
