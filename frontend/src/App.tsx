@@ -44,7 +44,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
-  const canCreateStyle = !user || user.max_styles !== 1 || user.style_count < 1;
+  const canCreateStyle = !user || user.max_styles !== 1 || boards.length < 1;
   const writingNew = tab === "brief" && briefMode === "new";
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
@@ -244,7 +244,7 @@ export default function App() {
         </header>
         {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
-            <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>
+            {canCreateStyle && <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>}
             {boards.map(b => (
               <button key={b.id} role="tab" aria-selected={b.active && !writingNew} className={"board" + (b.active && !writingNew ? " on" : "")} onClick={() => switchBoard(b)}>
                 {b.label}{b.version ? <em>v{b.version}</em> : null}
@@ -318,7 +318,7 @@ export default function App() {
             {sheet?.kind === "item" && <ItemSheet item={sheet.item} onClose={() => setSheet(null)} onCorrected={t => announce(t, "tag correction")} />}
             {sheet?.kind === "checkout" && <CheckoutSheet s={sheet} onClose={() => setSheet(null)} />}
             {sheet?.kind === "move" && <MoveSheet route={sheet.route} current={sheet.board} boards={boards} onPick={id => moveRoute(sheet.route, id)} onClose={() => setSheet(null)} />}
-            {sheet?.kind === "photo" && <PhotoSheet up={sheet.up} boards={boards} active={activeBoard} onPick={(id, label) => assignPhoto(sheet.up, id, label)} onClose={() => setSheet(null)} />}
+            {sheet?.kind === "photo" && <PhotoSheet up={sheet.up} boards={boards} active={activeBoard} canCreateStyle={canCreateStyle} onPick={(id, label) => assignPhoto(sheet.up, id, label)} onClose={() => setSheet(null)} />}
           </div>
         </div>
       </div>
@@ -462,8 +462,8 @@ function MoveSheet({ route, current, boards, onPick, onClose }: {
   );
 }
 
-function PhotoSheet({ up, boards, active, onPick, onClose }: {
-  up: UploadResult; boards: Board[]; active: Board | null; onPick: (id: string | null, label?: string) => void; onClose: () => void;
+function PhotoSheet({ up, boards, active, canCreateStyle, onPick, onClose }: {
+  up: UploadResult; boards: Board[]; active: Board | null; canCreateStyle: boolean; onPick: (id: string | null, label?: string) => void; onClose: () => void;
 }) {
   const match = boards.find(b => b.label.toLowerCase() === up.route.label.toLowerCase() && !b.active);
   return (
@@ -473,7 +473,7 @@ function PhotoSheet({ up, boards, active, onPick, onClose }: {
       <p className="small muted">{up.route.reason}</p>
       {match
         ? <button className="reason" onClick={() => onPick(match.id)}>Add to {match.label}</button>
-        : <button className="reason" onClick={() => onPick(null, up.route.label)}>Start a “{up.route.label}” board</button>}
+        : canCreateStyle && <button className="reason" onClick={() => onPick(null, up.route.label)}>Start a “{up.route.label}” board</button>}
       {active && <button className="reason" onClick={() => onPick(active.id)}>Keep it on {active.label}</button>}
       <button className="close" onClick={onClose}>Decide later</button>
     </>

@@ -342,3 +342,27 @@ def test_testers_cannot_access_admin_routes(isolated_accounts_db):
             client.post("/api/admin/users/missing/revoke", headers=headers),
         ]
     assert [response.status_code for response in responses] == [403, 403, 403, 403]
+
+
+def test_admin_user_listing_includes_styles_and_swipe_count(isolated_accounts_db):
+    _admin, admin_token = _user_and_session("Admin", role="admin")
+    tester, _tester_token = _user_and_session("Tester")
+    _profile(tester["id"], "tester-style")
+    db.insert_swipe("tester-style", "swiped-item", True)
+
+    with TestClient(main.app) as client:
+        response = client.get(
+            "/api/admin/users",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+
+    assert response.status_code == 200, response.text
+    api_tester = next(user for user in response.json() if user["id"] == tester["id"])
+    assert len(api_tester["styles"]) == 1
+    assert api_tester["swipe_count"] == 1
+
+    cli_tester = next(
+        user for user in accounts._admin_users() if user["id"] == tester["id"]
+    )
+    assert len(cli_tester["styles"]) == 1
+    assert cli_tester["swipe_count"] == 1

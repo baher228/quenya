@@ -202,8 +202,16 @@ def _admin_users() -> list[dict[str, Any]]:
     for row in rows:
         user = dict(row)
         boards = db.profile_boards("user", user["id"])
+        with db.db_connection() as connection:
+            swipe_count = connection.execute(
+                """SELECT COUNT(*) FROM swipes
+                   WHERE profile_id IN (
+                       SELECT id FROM profiles WHERE kind='user' AND owner_id=?
+                   )""",
+                (user["id"],),
+            ).fetchone()[0]
         user["styles"] = [{"id": b["id"], "label": b["label"]} for b in boards]
-        user["swipe_count"] = sum(b["counts"]["swipes"] for b in boards)
+        user["swipe_count"] = swipe_count
         result.append({key: user.get(key) for key in (
             "id", "name", "role", "created_at", "revoked_at", "last_seen_at",
             "styles", "swipe_count",
