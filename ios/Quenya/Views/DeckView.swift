@@ -142,6 +142,7 @@ struct DeckView: View {
                                     .font(.system(size: 12))
                                     .foregroundStyle(QuenyaTheme.webMuted)
                                     .lineLimit(1)
+                                    .fixedSize()
                             }
                             ForEach(liked, id: \.0) { key, _ in
                                 tasteChip("+ \(pretty(key))", color: QuenyaTheme.sage)
@@ -150,7 +151,9 @@ struct DeckView: View {
                                 tasteChip("− \(pretty(key))", color: QuenyaTheme.coral)
                             }
                         }
+                        .padding(.horizontal, 18)
                     }
+                    .padding(.horizontal, -18)
                 }
             }
             .padding(.top, 14)

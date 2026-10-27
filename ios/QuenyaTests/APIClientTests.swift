@@ -87,6 +87,25 @@ final class APIClientTests: XCTestCase {
             .contains(#"name="file"; filename="photo.jpg""#))
     }
 
+    func testCheckoutUsesAuthenticatedOutfitRequest() async throws {
+        StubURLProtocol.setResponse(json: """
+        {"order_ref":"order-1","simulated":true,"lines":[
+          {"title":"Jacket","source":"vinted","source_url":"https://example.test/jacket","price_gbp":25.0}
+        ],"total_gbp":25.0}
+        """)
+
+        let result = try await client.checkout(outfitId: "outfit-1")
+        let request = StubURLProtocol.lastRequest
+        XCTAssertEqual(request?.url?.path, "/api/checkout")
+        XCTAssertEqual(request?.httpMethod, "POST")
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "Authorization"), "Bearer test-token")
+        let body = try XCTUnwrap(StubURLProtocol.lastBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(json, ["outfit_id": "outfit-1"])
+        XCTAssertEqual(result.orderRef, "order-1")
+        XCTAssertEqual(result.lines.first?.sourceUrl, "https://example.test/jacket")
+    }
+
     func testEmptyTokenOmitsAuthorization() async throws {
         store.clear()
         StubURLProtocol.setResponse(json: #"{"id":"u1","name":"Tester","role":"tester"}"#)

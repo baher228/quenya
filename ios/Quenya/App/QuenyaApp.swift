@@ -8,7 +8,6 @@ struct QuenyaApp: App {
         WindowGroup {
             RootTabs()
                 .environment(appState)
-                .preferredColorScheme(.light)
                 .tint(QuenyaTheme.ink)
                 .task { await appState.launch() }
                 .onOpenURL { url in

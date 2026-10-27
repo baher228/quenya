@@ -68,11 +68,11 @@ struct RootTabs: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("quenya")
+                    (
+                        Text("quenya").foregroundColor(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
+                        + Text(".").foregroundColor(webDarkChrome ? QuenyaTheme.sage : QuenyaTheme.rust)
+                    )
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
-                    Text(".").font(.system(size: 19, weight: .semibold)).foregroundStyle(webDarkChrome ? QuenyaTheme.sage : QuenyaTheme.rust)
-                        .padding(.leading, -5)
                     Spacer()
                     Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
                         .font(.system(size: 11))

@@ -8,6 +8,7 @@ struct OutfitsView: View {
     @State private var rowErrors: [String: String] = [:]
     @State private var selectedItem: Item?
     @State private var safari: SafariTarget?
+    @State private var checkoutOutfit: Outfit?
 
     private let minorSlots: Set<String> = ["shoes", "bag", "accessory"]
 
@@ -54,9 +55,13 @@ struct OutfitsView: View {
                 }
             }
             .padding(18)
+            .padding(.bottom, 112)
         }
         .background(QuenyaTheme.webPhone)
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
+        .sheet(item: $checkoutOutfit) { outfit in
+            CheckoutSheetView(outfit: outfit)
+        }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }
 
@@ -144,11 +149,22 @@ struct OutfitsView: View {
                     }
                 }
             }
-            ShareLink(item: shareText(outfit)) {
-                Label("Share outfit", systemImage: "square.and.arrow.up")
+            Button {
+                checkoutOutfit = outfit
+            } label: {
+                Text("Buy the bundle · \(gbp(outfit.totalGbp))")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(QuenyaTheme.webText)
                     .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(QuenyaTheme.webSurface2, in: Capsule())
+                    .overlay(Capsule().stroke(QuenyaTheme.webLine, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            ShareLink(item: shareText(outfit)) {
+                Label("Share outfit", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(QuenyaTheme.webText)
+                    .frame(maxWidth: .infinity, minHeight: 34)
                     .overlay(Capsule().stroke(QuenyaTheme.webLine, lineWidth: 1))
             }
             if outfit.verdict == "reject", let reason = outfit.reason {
@@ -376,6 +392,91 @@ struct OutfitsView: View {
         var lines = [outfit.title, outfit.mood, "Total \(gbp(outfit.totalGbp))"]
         lines += outfit.pieces.map { "\($0.title) (\($0.source)) \(gbp($0.priceGbp)) \($0.sourceUrl)" }
         return lines.joined(separator: "\n")
+    }
+}
+
+private struct CheckoutSheetView: View {
+    @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
+    let outfit: Outfit
+    @State private var result: Checkout?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(outfit.title)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(QuenyaTheme.webText)
+                    if let result {
+                        Text("Demo checkout · no payment taken · \(result.orderRef)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(QuenyaTheme.sage)
+                        Text("For real orders we'd buy each piece from its shop and ship the bundle to you. For now, here's every listing.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(QuenyaTheme.webMuted)
+                        ForEach(result.lines) { line in
+                            if let url = URL(string: line.sourceUrl) {
+                                Link(destination: url) {
+                                    HStack(alignment: .top) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(line.title)
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(QuenyaTheme.webText)
+                                            Text(line.source)
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(QuenyaTheme.webMuted)
+                                        }
+                                        Spacer(minLength: 12)
+                                        Text(gbp(line.priceGbp))
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(QuenyaTheme.webSoft)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                            }
+                        }
+                        HStack {
+                            Text("Total")
+                            Spacer()
+                            Text(gbp(result.totalGbp)).fontWeight(.semibold)
+                        }
+                        .font(.system(size: 14))
+                        .foregroundStyle(QuenyaTheme.webText)
+                    } else if let error {
+                        ErrorPanel(message: error)
+                    } else {
+                        LoadingLabel(title: "Preparing your bundle", dark: true)
+                    }
+                }
+                .padding(20)
+            }
+            .background(QuenyaTheme.webPhone)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(QuenyaTheme.webText)
+                }
+            }
+            .toolbarBackground(QuenyaTheme.webPhone, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .task {
+            do {
+                let response = try await state.api.checkout(outfitId: outfit.id)
+                guard !Task.isCancelled else { return }
+                result = response
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 
