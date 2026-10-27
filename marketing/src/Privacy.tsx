@@ -18,7 +18,7 @@ export function Privacy() {
         <h2>Who we are</h2>
         <p>
           Quenya is the data controller for waitlist signups. You can reach us at{" "}
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> <Confirm>contact email: owner to confirm</Confirm>.
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
 
         <h2>What we store</h2>

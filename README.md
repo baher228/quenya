@@ -4,7 +4,7 @@ Quenya is a fashion discovery app for UK shoppers. Describe what you want ("road
 
 AI tasks help interpret briefs and photos, update each board's taste profile, build outfits and tag catalogue items. Product tagging uses the local CLIP kNN tagger by default.
 
-- App: https://quenya-rho.vercel.app (installable on iPhone: Share → Add to Home Screen)
+- App: https://app.quenya.co.uk (installable on iPhone: Share → Add to Home Screen)
 - API: https://quenya-api.vercel.app
 
 ## How it works

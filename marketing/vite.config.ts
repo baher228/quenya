@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 const api = process.env.QUENYA_API ?? "http://127.0.0.1:8000";
-// Canonical origin for OG/canonical URLs. Change when the final domain is chosen.
-const site = (process.env.SITE_URL ?? "https://quenya-marketing.vercel.app").replace(/\/$/, "");
+// Canonical origin for OG/canonical URLs.
+const site = (process.env.SITE_URL ?? "https://quenya.co.uk").replace(/\/$/, "");
 
 const siteUrl = {
   name: "site-url",
