@@ -272,7 +272,7 @@ private struct SwipeCard: View {
                                     .background(QuenyaTheme.webText.opacity(0.12), in: Capsule())
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
                         .clipped()
                         .mask(LinearGradient(
                             stops: [
@@ -285,7 +285,7 @@ private struct SwipeCard: View {
                     }
                 }
                 .foregroundStyle(QuenyaTheme.webText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
                 .padding(16)
                 VStack {
                     HStack {
