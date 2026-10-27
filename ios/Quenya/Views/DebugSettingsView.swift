@@ -9,7 +9,7 @@ struct DebugSettingsView: View {
         NavigationStack {
             Form {
                 Section("API base URL") {
-                    TextField("https://quenya-rho.vercel.app", text: $value)
+                    TextField("https://app.quenya.co.uk", text: $value)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)

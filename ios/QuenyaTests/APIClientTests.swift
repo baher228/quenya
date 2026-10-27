@@ -228,7 +228,7 @@ final class APIClientTests: XCTestCase {
     }
 
     func testInviteLinkParsing() {
-        XCTAssertEqual(InviteLink.token(from: "https://quenya-rho.vercel.app/?invite=abc"), "abc")
+        XCTAssertEqual(InviteLink.token(from: "https://app.quenya.co.uk/?invite=abc"), "abc")
         XCTAssertEqual(InviteLink.token(from: "quenya://invite?token=def"), "def")
         XCTAssertEqual(InviteLink.token(from: "  bare-token  "), "bare-token")
     }

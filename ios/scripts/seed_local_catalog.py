@@ -14,7 +14,7 @@ import httpx
 BACKEND = Path(__file__).resolve().parents[2] / "backend"
 sys.path.insert(0, str(BACKEND))
 
-PRODUCTION = "https://quenya-rho.vercel.app"
+PRODUCTION = "https://app.quenya.co.uk"
 PRODUCT_QUERIES = (
     "jacket", "coat", "t-shirt", "shirt", "polo", "jumper", "hoodie",
     "cardigan", "jeans", "trousers", "skirt", "shorts", "dress",

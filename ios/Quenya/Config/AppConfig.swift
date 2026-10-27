@@ -2,7 +2,7 @@ import Foundation
 
 enum AppConfig {
     static let userDefaultsKey = "QuenyaAPIBaseURL"
-    static let productionURL = URL(string: "https://quenya-rho.vercel.app")!
+    static let productionURL = URL(string: "https://app.quenya.co.uk")!
 
     static var baseURL: URL {
         #if DEBUG

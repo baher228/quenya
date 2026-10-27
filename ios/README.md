@@ -53,7 +53,7 @@ In Xcode, pass `-QuenyaAPIBaseURL http://localhost:8000` to the app launch
 arguments. The same override can be used with `simctl`:
 
 ```sh
-xcrun simctl launch booted uk.ardivia.quenya \
+xcrun simctl launch booted uk.co.quenya.app \
   -QuenyaAPIBaseURL http://localhost:8000
 ```
 

@@ -4,7 +4,7 @@ import Security
 import os
 
 private let keychainLogger = Logger(
-    subsystem: "uk.ardivia.quenya",
+    subsystem: "uk.co.quenya.app",
     category: "KeychainTokenStore"
 )
 #endif
@@ -16,7 +16,7 @@ protocol TokenStore {
 }
 
 final class KeychainTokenStore: TokenStore {
-    private let service = "uk.ardivia.quenya"
+    private let service = "uk.co.quenya.app"
     private let account = "session"
 
     func token() -> String? {
