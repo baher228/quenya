@@ -14,24 +14,32 @@ struct OutfitsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Eyebrow(text: state.outfits.isEmpty ? "Outfits" : "\(state.outfits.count) outfits\(state.currentVersion.map { " · taste v\($0)" } ?? "")")
-                H1(text: "Put together for you.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(state.outfits.isEmpty ? "Outfits" : "\(state.outfits.count) outfits\(state.currentVersion.map { " · taste v\($0)" } ?? "")")
+                        .font(.system(size: 12))
+                        .foregroundStyle(QuenyaTheme.sage)
+                        .padding(.top, 12)
+                    Text("Put together for you.")
+                        .font(.system(size: 30, weight: .semibold))
+                        .tracking(-0.5)
+                        .foregroundStyle(QuenyaTheme.webText)
+                }
                 if state.outfitLoading {
-                    LoadingLabel(title: "Styling outfits from your pool")
+                    LoadingLabel(title: "Styling outfits from your pool", dark: true)
                 } else if let error = state.outfitError {
                     ErrorPanel(message: error) { Task { await state.buildOutfits() } }
                 } else if state.outfits.isEmpty {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("No outfits yet. Swipe a few cards first, then build.")
                             .font(.system(size: 14))
-                            .foregroundStyle(QuenyaTheme.muted)
-                        PillButton(title: "Build outfits", primary: true) {
+                            .foregroundStyle(QuenyaTheme.webMuted)
+                        PillButton(title: "Build outfits", primary: true, dark: true) {
                             Task { await state.buildOutfits() }
                         }
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .background(QuenyaTheme.webSurface, in: RoundedRectangle(cornerRadius: 20))
                 }
 
                 ForEach(state.outfits) { outfit in
@@ -39,7 +47,7 @@ struct OutfitsView: View {
                 }
 
                 if !state.outfits.isEmpty && !state.outfitLoading {
-                    PillButton(title: "New set from taste v\(state.currentVersion.map(String.init) ?? "–")") {
+                    PillButton(title: "New set from taste v\(state.currentVersion.map(String.init) ?? "–")", dark: true) {
                         Task { await state.buildOutfits() }
                     }
                     .frame(maxWidth: .infinity)
@@ -47,7 +55,7 @@ struct OutfitsView: View {
             }
             .padding(18)
         }
-        .background(QuenyaTheme.cream)
+        .background(QuenyaTheme.webPhone)
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }
@@ -62,20 +70,25 @@ struct OutfitsView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(outfit.title)
-                        .font(.system(size: 21, weight: .semibold, design: .serif))
-                        .foregroundStyle(QuenyaTheme.ink)
-                    Text(outfit.mood).font(.system(size: 13)).foregroundStyle(QuenyaTheme.muted)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(QuenyaTheme.webText)
+                    Text(outfit.mood).font(.system(size: 13)).foregroundStyle(QuenyaTheme.webMuted)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(gbp(outfit.totalGbp)).font(.system(size: 16, weight: .semibold))
-                    Text("\(outfit.pieces.count) pieces").font(.system(size: 11)).foregroundStyle(QuenyaTheme.muted)
+                    Text(gbp(outfit.totalGbp)).font(.system(size: 17, weight: .semibold)).foregroundStyle(QuenyaTheme.webText)
+                    Text("\(outfit.pieces.count) pieces").font(.system(size: 11)).foregroundStyle(QuenyaTheme.webMuted)
                 }
             }
             if !major.isEmpty {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 9), GridItem(.flexible(), spacing: 9)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 3), GridItem(.flexible(), spacing: 3)], spacing: 3) {
                     ForEach(Array(major.enumerated()), id: \.element.id) { index, item in
-                        pieceCard(item, outfit: outfit, isLocked: keep.contains(item.id))
+                        pieceCard(
+                            item,
+                            outfit: outfit,
+                            isLocked: keep.contains(item.id),
+                            isWide: major.count % 2 == 1 && index == 0
+                        )
                             .gridCellColumns(major.count % 2 == 1 && index == 0 ? 2 : 1)
                     }
                 }
@@ -88,22 +101,22 @@ struct OutfitsView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 5) {
-                Text("Why this").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(QuenyaTheme.rust)
-                Text(outfit.why).font(.system(size: 13)).foregroundStyle(QuenyaTheme.softInk)
+                Text("WHY THIS").font(.system(size: 10, weight: .semibold)).tracking(1.2).foregroundStyle(QuenyaTheme.sage)
+                Text(outfit.why).font(.system(size: 13)).foregroundStyle(QuenyaTheme.webSoft)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
                 ForEach(outfit.pieces) { item in
                     Button {
                         if let url = URL(string: item.sourceUrl) { safari = SafariTarget(url: url) }
                     } label: {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(item.title).font(.system(size: 12)).lineLimit(1)
+                            Text(item.title).font(.system(size: 12)).lineLimit(1).underline(true, color: QuenyaTheme.webSoft)
                             Spacer(minLength: 6)
                             Text(item.source == "vinted" ? "Vinted" : item.source == "retail" ? "Retail" : item.source)
-                                .font(.system(size: 10)).foregroundStyle(QuenyaTheme.muted)
+                                .font(.system(size: 10)).foregroundStyle(QuenyaTheme.webMuted)
                         }
                         .contentShape(Rectangle())
-                        .foregroundStyle(QuenyaTheme.ink)
+                        .foregroundStyle(QuenyaTheme.webText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -113,7 +126,7 @@ struct OutfitsView: View {
             }
             HStack(spacing: 7) {
                 if outfit.verdict == "reject" {
-                    verdictLabel("Not for me · \(outfit.reason ?? "Rejected")", color: QuenyaTheme.muted)
+                    verdictLabel("Not for me · \(outfit.reason ?? "Rejected")", color: QuenyaTheme.webMuted)
                 } else {
                     compactButton("Not for me", disabled: busy != nil) {
                         state.presentedSheet = .reject(outfit)
@@ -124,7 +137,7 @@ struct OutfitsView: View {
                     disabled: busy != nil
                 ) { Task { await rebuild(outfit) } }
                 if outfit.verdict == "like" {
-                    verdictLabel("Kept", color: QuenyaTheme.ink, outlined: true)
+                    verdictLabel("Kept", color: QuenyaTheme.webText, outlined: true)
                 } else {
                     compactButton("Keep", primary: true, disabled: busy != nil) {
                         Task { await state.verdict(outfit, like: true) }
@@ -134,69 +147,152 @@ struct OutfitsView: View {
             ShareLink(item: shareText(outfit)) {
                 Label("Share outfit", systemImage: "square.and.arrow.up")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(QuenyaTheme.ink)
+                    .foregroundStyle(QuenyaTheme.webText)
                     .frame(maxWidth: .infinity, minHeight: 40)
-                    .overlay(Capsule().stroke(QuenyaTheme.line, lineWidth: 1))
+                    .overlay(Capsule().stroke(QuenyaTheme.webLine, lineWidth: 1))
             }
             if outfit.verdict == "reject", let reason = outfit.reason {
                 Text("Correction recorded: \(reason). Your taste was updated and the next outfits use it.")
                     .font(.system(size: 12))
-                    .foregroundStyle(QuenyaTheme.muted)
+                    .foregroundStyle(QuenyaTheme.webMuted)
             }
         }
         .padding(15)
-        .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.line, lineWidth: 1))
+        .background(QuenyaTheme.webSurface, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.webLine, lineWidth: 1))
     }
 
-    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Button { selectedItem = item } label: {
-                RemoteImage(path: item.imagePath)
-                    .frame(height: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            HStack {
-                Text(item.brand ?? item.tags?.category ?? "Piece")
-                    .font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                Spacer()
-                Text(gbp(item.priceGbp)).font(.system(size: 11))
-            }
-            HStack(spacing: 6) {
-                compactButton(isLocked ? "Locked" : "Lock") { toggleLock(outfit, item.id) }
-                compactButton(busy == outfit.id + "swap" + item.id ? "…" : "Swap", disabled: busy != nil) {
-                    Task { await swap(outfit, item: item) }
+    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool, isWide: Bool) -> some View {
+        GeometryReader { geometry in
+            ZStack {
+                Button { selectedItem = item } label: {
+                    RemoteImage(path: item.imagePath)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                 }
+                .buttonStyle(.plain)
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.85)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+
+                HStack(alignment: .lastTextBaseline) {
+                    Text(item.brand ?? item.tags?.category ?? "Piece")
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 6)
+                    Text(gbp(item.priceGbp)).font(.system(size: 11))
+                }
+                .foregroundStyle(QuenyaTheme.cream)
+                .padding(.horizontal, 9)
+                .padding(.bottom, 7)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .allowsHitTesting(false)
+            }
+            .overlay(alignment: .top) {
+                HStack {
+                    pieceActionButton(isLocked ? "Locked" : "Lock", locked: isLocked) {
+                        toggleLock(outfit, item.id)
+                    }
+                    Spacer()
+                    pieceActionButton(
+                        busy == outfit.id + "swap" + item.id ? "…" : "Swap",
+                        disabled: busy != nil
+                    ) {
+                        Task { await swap(outfit, item: item) }
+                    }
+                }
+                .padding(7)
             }
         }
-        .padding(8)
-        .background(isLocked ? QuenyaTheme.rustSoft.opacity(0.55) : QuenyaTheme.cream, in: RoundedRectangle(cornerRadius: 15))
+        .aspectRatio(isWide ? 4.0 / 3.0 : 3.0 / 4.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isLocked ? QuenyaTheme.sage : .clear, lineWidth: 2)
+                .allowsHitTesting(false)
+        }
     }
 
     private func minorRow(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
         HStack(spacing: 9) {
             Button { selectedItem = item } label: {
-                RemoteImage(path: item.imagePath).frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                RemoteImage(path: item.imagePath).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
             Button { selectedItem = item } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(item.brand.map { "\($0) · " } ?? "")\(item.title)")
                         .font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(gbp(item.priceGbp)).font(.system(size: 11)).foregroundStyle(QuenyaTheme.muted)
+                    Text(gbp(item.priceGbp)).font(.system(size: 11)).foregroundStyle(QuenyaTheme.webMuted)
                 }
-                .foregroundStyle(QuenyaTheme.ink)
+                .foregroundStyle(QuenyaTheme.webText)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            compactButton(isLocked ? "Locked" : "Lock") { toggleLock(outfit, item.id) }
-            compactButton(busy == outfit.id + "swap" + item.id ? "…" : "Swap", disabled: busy != nil) {
-                Task { await swap(outfit, item: item) }
+            HStack(spacing: 6) {
+                pieceActionButton(isLocked ? "Locked" : "Lock", locked: isLocked, onPhotoTile: false) {
+                    toggleLock(outfit, item.id)
+                }
+                pieceActionButton(
+                    busy == outfit.id + "swap" + item.id ? "…" : "Swap",
+                    disabled: busy != nil,
+                    onPhotoTile: false
+                ) {
+                    Task { await swap(outfit, item: item) }
+                }
             }
         }
-        .padding(7)
-        .background(isLocked ? QuenyaTheme.rustSoft.opacity(0.55) : QuenyaTheme.cream, in: RoundedRectangle(cornerRadius: 13))
+        .padding(.horizontal, 3)
+        .padding(.vertical, 8)
+        .overlay(alignment: .top) {
+            Rectangle().fill(QuenyaTheme.webLine).frame(height: 1)
+        }
+        .overlay(alignment: .leading) {
+            if isLocked {
+                Rectangle().fill(QuenyaTheme.sage).frame(width: 2).padding(.vertical, 1)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isLocked ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func pieceActionButton(
+        _ title: String,
+        locked: Bool = false,
+        disabled: Bool = false,
+        onPhotoTile: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        let background = locked
+            ? QuenyaTheme.sage
+            : (onPhotoTile ? QuenyaTheme.ink.opacity(0.82) : QuenyaTheme.webSurface2)
+        let foreground = locked
+            ? QuenyaTheme.webPhone
+            : (onPhotoTile ? QuenyaTheme.cream : QuenyaTheme.webText)
+        let border = locked ? QuenyaTheme.sage : (onPhotoTile ? Color.clear : QuenyaTheme.webLine)
+
+        return Button(action: action) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .medium))
+                .tracking(0.6)
+                .foregroundStyle(foreground)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(background, in: Capsule())
+                .overlay(Capsule().stroke(border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
     }
 
     private func compactButton(
@@ -208,13 +304,13 @@ struct OutfitsView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(primary ? QuenyaTheme.cream : QuenyaTheme.ink)
+                .foregroundStyle(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, minHeight: 34)
                 .padding(.horizontal, 6)
-                .background(primary ? QuenyaTheme.ink : QuenyaTheme.cream, in: Capsule())
-                .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.line, lineWidth: 1))
+                .background(primary ? QuenyaTheme.webText : QuenyaTheme.webSurface2, in: Capsule())
+                .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.webLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -229,7 +325,7 @@ struct OutfitsView: View {
             .minimumScaleFactor(0.65)
             .frame(maxWidth: .infinity, minHeight: 34)
             .padding(.horizontal, 6)
-            .overlay(Capsule().stroke(outlined ? QuenyaTheme.ink : QuenyaTheme.line, lineWidth: 1))
+            .overlay(Capsule().stroke(outlined ? QuenyaTheme.webText : QuenyaTheme.webLine, lineWidth: 1))
     }
 
     private func toggleLock(_ outfit: Outfit, _ itemId: String) {

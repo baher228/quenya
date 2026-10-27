@@ -207,7 +207,9 @@ def _fake_call_task(task, _system, _model, content, out_model, **_kwargs):
 
 
 def configure_fakes() -> None:
-    images.IMAGE_DIR = Path("/tmp/quenya-img")
+    images.IMAGE_DIR = Path(
+        os.getenv("QUENYA_IMAGE_DIR", str(Path.home() / "ios-work" / "images"))
+    )
     for module in (phase2_api, routing, styles, taste, tagging):
         module.call_task = _fake_call_task
     phase2_api.decode_brief = lambda _brief: []

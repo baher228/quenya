@@ -9,6 +9,16 @@ enum QuenyaTheme {
     static let muted = Color(hex: 0x7A7064)
     static let rust = Color(hex: 0xB4532A)
     static let rustSoft = Color(hex: 0xE7C9B8)
+    static let sage = Color(hex: 0xB9C4A8)
+    static let coral = Color(hex: 0xD9897A)
+    static let webPhone = Color(hex: 0x171411)
+    static let webSurface = Color(hex: 0x1F1B17)
+    static let webSurface2 = Color(hex: 0x221E1A)
+    static let webLine = Color(hex: 0x2A2520)
+    static let webText = Color(hex: 0xEDE6DA)
+    static let webSoft = Color(hex: 0xC9C0B3)
+    static let webMuted = Color(hex: 0x8E8579)
+    static let webDim = Color(hex: 0x7D7468)
 }
 
 extension Color {
@@ -78,17 +88,18 @@ struct PillButton: View {
     let title: String
     var primary = false
     var disabled = false
+    var dark = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(primary ? QuenyaTheme.cream : QuenyaTheme.ink)
+                .foregroundStyle(primary ? (dark ? QuenyaTheme.webPhone : QuenyaTheme.cream) : (dark ? QuenyaTheme.webText : QuenyaTheme.ink))
                 .frame(minHeight: 44)
                 .padding(.horizontal, 20)
-                .background(primary ? QuenyaTheme.ink : Color.clear, in: Capsule())
-                .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.ink, lineWidth: 1))
+                .background(primary ? (dark ? QuenyaTheme.webText : QuenyaTheme.ink) : (dark ? QuenyaTheme.webSurface2 : Color.clear), in: Capsule())
+                .overlay(Capsule().stroke(primary ? Color.clear : (dark ? QuenyaTheme.webLine : QuenyaTheme.ink), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -99,16 +110,19 @@ struct PillButton: View {
 struct ChoicePill: View {
     let title: String
     var selected = false
+    var dark = false
+    var outlined = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(selected ? QuenyaTheme.cream : QuenyaTheme.ink)
+                .foregroundStyle(dark ? (selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft) : (selected ? QuenyaTheme.cream : QuenyaTheme.ink))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(selected ? QuenyaTheme.ink : QuenyaTheme.surface, in: Capsule())
+                .background(dark ? (selected ? QuenyaTheme.webText : (outlined ? Color.clear : QuenyaTheme.webSurface2)) : (selected ? QuenyaTheme.ink : QuenyaTheme.surface), in: Capsule())
+                .overlay(Capsule().stroke(dark && outlined ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -137,11 +151,12 @@ struct ErrorPanel: View {
 
 struct LoadingLabel: View {
     let title: String
+    var dark = false
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView().tint(QuenyaTheme.rust)
-            Text(title).font(.system(size: 14)).foregroundStyle(QuenyaTheme.softInk)
+            ProgressView().tint(dark ? QuenyaTheme.sage : QuenyaTheme.rust)
+            Text(title).font(.system(size: 14)).foregroundStyle(dark ? QuenyaTheme.webSoft : QuenyaTheme.softInk)
         }
         .padding(.vertical, 18)
     }

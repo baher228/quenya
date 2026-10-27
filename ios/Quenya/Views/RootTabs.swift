@@ -3,6 +3,14 @@ import SwiftUI
 struct RootTabs: View {
     @Environment(AppState.self) private var state
 
+    private var webDarkChrome: Bool {
+        state.selectedTab == .outfits || (state.selectedTab == .swipe && !state.picking && state.hasProfile)
+    }
+
+    private var chromeBackground: Color {
+        webDarkChrome ? QuenyaTheme.webPhone : QuenyaTheme.cream
+    }
+
     private var selection: Binding<AppTab> {
         Binding(
             get: { state.selectedTab },
@@ -36,8 +44,8 @@ struct RootTabs: View {
                 signedInContent
             }
         }
-        .background(QuenyaTheme.cream.ignoresSafeArea())
-        .preferredColorScheme(.light)
+        .background(chromeBackground.ignoresSafeArea())
+        .preferredColorScheme(webDarkChrome ? .dark : .light)
         .sheet(item: Binding(
             get: { state.presentedSheet },
             set: { state.presentedSheet = $0 }
@@ -61,14 +69,14 @@ struct RootTabs: View {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("quenya")
-                        .font(.system(size: 25, weight: .semibold, design: .serif))
-                        .foregroundStyle(QuenyaTheme.ink)
-                    Text(".").font(.system(size: 25, weight: .semibold, design: .serif)).foregroundStyle(QuenyaTheme.rust)
-                        .padding(.leading, -7)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
+                    Text(".").font(.system(size: 19, weight: .semibold)).foregroundStyle(webDarkChrome ? QuenyaTheme.sage : QuenyaTheme.rust)
+                        .padding(.leading, -5)
                     Spacer()
                     Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
                         .font(.system(size: 11))
-                        .foregroundStyle(QuenyaTheme.muted)
+                        .foregroundStyle(webDarkChrome ? QuenyaTheme.webMuted : QuenyaTheme.muted)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 20)
@@ -80,10 +88,10 @@ struct RootTabs: View {
                 }
 
                 Rectangle()
-                    .fill(QuenyaTheme.line)
+                    .fill(webDarkChrome ? QuenyaTheme.webLine : QuenyaTheme.line)
                     .frame(height: 1)
             }
-            .background(QuenyaTheme.cream)
+            .background(chromeBackground)
 
             TabView(selection: selection) {
                 BriefView().tag(AppTab.brief)
@@ -97,8 +105,8 @@ struct RootTabs: View {
                 TasteView().tag(AppTab.taste)
                     .tabItem { Label(AppTab.taste.title, systemImage: AppTab.taste.symbol) }
             }
-            .tint(QuenyaTheme.ink)
-            .toolbarBackground(QuenyaTheme.cream, for: .tabBar)
+            .tint(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
+            .toolbarBackground(chromeBackground, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .overlay(alignment: .bottom) {
                 if let toast = state.toast {
@@ -114,7 +122,7 @@ struct RootTabs: View {
                 }
             }
         }
-        .background(QuenyaTheme.cream)
+        .background(chromeBackground)
     }
 
     @ViewBuilder

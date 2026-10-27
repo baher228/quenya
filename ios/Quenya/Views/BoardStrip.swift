@@ -7,14 +7,20 @@ struct BoardStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 if state.canCreateStyle {
-                    ChoicePill(title: "+ New", selected: state.briefMode == .new && state.selectedTab == .brief) {
+                    ChoicePill(
+                        title: "+ New",
+                        selected: state.briefMode == .new && state.selectedTab == .brief,
+                        dark: state.selectedTab == .outfits,
+                        outlined: state.selectedTab == .outfits
+                    ) {
                         state.startNewStyle()
                     }
                 }
                 ForEach(state.boards) { board in
                     ChoicePill(
                         title: board.label + (board.version.map { " v\($0)" } ?? ""),
-                        selected: board.active && !(state.briefMode == .new && state.selectedTab == .brief)
+                        selected: board.active && !(state.briefMode == .new && state.selectedTab == .brief),
+                        dark: state.selectedTab == .outfits
                     ) {
                         Task {
                             if await state.activate(board) {
@@ -28,6 +34,6 @@ struct BoardStrip: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
         }
-        .background(QuenyaTheme.cream)
+        .background(state.selectedTab == .outfits ? QuenyaTheme.webPhone : QuenyaTheme.cream)
     }
 }

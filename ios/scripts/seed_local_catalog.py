@@ -90,7 +90,9 @@ def _cache_image(url: str, source_url: str) -> bool:
 
 def main() -> None:
     if not os.getenv("DB_PATH"):
-        raise SystemExit("Set DB_PATH to a local SQLite file, for example /tmp/q.sqlite.")
+        raise SystemExit(
+            "Set DB_PATH to a local SQLite file, for example ~/ios-work/q.sqlite."
+        )
     if os.getenv("QUENYA_DATABASE_URL") or os.getenv("DATABASE_URL"):
         raise SystemExit("Remote database URLs are not allowed by this local seeder.")
     if any(os.getenv(name) for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY")):
@@ -98,7 +100,9 @@ def main() -> None:
 
     from app import db, images
 
-    images.IMAGE_DIR = Path("/tmp/quenya-img")
+    images.IMAGE_DIR = Path(
+        os.getenv("QUENYA_IMAGE_DIR", str(Path.home() / "ios-work" / "images"))
+    )
     queries = _queries()
     records: dict[str, tuple[dict, dict]] = {}
     with httpx.Client(timeout=35, follow_redirects=True) as client:
