@@ -105,6 +105,7 @@ button { color: inherit; }
   font-stretch: 68%;
   font-weight: 900;
   letter-spacing: -0.055em;
+  word-spacing: 0.16em;
   line-height: 0.84;
   text-transform: uppercase;
 }
@@ -352,11 +353,13 @@ button { color: inherit; }
   font-stretch: 68%;
   font-weight: 900;
   letter-spacing: -0.055em;
+  word-spacing: 0.16em;
   line-height: 0.82;
   text-transform: uppercase;
   text-wrap: balance;
 }
 .display-heading i {
+  margin-left: 0.06em;
   color: var(--coral);
   font-family: var(--accent);
   font-size: 0.84em;
