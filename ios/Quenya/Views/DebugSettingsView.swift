@@ -4,6 +4,7 @@ struct DebugSettingsView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     @State private var value = ""
+    @AppStorage(TabBarStyle.storageKey) private var tabBarStyle: TabBarStyle = .system
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,16 @@ struct DebugSettingsView: View {
                         state.changeBaseURL(nil)
                         dismiss()
                     }
+                }
+                .listRowBackground(QuenyaTheme.webSurface)
+
+                Section("Tab bar") {
+                    Picker("Style", selection: $tabBarStyle) {
+                        ForEach(TabBarStyle.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                    .tint(QuenyaTheme.sage)
                 }
                 .listRowBackground(QuenyaTheme.webSurface)
             }

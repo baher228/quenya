@@ -3,7 +3,20 @@ import SwiftUI
 struct RootTabs: View {
     @Environment(AppState.self) private var state
 
+    @AppStorage(TabBarStyle.storageKey) private var tabBarStyle: TabBarStyle = .system
+    @State private var keyboardVisible = false
+    @State private var barHeight: CGFloat = 0
+
     private let chromeBackground = QuenyaTheme.webPhone
+    private var customBar: Bool { tabBarStyle != .system }
+    private var showsCustomBar: Bool { customBar && !keyboardVisible }
+
+    @ViewBuilder
+    private var barSpacer: some View {
+        if showsCustomBar {
+            Color.clear.frame(height: barHeight)
+        }
+    }
 
     private var selection: Binding<AppTab> {
         Binding(
@@ -90,14 +103,24 @@ struct RootTabs: View {
             TabView(selection: selection) {
                 BriefView().tag(AppTab.brief)
                     .tabItem { Label(AppTab.brief.title, systemImage: AppTab.brief.symbol) }
+                    .toolbar(customBar ? .hidden : .automatic, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 swipeContent.tag(AppTab.swipe)
                     .tabItem { Label(AppTab.swipe.title, systemImage: AppTab.swipe.symbol) }
+                    .toolbar(customBar ? .hidden : .automatic, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 OutfitsView().tag(AppTab.outfits)
                     .tabItem { Label(AppTab.outfits.title, systemImage: AppTab.outfits.symbol) }
+                    .toolbar(customBar ? .hidden : .automatic, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 FindView().tag(AppTab.find)
                     .tabItem { Label(AppTab.find.title, systemImage: AppTab.find.symbol) }
+                    .toolbar(customBar ? .hidden : .automatic, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 TasteView().tag(AppTab.taste)
                     .tabItem { Label(AppTab.taste.title, systemImage: AppTab.taste.symbol) }
+                    .toolbar(customBar ? .hidden : .automatic, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
             }
             .tint(QuenyaTheme.webText)
             .toolbarBackground(chromeBackground, for: .tabBar)
@@ -110,13 +133,25 @@ struct RootTabs: View {
                             state.setTab(.taste)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.bottom, geometry.safeAreaInsets.bottom + 64)
+                        .padding(.bottom, geometry.safeAreaInsets.bottom + (showsCustomBar ? barHeight + 12 : 64))
                         .frame(maxHeight: .infinity, alignment: .bottom)
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                if showsCustomBar {
+                    CustomTabBar(style: tabBarStyle, selection: state.selectedTab) { state.setTab($0) }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
+                }
+            }
         }
         .background(chromeBackground)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
+        }
     }
 
     @ViewBuilder

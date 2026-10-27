@@ -25,6 +25,7 @@
 		6FFBA26A19CFDF9E999E8171 /* StyleCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD29D1F059FB87EF50A76594 /* StyleCacheTests.swift */; };
 		74C4CF1E2698BDB09E8FE997 /* DeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB4C9E4265EC3FEDA2EE2CE1 /* DeckView.swift */; };
 		7587A3A5AF12DD510B461141 /* PhotoRouteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A74A3902E13C5E26BB8D173 /* PhotoRouteSheet.swift */; };
+		7ED73AF26A28FA5DA634EB18 /* CustomTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A462092CF903FD393C54FFC3 /* CustomTabBar.swift */; };
 		85CFEE8F6211337A965E6C5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DFCDF27A49B7ECD4FEEE64F9 /* Assets.xcassets */; };
 		88F7CD92000A85432F4C025A /* InviteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E9D12E865EBD0F383F6C4AE /* InviteView.swift */; };
 		A7DAAE3B7B49436B257709C6 /* StubURLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B3B1F930D0BC638FCC7C85 /* StubURLProtocol.swift */; };
@@ -71,6 +72,7 @@
 		93B3B1F930D0BC638FCC7C85 /* StubURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StubURLProtocol.swift; sourceTree = "<group>"; };
 		9E9D12E865EBD0F383F6C4AE /* InviteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteView.swift; sourceTree = "<group>"; };
 		9F4DAACF048A8204D69E2CFF /* DebugSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugSettingsView.swift; sourceTree = "<group>"; };
+		A462092CF903FD393C54FFC3 /* CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTabBar.swift; sourceTree = "<group>"; };
 		A822C9151DC50066B60F6521 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		AA0C780C7C6A23EB5D42C195 /* BoardStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardStrip.swift; sourceTree = "<group>"; };
 		B89A53784D8E7F7E00CFA496 /* QuenyaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = QuenyaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -159,6 +161,7 @@
 			children = (
 				AA0C780C7C6A23EB5D42C195 /* BoardStrip.swift */,
 				8D4D431D52B71293B5122E8B /* BriefView.swift */,
+				A462092CF903FD393C54FFC3 /* CustomTabBar.swift */,
 				9F4DAACF048A8204D69E2CFF /* DebugSettingsView.swift */,
 				CB4C9E4265EC3FEDA2EE2CE1 /* DeckView.swift */,
 				C21C503781FF0E394510ADE0 /* FindView.swift */,
@@ -307,6 +310,7 @@
 				E3AF41CEA6212D34B26E9C8E /* AppState.swift in Sources */,
 				BD792D13F3AB758BF9FFBDB7 /* BoardStrip.swift in Sources */,
 				CC62D1269C2EF65A88779FF2 /* BriefView.swift in Sources */,
+				7ED73AF26A28FA5DA634EB18 /* CustomTabBar.swift in Sources */,
 				2929D388239D340368B3C1D4 /* DebugSettingsView.swift in Sources */,
 				74C4CF1E2698BDB09E8FE997 /* DeckView.swift in Sources */,
 				61D3B9AA86BF29EC567DF11A /* FindView.swift in Sources */,
