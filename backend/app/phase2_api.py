@@ -9,11 +9,12 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import numpy as np
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from PIL import Image, ImageOps
 
 from app import db, images
 from app.accessories import is_accessory_slot
+from app.accounts import context_user, current_user, in_request
 from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
 from app.embedding_ranker import (
@@ -66,12 +67,40 @@ from app.styles import decode_brief, style_notes, style_queries
 from app.tagging import tag_item_with_vectors
 from app.taste import create_taste, update_taste
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(current_user)])
+
+
+def _owner_id() -> str | None:
+    user = context_user()
+    if user:
+        return user["id"]
+    if in_request():
+        raise HTTPException(status_code=401, detail="Sign in with your invite link")
+    return None
+
+
+def _route_input(
+    input_kind: str, input_text: str,
+) -> tuple[Any, dict[str, Any] | None, Any, str]:
+    owner_id = _owner_id()
+    if owner_id is None:
+        return route_input(input_kind, input_text)
+    return route_input(input_kind, input_text, owner_id=owner_id)
+
+
+def _user_boards() -> list[dict[str, Any]]:
+    owner_id = _owner_id()
+    return (
+        db.profile_boards("user", owner_id)
+        if owner_id is not None
+        else db.profile_boards("user")
+    )
 
 
 def _core() -> dict[str, Any]:
     if SHARED_CORE_ENABLED:
-        return shared_core()
+        owner_id = _owner_id()
+        return shared_core(owner_id=owner_id) if owner_id else shared_core()
     return {"rules": [], "likes": {}, "avoids": {}, "palette": [], "sizes": {}}
 
 
@@ -92,7 +121,7 @@ def _label_from_brief(text: str) -> str | None:
 
 
 def _unique_board_label(label: str) -> str:
-    existing = {board["label"].casefold() for board in db.profile_boards()}
+    existing = {board["label"].casefold() for board in _user_boards()}
     if label.casefold() not in existing:
         return label
     suffix = 2
@@ -109,10 +138,17 @@ def _http_task_error(exc: TaskError) -> HTTPException:
 
 
 def _user_profile() -> dict[str, Any]:
-    profile = db.active_profile("user")
+    owner_id = _owner_id()
+    profile = db.active_profile("user", owner_id) if owner_id else db.active_profile("user")
     if not profile:
         raise HTTPException(status_code=409, detail="Create a profile first")
     return profile
+
+
+def _ensure_can_create_style(user: dict[str, Any] | None = None) -> None:
+    user = user or context_user()
+    if user and user.get("role") == "tester" and db.profile_boards("user", user["id"]):
+        raise HTTPException(status_code=403, detail="Tester accounts have one style")
 
 
 def _board_summary(profile: dict[str, Any]) -> dict[str, Any]:
@@ -509,14 +545,31 @@ def create_profile(
 ) -> dict[str, Any]:
     brief = body.brief.model_dump(exclude_none=True)
     brief["style_refs"] = decode_brief(brief)
+    user = context_user()
     try:
-        route_output, existing, route_meta, _content = route_input("brief", brief["text"])
+        route_output, existing, route_meta, _content = _route_input(
+            "brief", brief["text"]
+        )
     except TaskError as exc:
         raise _http_task_error(exc) from exc
+    if user and user.get("role") == "tester" and not body.new_board:
+        owned_boards = db.profile_boards("user", user["id"])
+        if owned_boards and existing is None:
+            existing = next(
+                (board for board in owned_boards if board["active"]),
+                owned_boards[0],
+            )
+            route_output = route_output.model_copy(
+                update={
+                    "board_id": existing["id"],
+                    "context": existing["context"],
+                    "label": existing["label"],
+                }
+            )
     route_note_output: Any = route_output
     if existing and not body.new_board:
         profile_id = existing["id"]
-        profile = db.activate_profile(profile_id)
+        profile = db.activate_profile(profile_id, owner_id=_owner_id())
         db.update_profile_brief(profile_id, brief)
         route_id = db.create_route(
             "user", "brief", brief["text"],
@@ -525,7 +578,7 @@ def create_profile(
                 "_previous_brief": existing["brief"],
                 "_routed": "existing",
             },
-            route_meta.request_id, profile_id,
+            route_meta.request_id, profile_id, _owner_id(),
         )
         db.add_correction(
             profile_id, "brief", route_id,
@@ -548,12 +601,14 @@ def create_profile(
         if body.new_board and existing is not None:
             label = _label_from_brief(brief["text"]) or label
         label = _unique_board_label(label)
+        _ensure_can_create_style()
         try:
             taste_profile, taste_meta = create_taste(brief, profile_id)
         except TaskError as exc:
             raise _http_task_error(exc) from exc
         db.create_profile(
             profile_id, brief, label=label, context=route_output.context,
+            owner_id=_owner_id(),
             ranker_arm=fallback_arm(profile_id),
         )
         route_output_data = route_output.model_dump() | {
@@ -567,7 +622,7 @@ def create_profile(
         route_id = db.create_route(
             "user", "brief", brief["text"],
             route_output_data,
-            route_meta.request_id, profile_id,
+            route_meta.request_id, profile_id, _owner_id(),
         )
         profile = db.get_profile(profile_id)
         job_id = _start_fetch(
@@ -578,7 +633,7 @@ def create_profile(
         taste = {"version": 1, "profile": taste_profile}
         taste_request_id = taste_meta.request_id
         routed = "new"
-    board = next(item for item in db.profile_boards() if item["id"] == profile_id)
+    board = next(item for item in _user_boards() if item["id"] == profile_id)
     return {
         "profile_id": profile_id,
         "brief": brief,
@@ -595,7 +650,7 @@ def create_profile(
 
 @router.get("/api/boards")
 def boards() -> list[dict[str, Any]]:
-    return [_board_summary(board) for board in db.profile_boards()]
+    return [_board_summary(board) for board in _user_boards()]
 
 
 @router.put("/api/boards/{board_id}/brief")
@@ -603,12 +658,14 @@ def update_board_brief(
     board_id: str, body: BoardBriefRequest, background_tasks: BackgroundTasks
 ) -> dict[str, Any]:
     previous = db.get_profile(board_id, kind="user")
+    if previous and _owner_id() is not None and previous.get("owner_id") != _owner_id():
+        previous = None
     if not previous:
         raise HTTPException(status_code=404, detail="Board not found")
 
     brief = body.brief.model_dump(exclude_none=True)
     brief["style_refs"] = decode_brief(brief)
-    profile = db.activate_profile(board_id, kind="user")
+    profile = db.activate_profile(board_id, kind="user", owner_id=_owner_id())
     if not profile:
         raise HTTPException(status_code=404, detail="Board not found")
     db.update_profile_brief(board_id, brief)
@@ -634,7 +691,7 @@ def update_board_brief(
         )
     )
     job_id = _start_fetch(profile, queries, background_tasks)
-    board = next(item for item in db.profile_boards() if item["id"] == board_id)
+    board = next(item for item in _user_boards() if item["id"] == board_id)
     return {
         "profile_id": board_id,
         "brief": brief,
@@ -649,20 +706,22 @@ def update_board_brief(
 
 @router.post("/api/boards/{board_id}/activate")
 def activate_board(board_id: str) -> dict[str, Any]:
-    profile = db.activate_profile(board_id)
+    profile = db.activate_profile(board_id, owner_id=_owner_id())
     if not profile:
         raise HTTPException(status_code=404, detail="Board not found")
-    board = next(item for item in db.profile_boards() if item["id"] == board_id)
+    board = next(item for item in _user_boards() if item["id"] == board_id)
     return {"board": _board_summary(board)}
 
 
 @router.patch("/api/boards/{board_id}")
 def rename_board(board_id: str, body: BoardLabelRequest) -> dict[str, Any]:
     profile = db.get_profile(board_id)
+    if profile and _owner_id() is not None and profile.get("owner_id") != _owner_id():
+        profile = None
     if not profile:
         raise HTTPException(status_code=404, detail="Board not found")
     db.set_profile_label(board_id, body.label)
-    board = next(item for item in db.profile_boards() if item["id"] == board_id)
+    board = next(item for item in _user_boards() if item["id"] == board_id)
     return {"board": _board_summary(board)}
 
 
@@ -672,6 +731,7 @@ def get_core() -> dict[str, Any]:
 
 
 def _new_board(brief: dict[str, Any], label: str, context: str) -> dict[str, Any]:
+    _ensure_can_create_style()
     profile_id = uuid.uuid4().hex
     try:
         create_taste(brief, profile_id)
@@ -679,9 +739,10 @@ def _new_board(brief: dict[str, Any], label: str, context: str) -> dict[str, Any
         raise _http_task_error(exc) from exc
     db.create_profile(
         profile_id, brief, label=label, context=context,
+        owner_id=_owner_id(),
         ranker_arm=fallback_arm(profile_id),
     )
-    return next(board for board in db.profile_boards() if board["id"] == profile_id)
+    return next(board for board in _user_boards() if board["id"] == profile_id)
 
 
 def _taste_payload(profile_id: str) -> dict[str, Any] | None:
@@ -693,16 +754,18 @@ def _taste_payload(profile_id: str) -> dict[str, Any] | None:
 
 @router.post("/api/route/{route_id}/correct")
 def correct_route(route_id: str, body: RouteCorrectionRequest) -> dict[str, Any]:
-    route = db.get_route(route_id)
+    route = db.get_route(route_id, owner_id=_owner_id())
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
     output = route["output"]
     original_id = route.get("chosen_board_id")
     original = db.get_profile(original_id) if original_id else None
+    if original and _owner_id() is not None and original.get("owner_id") != _owner_id():
+        raise HTTPException(status_code=404, detail="Board not found")
     new_board = None
     if body.board_id:
         target = next(
-            (board for board in db.profile_boards() if board["id"] == body.board_id),
+            (board for board in _user_boards() if board["id"] == body.board_id),
             None,
         )
         if not target:
@@ -731,7 +794,7 @@ def correct_route(route_id: str, body: RouteCorrectionRequest) -> dict[str, Any]
         target = new_board
     elif original:
         target = next(
-            board for board in db.profile_boards() if board["id"] == original_id
+            board for board in _user_boards() if board["id"] == original_id
         )
     else:
         raise HTTPException(status_code=400, detail="Correction needs a board")
@@ -753,7 +816,7 @@ def correct_route(route_id: str, body: RouteCorrectionRequest) -> dict[str, Any]
     if route["input_kind"] == "photo":
         upload_id = output.get("upload_id")
         if upload_id:
-            db.assign_upload(upload_id, target["id"])
+            db.assign_upload(upload_id, target["id"], _owner_id())
             try:
                 version, profile, taste_meta, _ = update_taste(db.get_profile(target["id"]))
                 taste_result = {
@@ -770,14 +833,14 @@ def correct_route(route_id: str, body: RouteCorrectionRequest) -> dict[str, Any]
             taste_result = _taste_payload(target["id"])
     else:
         taste_result = _taste_payload(target["id"])
-    db.activate_profile(target["id"])
+    db.activate_profile(target["id"], owner_id=_owner_id())
     correction = {
         "board_id": target["id"],
         "context": target["context"],
         "label": target["label"],
     }
-    db.correct_route(route_id, correction)
-    target = next(board for board in db.profile_boards() if board["id"] == target["id"])
+    db.correct_route(route_id, correction, owner_id=_owner_id())
+    target = next(board for board in _user_boards() if board["id"] == target["id"])
     return {
         "route": _route_response(route_id, "corrected", route["output"], route["request_id"]),
         "board": _board_summary(target),
@@ -789,12 +852,12 @@ def correct_route(route_id: str, body: RouteCorrectionRequest) -> dict[str, Any]
 def merge_board(board_id: str, body: BoardMergeRequest) -> dict[str, Any]:
     if board_id == body.into_id:
         raise HTTPException(status_code=400, detail="Cannot merge a board into itself")
-    boards_by_id = {board["id"]: board for board in db.profile_boards()}
+    boards_by_id = {board["id"]: board for board in _user_boards()}
     source, target = boards_by_id.get(board_id), boards_by_id.get(body.into_id)
     if not source or not target:
         raise HTTPException(status_code=404, detail="Board not found")
     db.merge_profile_data(board_id, body.into_id)
-    db.activate_profile(body.into_id)
+    db.activate_profile(body.into_id, owner_id=_owner_id())
     taste_result = _taste_payload(body.into_id)
     if any(db.unconsumed_signals(body.into_id).values()):
         try:
@@ -807,13 +870,13 @@ def merge_board(board_id: str, body: BoardMergeRequest) -> dict[str, Any]:
             }
         except TaskError as exc:
             raise _http_task_error(exc) from exc
-    target = next(board for board in db.profile_boards() if board["id"] == body.into_id)
+    target = next(board for board in _user_boards() if board["id"] == body.into_id)
     return {"board": _board_summary(target), "taste": taste_result}
 
 
 @router.get("/api/fetch/{job_id}")
 def fetch_job(job_id: str) -> dict[str, Any]:
-    job = db.get_fetch_job(job_id)
+    job = db.get_fetch_job(job_id, _owner_id())
     if not job:
         raise HTTPException(status_code=404, detail="Fetch job not found")
     return {
@@ -1437,7 +1500,9 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
             f"\"{read_data['one_line']}\" | aesthetics: {aesthetics} | "
             f"garments: {garments}"
         )
-        route_output, selected, route_meta, _content = route_input("photo", input_text)
+        route_output, selected, route_meta, _content = _route_input(
+            "photo", input_text
+        )
         request_ids.append(route_meta.request_id)
     except TaskError as exc:
         raise HTTPException(
@@ -1452,7 +1517,7 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
         or (not selected and route_output.confidence < 0.6)
     ) else None
     upload_id = db.add_upload(
-        destination, path, read_data, meta.request_id
+        destination, path, read_data, meta.request_id, _owner_id()
     )
     route_id = db.create_route(
         "user",
@@ -1466,7 +1531,7 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
             "_routed": "existing" if destination else "new",
         },
         route_meta.request_id,
-        selected["id"] if selected else None,
+        selected["id"] if selected else None, _owner_id(),
     )
     taste_result = None
     if destination:
@@ -1502,14 +1567,14 @@ async def upload_inspiration(file: Annotated[UploadFile, File()]) -> dict[str, A
 
 @router.post("/api/uploads/{upload_id}/assign")
 def assign_upload(upload_id: str, body: UploadAssignRequest) -> dict[str, Any]:
-    upload = db.get_upload(upload_id)
+    upload = db.get_upload(upload_id, _owner_id())
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
-    route = db.route_for_upload(upload_id)
+    route = db.route_for_upload(upload_id, owner_id=_owner_id())
     active = _user_profile()
     if body.board_id:
         target = next(
-            (board for board in db.profile_boards() if board["id"] == body.board_id),
+            (board for board in _user_boards() if board["id"] == body.board_id),
             None,
         )
         if not target:
@@ -1522,8 +1587,8 @@ def assign_upload(upload_id: str, body: UploadAssignRequest) -> dict[str, Any]:
             body.label or (route["output"].get("label") if route else "Your style"),
             route["output"].get("context", "other") if route else "other",
         )
-    db.assign_upload(upload_id, target["id"])
-    db.activate_profile(target["id"])
+    db.assign_upload(upload_id, target["id"], _owner_id())
+    db.activate_profile(target["id"], owner_id=_owner_id())
     try:
         version, profile, meta, _ = update_taste(db.get_profile(target["id"]))
     except TaskError as exc:
@@ -1536,15 +1601,16 @@ def assign_upload(upload_id: str, body: UploadAssignRequest) -> dict[str, Any]:
         router_board_id != target["id"]
         and not (router_board_id is None and body.board_id is None)
     ):
-        db.correct_route(
-            route["id"],
-            {
-                "board_id": target["id"],
-                "context": route["output"].get("context", target["context"]),
-                "label": body.label or target["label"],
-            },
-        )
-    board = next(item for item in db.profile_boards() if item["id"] == target["id"])
+            db.correct_route(
+                route["id"],
+                {
+                    "board_id": target["id"],
+                    "context": route["output"].get("context", target["context"]),
+                    "label": body.label or target["label"],
+                },
+                owner_id=_owner_id(),
+            )
+    board = next(item for item in _user_boards() if item["id"] == target["id"])
     return {
         "upload_id": upload_id,
         "pending": False,
@@ -1563,7 +1629,9 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
     active = _user_profile()
     gender = _gender_code(active["brief"]["gender"])
     try:
-        route_output, selected, route_meta, _content = route_input("search", body.q)
+        route_output, selected, route_meta, _content = _route_input(
+            "search", body.q
+        )
     except TaskError as exc:
         raise _http_task_error(exc) from exc
     context = selected["context"] if selected else route_output.context
@@ -1573,7 +1641,7 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
         body.q,
         route_output.model_dump() | {"_routed": "existing" if selected else "new"},
         route_meta.request_id,
-        selected["id"] if selected else None,
+        selected["id"] if selected else None, _owner_id(),
     )
     domains = CONTEXT_SOURCES.get(context, CONTEXT_SOURCES["other"])
     cached_urls = db.source_urls()
@@ -1680,7 +1748,38 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
 
 @router.post("/api/reset")
 def reset() -> dict[str, Any]:
+    owner_id = _owner_id()
     with db.db_connection() as connection:
+        if owner_id is not None:
+            profiles = "(SELECT id FROM profiles WHERE kind='user' AND owner_id=?)"
+            connection.execute(
+                f"DELETE FROM fetch_jobs WHERE profile_id IN {profiles}", (owner_id,)
+            )
+            connection.execute(
+                "DELETE FROM routes WHERE profile_kind='user' AND owner_id=?", (owner_id,)
+            )
+            connection.execute(
+                f"DELETE FROM uploads WHERE owner_id=? OR profile_id IN {profiles}",
+                (owner_id, owner_id),
+            )
+            connection.execute(
+                f"DELETE FROM swipes WHERE profile_id IN {profiles}", (owner_id,)
+            )
+            for table in (
+                "taste_versions",
+                "outfits",
+                "corrections",
+                "uploads",
+                "deck_events",
+                "profile_embeddings",
+            ):
+                connection.execute(
+                    f"DELETE FROM {table} WHERE profile_id IN {profiles}", (owner_id,)
+                )
+            connection.execute(
+                "DELETE FROM profiles WHERE kind='user' AND owner_id=?", (owner_id,)
+            )
+            return {"ok": True}
         connection.execute("DELETE FROM fetch_jobs")
         connection.execute("DELETE FROM routes WHERE profile_kind='user'")
         connection.execute(
@@ -1690,7 +1789,14 @@ def reset() -> dict[str, Any]:
         connection.execute(
             "DELETE FROM swipes WHERE profile_id IN (SELECT id FROM profiles WHERE kind='user')"
         )
-        for table in ("taste_versions", "outfits", "corrections", "uploads"):
+        for table in (
+            "taste_versions",
+            "outfits",
+            "corrections",
+            "uploads",
+            "deck_events",
+            "profile_embeddings",
+        ):
             connection.execute(
                 f"DELETE FROM {table} "
                 "WHERE profile_id IN (SELECT id FROM profiles WHERE kind='user')"

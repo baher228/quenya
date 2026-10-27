@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errText, gbp, img } from "./api";
+import { api, errText, gbp, img, type User } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
 import { DeckScreen } from "./Deck";
 import { FindScreen } from "./Find";
@@ -39,20 +39,56 @@ export default function App() {
   const [routeNote, setRouteNote] = useState<RouteNote | null>(null);
   const [briefKey, setBriefKey] = useState(0);
   const [picking, setPicking] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [inviteOnly, setInviteOnly] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
+  const canCreateStyle = !user || user.max_styles !== 1 || boards.length < 1;
   const writingNew = tab === "brief" && briefMode === "new";
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
   }, [tab, picking, activeBoard?.id]);
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
-  useEffect(refreshBoards, [refreshBoards]);
-  useEffect(() => { if (tab === "swipe" && picking) refreshBoards(); }, [tab, picking, refreshBoards]);
+  useEffect(() => {
+    const start = async () => {
+      try {
+        const invite = new URLSearchParams(window.location.search).get("invite");
+        if (invite) {
+          const result = await api.invite(invite);
+          window.localStorage.setItem("quenya.token", result.token);
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+        setUser(await api.me());
+      } catch {
+        setInviteOnly(true);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    void start();
+  }, []);
+  useEffect(() => {
+    const unauthorized = () => {
+      setUser(null);
+      setInviteOnly(true);
+    };
+    window.addEventListener("quenya:unauthorized", unauthorized);
+    return () => window.removeEventListener("quenya:unauthorized", unauthorized);
+  }, []);
+  useEffect(() => {
+    if (!authLoading && user) refreshBoards();
+  }, [authLoading, refreshBoards, user]);
+  useEffect(() => {
+    if (!authLoading && user && tab === "swipe" && picking) refreshBoards();
+  }, [authLoading, tab, picking, refreshBoards, user]);
   useEffect(() => { if (!routeNote) return; const h = window.setTimeout(() => setRouteNote(null), 15000); return () => window.clearTimeout(h); }, [routeNote]);
 
   const version = taste?.current?.version ?? null;
   const refreshTaste = useCallback(() => { api.taste().then(setTaste).catch(() => setTaste({ current: null, history: [], counts: {} })); }, []);
-  useEffect(refreshTaste, [refreshTaste]);
+  useEffect(() => {
+    if (!authLoading && user) refreshTaste();
+  }, [authLoading, refreshTaste, user]);
 
   const announce = useCallback((t: TasteVersion | null | undefined, _why: string) => {
     if (!t) return;
@@ -93,6 +129,7 @@ export default function App() {
   };
 
   const newBoard = () => {
+    if (!canCreateStyle) return;
     setBriefMode("new");
     setBrief({ ...DEFAULT_BRIEF, text: "" });
     setBriefKey(k => k + 1);
@@ -187,6 +224,17 @@ export default function App() {
   };
 
   const hasProfile = !!taste?.current;
+  if (authLoading) return <Loading>Checking invite…</Loading>;
+  if (inviteOnly || !user) {
+    return (
+      <div className="stage"><div className="phone"><main className="body">
+        <section className="screen empty">
+          <p className="h3">Quenya is invite-only for now.</p>
+          <p className="muted">Open your invite link again.</p>
+        </section>
+      </main></div></div>
+    );
+  }
   return (
     <div className="stage">
       <div className="phone">
@@ -196,7 +244,7 @@ export default function App() {
         </header>
         {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
-            <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>
+            {canCreateStyle && <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>}
             {boards.map(b => (
               <button key={b.id} role="tab" aria-selected={b.active && !writingNew} className={"board" + (b.active && !writingNew ? " on" : "")} onClick={() => switchBoard(b)}>
                 {b.label}{b.version ? <em>v{b.version}</em> : null}
@@ -218,7 +266,7 @@ export default function App() {
           {tab === "brief" && (
             <>
               <BriefScreen key={briefKey} initial={brief} busy={creating} onSubmit={submitBrief}
-                mode={briefMode} boardLabel={activeBoard?.label} onNew={newBoard} />
+                mode={briefMode} boardLabel={activeBoard?.label} onNew={newBoard} allowNew={canCreateStyle} />
               {createErr !== null && <ErrorBox error={createErr} />}
             </>
           )}
@@ -228,7 +276,7 @@ export default function App() {
                 onSignal={due => { if (due && !updating) void runUpdate("from your swipes"); }}
                 onDone={deckDone} onOpenItem={item => setSheet({ kind: "item", item })} />
             : boards.length > 0
-              ? <StylePicker boards={boards} onNew={newBoard} onPick={async b => { if (await switchBoard(b)) setPicking(false); }} />
+              ? <StylePicker boards={boards} allowNew={canCreateStyle} onNew={newBoard} onPick={async b => { if (await switchBoard(b)) setPicking(false); }} onSignOut={() => { void api.logout().finally(() => { window.localStorage.removeItem("quenya.token"); setUser(null); }); }} />
               : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "outfits" && (hasProfile
             ? <OutfitsScreen outfits={outfits} loading={outLoading} error={outErr} version={version} onBuild={build}
@@ -270,7 +318,7 @@ export default function App() {
             {sheet?.kind === "item" && <ItemSheet item={sheet.item} onClose={() => setSheet(null)} onCorrected={t => announce(t, "tag correction")} />}
             {sheet?.kind === "checkout" && <CheckoutSheet s={sheet} onClose={() => setSheet(null)} />}
             {sheet?.kind === "move" && <MoveSheet route={sheet.route} current={sheet.board} boards={boards} onPick={id => moveRoute(sheet.route, id)} onClose={() => setSheet(null)} />}
-            {sheet?.kind === "photo" && <PhotoSheet up={sheet.up} boards={boards} active={activeBoard} onPick={(id, label) => assignPhoto(sheet.up, id, label)} onClose={() => setSheet(null)} />}
+            {sheet?.kind === "photo" && <PhotoSheet up={sheet.up} boards={boards} active={activeBoard} canCreateStyle={canCreateStyle} onPick={(id, label) => assignPhoto(sheet.up, id, label)} onClose={() => setSheet(null)} />}
           </div>
         </div>
       </div>
@@ -278,7 +326,7 @@ export default function App() {
   );
 }
 
-function StylePicker({ boards, onPick, onNew }: { boards: Board[]; onPick: (b: Board) => void; onNew: () => void }) {
+function StylePicker({ boards, onPick, onNew, allowNew, onSignOut }: { boards: Board[]; onPick: (b: Board) => void; onNew: () => void; allowNew: boolean; onSignOut: () => void }) {
   return (
     <section className="screen pick">
       <p className="eyebrow">Swipe</p>
@@ -291,10 +339,14 @@ function StylePicker({ boards, onPick, onNew }: { boards: Board[]; onPick: (b: B
             <span className="pick-go" aria-hidden="true">→</span>
           </button>
         ))}
-        <button className="pick-row add" onClick={onNew}>
+        {allowNew && <button className="pick-row add" onClick={onNew}>
           <span className="pick-t">New style</span>
           <span className="pick-m">Write a brief</span>
           <span className="pick-go" aria-hidden="true">+</span>
+        </button>}
+        <button className="pick-row add" onClick={onSignOut}>
+          <span className="pick-t">Sign out</span>
+          <span className="pick-m">Use another invite link</span>
         </button>
       </div>
     </section>
@@ -410,8 +462,8 @@ function MoveSheet({ route, current, boards, onPick, onClose }: {
   );
 }
 
-function PhotoSheet({ up, boards, active, onPick, onClose }: {
-  up: UploadResult; boards: Board[]; active: Board | null; onPick: (id: string | null, label?: string) => void; onClose: () => void;
+function PhotoSheet({ up, boards, active, canCreateStyle, onPick, onClose }: {
+  up: UploadResult; boards: Board[]; active: Board | null; canCreateStyle: boolean; onPick: (id: string | null, label?: string) => void; onClose: () => void;
 }) {
   const match = boards.find(b => b.label.toLowerCase() === up.route.label.toLowerCase() && !b.active);
   return (
@@ -421,7 +473,7 @@ function PhotoSheet({ up, boards, active, onPick, onClose }: {
       <p className="small muted">{up.route.reason}</p>
       {match
         ? <button className="reason" onClick={() => onPick(match.id)}>Add to {match.label}</button>
-        : <button className="reason" onClick={() => onPick(null, up.route.label)}>Start a “{up.route.label}” board</button>}
+        : canCreateStyle && <button className="reason" onClick={() => onPick(null, up.route.label)}>Start a “{up.route.label}” board</button>}
       {active && <button className="reason" onClick={() => onPick(active.id)}>Keep it on {active.label}</button>}
       <button className="close" onClick={onClose}>Decide later</button>
     </>

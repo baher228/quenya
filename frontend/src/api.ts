@@ -29,10 +29,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const timer = window.setTimeout(() => controller.abort(), 90_000);
   let res: Response;
   try {
+    const token = window.localStorage.getItem("quenya.token");
+    const headers = new Headers(init?.headers);
+    if (!(init?.body instanceof FormData)) headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
     res = await fetch(path, {
       ...init,
       signal: controller.signal,
-      headers: init?.body instanceof FormData ? init.headers : { "Content-Type": "application/json", ...init?.headers },
+      headers,
     });
   } catch (e) {
     const timedOut = e instanceof DOMException && e.name === "AbortError";
@@ -48,6 +52,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     body = text;
   }
   if (!res.ok) {
+    if (res.status === 401) {
+      window.localStorage.removeItem("quenya.token");
+      window.dispatchEvent(new Event("quenya:unauthorized"));
+    }
     const detail = (body as { detail?: unknown })?.detail ?? body;
     let message = `Request failed (${res.status})`;
     let ids: string[] = [];
@@ -66,6 +74,9 @@ const post = <T>(path: string, data?: unknown) =>
   req<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
 export const api = {
+  invite: (token: string) => post<{ token: string; user: User }>("/api/auth/invite", { token }),
+  me: () => req<User>("/api/me"),
+  logout: () => post<{ ok: boolean }>("/api/auth/logout"),
   health: () => req<{
     items_total: number;
     items_tagged: number;
@@ -118,6 +129,8 @@ export const api = {
   reset: () => post<unknown>("/api/reset"),
   stats: () => req<TaskStats[]>("/api/model/stats"),
 };
+
+export type User = { id: string; name: string; role: "tester" | "admin"; max_styles: number | null; style_count: number };
 
 export const img = (it: Item) => it.image ?? it.image_url ?? "";
 export const gbp = (n: number) => "£" + (Number.isInteger(n) ? n.toFixed(0) : n.toFixed(2));

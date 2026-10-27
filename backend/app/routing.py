@@ -45,10 +45,18 @@ def router_user_content(
 
 
 def route_input(
-    input_kind: str, input_text: str, *, kind: str = "user"
+    input_kind: str, input_text: str, *, kind: str = "user",
+    owner_id: str | None = None,
 ) -> tuple[RouteOut, dict[str, Any] | None, CallMeta, str]:
-    boards = db.profile_boards(kind)[:12]
-    past_corrections = db.corrected_routes(kind, 8)
+    boards = (
+        db.profile_boards(kind, owner_id) if owner_id is not None
+        else db.profile_boards(kind)
+    )[:12]
+    past_corrections = (
+        db.corrected_routes(kind, 8, owner_id)
+        if owner_id is not None
+        else db.corrected_routes(kind, 8)
+    )
     content = router_user_content(input_kind, input_text, boards, past_corrections)
     output, meta = call_task(
         "router", ROUTER_SYSTEM, ROUTER_MODEL, content, RouteOut

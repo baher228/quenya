@@ -168,7 +168,9 @@ def test_accessory_cap_intent_and_slot_helpers():
     assert not is_accessory_slot("shoes")
 
 
-def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(monkeypatch):
+def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(
+    monkeypatch, auth_headers
+):
     outfit = {
         "id": "outfit",
         "profile_id": "profile",
@@ -230,7 +232,9 @@ def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(mon
 
     with TestClient(app) as client:
         response = client.post(
-            "/api/outfits/outfit/swap", json=SwapRequest(item_id="belt").model_dump()
+            "/api/outfits/outfit/swap",
+            json=SwapRequest(item_id="belt").model_dump(),
+            headers=auth_headers,
         )
 
     assert response.status_code == 200
