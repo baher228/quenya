@@ -26,6 +26,11 @@ targets:
       properties:
         QuenyaAPIBaseURL: $(QUENYA_API_BASE_URL)
         NSPhotoLibraryUsageDescription: Choose inspiration photos to personalise your style.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         CFBundleURLTypes:

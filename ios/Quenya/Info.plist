@@ -36,5 +36,16 @@
 	<string>Choose inspiration photos to personalise your style.</string>
 	<key>QuenyaAPIBaseURL</key>
 	<string>$(QUENYA_API_BASE_URL)</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>
