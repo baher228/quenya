@@ -1,4 +1,9 @@
 import Foundation
+#if DEBUG
+import os
+
+private let apiLogger = Logger(subsystem: "uk.co.quenya.app", category: "api")
+#endif
 
 struct APIError: Error, LocalizedError {
     let status: Int
@@ -217,6 +222,12 @@ final class APIClient {
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+        #if DEBUG
+        let method = request.httpMethod ?? "GET"
+        let path = request.url.map { $0.path + ($0.query.map { "?\($0)" } ?? "") } ?? ""
+        apiLogger.debug("\(method, privacy: .public) \(path, privacy: .public)")
+        #endif
+
         let data: Data
         let response: URLResponse
         do {

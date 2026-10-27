@@ -2,8 +2,6 @@ import SwiftUI
 
 struct OutfitsView: View {
     @Environment(AppState.self) private var state
-    @State private var locked: [String: [String]] = [:]
-    @State private var seen: [String: [String]] = [:]
     @State private var busy: String?
     @State private var rowErrors: [String: String] = [:]
     @State private var selectedItem: Item?
@@ -67,7 +65,7 @@ struct OutfitsView: View {
 
     @ViewBuilder
     private func outfitCard(_ outfit: Outfit) -> some View {
-        let keep = locked[outfit.id] ?? []
+        let keep = state.locked[outfit.id] ?? []
         let major = outfit.pieces.filter { !minorSlots.contains($0.tags?.slot ?? "") }
         let minor = outfit.pieces.filter { minorSlots.contains($0.tags?.slot ?? "") }
 
@@ -355,10 +353,10 @@ struct OutfitsView: View {
     }
 
     private func toggleLock(_ outfit: Outfit, _ itemId: String) {
-        var ids = locked[outfit.id] ?? []
+        var ids = state.locked[outfit.id] ?? []
         if ids.contains(itemId) { ids.removeAll { $0 == itemId } }
         else { ids.append(itemId) }
-        locked[outfit.id] = ids
+        state.locked[outfit.id] = ids
     }
 
     private func swap(_ outfit: Outfit, item: Item) async {
@@ -366,26 +364,26 @@ struct OutfitsView: View {
             let next = try await state.api.swap(
                 outfitId: outfit.id,
                 itemId: item.id,
-                excludeIds: Array((seen[outfit.id] ?? []).suffix(300))
+                excludeIds: Array((state.swapSeen[outfit.id] ?? []).suffix(300))
             )
-            var locks = locked[outfit.id] ?? []
+            var locks = state.locked[outfit.id] ?? []
             if locks.contains(item.id) { locks.removeAll { $0 == item.id } }
-            locked[next.id] = locks
-            seen[next.id] = uniqueOrdered((seen[outfit.id] ?? []) + outfit.pieces.map(\.id))
+            state.locked[next.id] = locks
+            state.swapSeen[next.id] = uniqueOrdered((state.swapSeen[outfit.id] ?? []) + outfit.pieces.map(\.id))
             state.replace(outfit, with: next)
         }
     }
 
     private func rebuild(_ outfit: Outfit) async {
         await run(outfit, key: "rebuild") {
-            let keep = locked[outfit.id] ?? []
+            let keep = state.locked[outfit.id] ?? []
             let otherPieces = state.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
             let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
             let response = try await state.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
             guard let next = response.outfits.first else {
                 throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
             }
-            locked[next.id] = keep
+            state.locked[next.id] = keep
             state.replace(outfit, with: next)
         }
     }

@@ -59,16 +59,63 @@ final class AppState {
     private var boardsRefreshID = UUID()
     private var tasteRefreshID = UUID()
     private var outfitBuildID = UUID()
+    private var deckLoadID = UUID()
+    let cache: StyleCache
 
     var authPhase: AuthPhase = .loading
     var user: User?
     var boards: [Board] = []
     var taste: TasteState?
-    var outfits: [Outfit] = []
+    var outfits: [Outfit] {
+        get {
+            guard let styleId = activeBoard?.id else { return [] }
+            return cache.snapshot(for: styleId).outfits
+        }
+        set {
+            guard let styleId = activeBoard?.id else { return }
+            cache.update(styleId) { $0.outfits = newValue }
+        }
+    }
+    var locked: [String: [String]] {
+        get {
+            guard let styleId = activeBoard?.id else { return [:] }
+            return cache.snapshot(for: styleId).locked
+        }
+        set {
+            guard let styleId = activeBoard?.id else { return }
+            cache.update(styleId) { $0.locked = newValue }
+        }
+    }
+    var swapSeen: [String: [String]] {
+        get {
+            guard let styleId = activeBoard?.id else { return [:] }
+            return cache.snapshot(for: styleId).swapSeen
+        }
+        set {
+            guard let styleId = activeBoard?.id else { return }
+            cache.update(styleId) { $0.swapSeen = newValue }
+        }
+    }
+    var deck: [Item] {
+        get {
+            guard let styleId = activeBoard?.id else { return [] }
+            return cache.snapshot(for: styleId).deck
+        }
+        set {
+            guard let styleId = activeBoard?.id else { return }
+            cache.update(styleId) { $0.deck = newValue }
+        }
+    }
+    var swipedCount: Int {
+        guard let styleId = activeBoard?.id else { return 0 }
+        return cache.snapshot(for: styleId).swiped
+    }
     var toast: ToastMessage?
     var fetchNote: String?
     var updating = false
     var picking = true
+    var deckLoading = false
+    var deckError: String?
     var selectedTab: AppTab = .brief
     var briefMode: BriefMode = .new
     var currentBrief: Brief = {
@@ -95,8 +142,13 @@ final class AppState {
         #endif
     }
 
-    init(tokenStore: TokenStore = KeychainTokenStore(), apiClient: APIClient? = nil) {
+    init(
+        tokenStore: TokenStore = KeychainTokenStore(),
+        apiClient: APIClient? = nil,
+        cache: StyleCache? = nil
+    ) {
         self.tokenStore = tokenStore
+        self.cache = cache ?? StyleCache()
         api = apiClient ?? APIClient(baseURL: AppConfig.baseURL, tokenStore: tokenStore)
         installUnauthorizedHandler()
     }
@@ -108,23 +160,58 @@ final class AppState {
             authPhase = .signedOut(nil)
             return
         }
-        do {
-            user = try await api.me()
-            guard !Task.isCancelled, launchID == requestID else { return }
+
+        let cachedSession = cache.loadSession()
+        if let cachedSession {
+            user = cachedSession.user
+            boards = cachedSession.boards
+            taste = cachedSession.taste
+            cache.activate(userId: cachedSession.userId)
+            syncBriefWithActiveBoard()
+            if let styleId = activeBoard?.id {
+                let snapshot = cache.snapshot(for: styleId)
+                if !snapshot.deck.isEmpty || !snapshot.outfits.isEmpty {
+                    picking = false
+                }
+            }
             authPhase = .signedIn
-            await refreshBoards()
+        }
+
+        do {
+            let refreshedUser = try await api.me()
             guard !Task.isCancelled, launchID == requestID else { return }
-            await refreshTaste()
+            if let cachedSession, cachedSession.userId != refreshedUser.id {
+                cache.clear()
+                resetPerUserState()
+                cache.activate(userId: refreshedUser.id)
+            } else {
+                cache.activate(userId: refreshedUser.id)
+            }
+            user = refreshedUser
+            authPhase = .signedIn
+            let boardsRefreshed = await refreshBoards()
+            guard !Task.isCancelled, launchID == requestID else { return }
+            let tasteRefreshed = await refreshTaste()
             guard !Task.isCancelled, launchID == requestID else { return }
             syncBriefWithActiveBoard()
+            if boardsRefreshed && tasteRefreshed {
+                saveSessionSnapshot()
+                if let styleId = activeBoard?.id, !cache.snapshot(for: styleId).deck.isEmpty {
+                    await refreshDeckQuietly(maxAge: nil)
+                }
+            }
         } catch is CancellationError {
             return
         } catch let error as APIError where error.status == 401 {
             guard !Task.isCancelled, launchID == requestID else { return }
+            cache.clear()
+            resetPerUserState()
             authPhase = .signedOut(nil)
         } catch {
             guard !Task.isCancelled, launchID == requestID else { return }
-            authPhase = .failed(error.localizedDescription)
+            if cachedSession == nil {
+                authPhase = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -142,13 +229,27 @@ final class AppState {
         do {
             let result = try await api.invite(token)
             tokenStore.save(result.token)
-            user = try await api.me()
+            let redeemedUser = try await api.me()
+            if cache.userId != nil && cache.userId != redeemedUser.id {
+                cache.clear()
+            }
+            user = redeemedUser
+            cache.activate(userId: redeemedUser.id)
             authPhase = .signedIn
-            await refreshBoards()
-            await refreshTaste()
+            let boardsRefreshed = await refreshBoards()
+            let tasteRefreshed = await refreshTaste()
             syncBriefWithActiveBoard()
+            if let styleId = activeBoard?.id {
+                let snapshot = cache.snapshot(for: styleId)
+                if !snapshot.deck.isEmpty || !snapshot.outfits.isEmpty {
+                    picking = false
+                }
+            }
+            if boardsRefreshed && tasteRefreshed { saveSessionSnapshot() }
         } catch {
             tokenStore.clear()
+            cache.clear()
+            resetPerUserState()
             authPhase = .signedOut(error.localizedDescription)
         }
     }
@@ -156,10 +257,8 @@ final class AppState {
     func signOut() async {
         _ = try? await api.logout()
         tokenStore.clear()
-        user = nil
-        boards = []
-        taste = nil
-        outfits = []
+        cache.clear()
+        resetPerUserState()
         authPhase = .signedOut(nil)
     }
 
@@ -170,46 +269,53 @@ final class AppState {
             UserDefaults.standard.removeObject(forKey: AppConfig.userDefaultsKey)
         }
         tokenStore.clear()
-        user = nil
-        boards = []
-        taste = nil
+        cache.clear()
+        resetPerUserState()
         configureAPI()
         authPhase = .signedOut(nil)
     }
 
-    func refreshBoards() async {
+    @discardableResult
+    func refreshBoards() async -> Bool {
         let requestID = UUID()
         boardsRefreshID = requestID
         do {
             let result = try await api.boards()
-            guard !Task.isCancelled, boardsRefreshID == requestID else { return }
+            guard !Task.isCancelled, boardsRefreshID == requestID else { return false }
             boards = result
+            saveSessionSnapshot()
+            return true
         } catch is CancellationError {
-            return
+            return false
         } catch {
-            guard !Task.isCancelled, boardsRefreshID == requestID else { return }
+            return false
         }
     }
 
-    func refreshTaste() async {
+    @discardableResult
+    func refreshTaste() async -> Bool {
         let requestID = UUID()
         tasteRefreshID = requestID
         do {
             let result = try await api.taste()
-            guard !Task.isCancelled, tasteRefreshID == requestID else { return }
+            guard !Task.isCancelled, tasteRefreshID == requestID else { return false }
             taste = result
+            saveSessionSnapshot()
+            return true
         } catch is CancellationError {
-            return
+            return false
         } catch {
-            guard !Task.isCancelled, tasteRefreshID == requestID else { return }
-            taste = TasteState(current: nil, history: [], counts: [:], core: nil)
+            guard !Task.isCancelled, tasteRefreshID == requestID else { return false }
+            if taste == nil {
+                taste = TasteState(current: nil, history: [], counts: [:], core: nil)
+            }
+            return false
         }
     }
 
     func setTab(_ tab: AppTab) {
         selectedTab = tab
         if tab == .swipe {
-            picking = true
             Task { await refreshBoards() }
         } else if tab == .brief, let board = activeBoard {
             briefMode = .edit
@@ -245,6 +351,7 @@ final class AppState {
             return updated
         }
         currentBrief = board.brief.merged()
+        saveSessionSnapshot()
         if changed { boardChanged() }
         return true
     }
@@ -264,13 +371,13 @@ final class AppState {
                     throw APIError(status: 0, message: "Select a style before updating.", requestIds: [])
                 }
                 result = try await api.updateBrief(boardId: board.id, brief: brief)
+                cache.invalidate(board.id)
                 announce(result.taste)
             } else {
                 result = try await api.createProfile(brief, newBoard: true)
             }
-            outfits = []
-            await refreshTaste()
-            await refreshBoards()
+            let tasteRefreshed = await refreshTaste()
+            let boardsRefreshed = await refreshBoards()
             for photo in photos {
                 do { try await upload(photo, boardId: activeBoard?.id) }
                 catch { showToast("Couldn't read a photo", lines: [error.localizedDescription]) }
@@ -278,6 +385,7 @@ final class AppState {
             if let jobId = result.fetchJobId {
                 Task { await pollFetch(jobId) }
             }
+            if tasteRefreshed && boardsRefreshed { saveSessionSnapshot() }
             deckKey += 1
             picking = false
             selectedTab = .swipe
@@ -313,27 +421,124 @@ final class AppState {
         fetchNote = nil
     }
 
-    func loadDeck() async -> [Item] {
+    func ensureDeck() async {
+        guard let styleId = activeBoard?.id else { return }
+        if !cache.snapshot(for: styleId).deck.isEmpty {
+            deckLoading = false
+            deckError = nil
+            return
+        }
+        guard !deckLoading else { return }
+        await fetchDeck(for: styleId, replacing: true)
+    }
+
+    func reloadDeck() async {
+        guard let styleId = activeBoard?.id else { return }
+        await fetchDeck(for: styleId, replacing: true)
+    }
+
+    private func fetchDeck(for styleId: String, replacing: Bool) async {
+        guard let userId = cache.userId else { return }
+        let requestID = UUID()
+        deckLoadID = requestID
+        deckLoading = true
+        deckError = nil
+        defer {
+            if deckLoadID == requestID { deckLoading = false }
+        }
+
         do {
             let result = try await api.deck(n: 10)
-            guard !Task.isCancelled else { return [] }
-            return result
+            guard !Task.isCancelled,
+                  deckLoadID == requestID,
+                  cache.userId == userId,
+                  activeBoard?.id == styleId else { return }
+            let sentSwipeIds = Set(cache.snapshot(for: styleId).sentSwipeIds)
+            cache.update(styleId) { snapshot in
+                let fetched = result.filter { !sentSwipeIds.contains($0.id) }
+                if replacing {
+                    snapshot.deck = fetched
+                } else {
+                    let existing = Set(snapshot.deck.map(\.id))
+                    snapshot.deck.append(contentsOf: fetched.filter { !existing.contains($0.id) })
+                }
+                snapshot.deckFetchedAt = Date()
+            }
+            ImageCache.shared.prefetch(cache.snapshot(for: styleId).deck.map(\.imagePath))
         } catch is CancellationError {
-            return []
+            return
         }
         catch {
-            guard !Task.isCancelled else { return [] }
-            showToast("Couldn't load the deck", lines: [error.localizedDescription])
-            return []
+            guard !Task.isCancelled,
+                  deckLoadID == requestID,
+                  cache.userId == userId,
+                  activeBoard?.id == styleId else { return }
+            if cache.snapshot(for: styleId).deck.isEmpty {
+                deckError = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshDeckQuietly(maxAge: TimeInterval?) async {
+        guard let styleId = activeBoard?.id, let userId = cache.userId else { return }
+        let beforeFetch = cache.snapshot(for: styleId)
+        if let maxAge,
+           let fetchedAt = beforeFetch.deckFetchedAt,
+           Date().timeIntervalSince(fetchedAt) < maxAge {
+            return
+        }
+        if deckLoading && beforeFetch.deck.isEmpty { return }
+
+        do {
+            let result = try await api.deck(n: 10)
+            guard !Task.isCancelled,
+                  cache.userId == userId,
+                  activeBoard?.id == styleId else { return }
+            var added: [Item] = []
+            cache.update(styleId) { snapshot in
+                let excluded = Set(snapshot.deck.map(\.id)).union(snapshot.sentSwipeIds)
+                added = result.filter { !excluded.contains($0.id) }
+                snapshot.deck.append(contentsOf: added)
+                snapshot.deckFetchedAt = Date()
+            }
+            ImageCache.shared.prefetch(added.map(\.imagePath))
+        } catch is CancellationError {
+            return
+        } catch {
+            if activeBoard?.id == styleId,
+               cache.userId == userId,
+               cache.snapshot(for: styleId).deck.isEmpty {
+                deckError = error.localizedDescription
+            }
         }
     }
 
     func swipe(_ item: Item, liked: Bool) async {
+        guard let styleId = activeBoard?.id else { return }
+        if !cache.snapshot(for: styleId).sentSwipeIds.contains(item.id) {
+            recordSwipe(item, styleId: styleId)
+        }
         do {
             let result = try await api.swipe(itemId: item.id, liked: liked)
             if result.updateDue && !updating { await runUpdate() }
         } catch {
             showToast("Swipe not saved", lines: [error.localizedDescription])
+        }
+    }
+
+    func recordSwipe(_ item: Item) {
+        guard let styleId = activeBoard?.id else { return }
+        recordSwipe(item, styleId: styleId)
+    }
+
+    private func recordSwipe(_ item: Item, styleId: String) {
+        cache.update(styleId) { snapshot in
+            snapshot.deck.removeAll { $0.id == item.id }
+            snapshot.sentSwipeIds.append(item.id)
+            if snapshot.sentSwipeIds.count > 500 {
+                snapshot.sentSwipeIds.removeFirst(snapshot.sentSwipeIds.count - 500)
+            }
+            snapshot.swiped += 1
         }
     }
 
@@ -376,23 +581,25 @@ final class AppState {
     }
 
     func buildOutfits() async {
+        guard let styleId = activeBoard?.id else { return }
         let requestID = UUID()
         outfitBuildID = requestID
         selectedTab = .outfits
         outfitLoading = true
         outfitError = nil
+        defer {
+            if outfitBuildID == requestID { outfitLoading = false }
+        }
         do {
             let result = try await api.outfits(count: 3).outfits
             guard !Task.isCancelled, outfitBuildID == requestID else { return }
-            outfits = result
+            cache.update(styleId) { $0.outfits = result }
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled, outfitBuildID == requestID else { return }
             outfitError = error.localizedDescription
         }
-        guard !Task.isCancelled, outfitBuildID == requestID else { return }
-        outfitLoading = false
     }
 
     func replace(_ old: Outfit, with next: Outfit) {
@@ -449,12 +656,22 @@ final class AppState {
     }
 
     func boardChanged() {
-        outfits = []
+        deckLoadID = UUID()
+        outfitBuildID = UUID()
+        deckLoading = false
+        deckError = nil
+        outfitError = nil
+        outfitLoading = false
         deckKey += 1
         Task {
             await refreshTaste()
             await refreshBoards()
         }
+    }
+
+    func sceneBecameActive() async {
+        guard authPhase == .signedIn else { return }
+        await refreshDeckQuietly(maxAge: 600)
     }
 
     func currentBaseURLText() -> String {
@@ -477,11 +694,41 @@ final class AppState {
         }
     }
 
+    private func saveSessionSnapshot() {
+        guard let user else { return }
+        cache.saveSession(
+            SessionSnapshot(userId: user.id, user: user, boards: boards, taste: taste)
+        )
+    }
+
+    private func resetPerUserState() {
+        user = nil
+        boards = []
+        taste = nil
+        picking = true
+        selectedTab = .brief
+        briefMode = .new
+        currentBrief = .default
+        currentBrief.text = ""
+        deckLoading = false
+        deckError = nil
+        outfitLoading = false
+        outfitError = nil
+        fetchNote = nil
+        toast = nil
+        presentedSheet = nil
+        deckLoadID = UUID()
+        outfitBuildID = UUID()
+        deckKey += 1
+    }
+
     private func installUnauthorizedHandler() {
         api.onUnauthorized = { [weak self] in
             Task { @MainActor in
-                self?.user = nil
-                self?.authPhase = .signedOut(nil)
+                guard let self else { return }
+                self.cache.clear()
+                self.resetPerUserState()
+                self.authPhase = .signedOut(nil)
             }
         }
     }

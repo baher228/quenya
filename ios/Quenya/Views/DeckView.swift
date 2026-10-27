@@ -3,13 +3,7 @@ import UIKit
 
 struct DeckView: View {
     @Environment(AppState.self) private var state
-    @State private var items: [Item] = []
-    @State private var loading = true
-    @State private var error: String?
-    @State private var seen = 0
     @State private var selectedItem: Item?
-    @State private var retryKey = 0
-    @State private var loadGeneration = 0
     @State private var swipeCommand: SwipeCommand?
     @State private var learnedExpanded = false
 
@@ -42,7 +36,7 @@ struct DeckView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("\(seen) swiped")
+                Text("\(state.swipedCount) swiped")
                     .font(.system(size: 12))
                     .foregroundStyle(QuenyaTheme.webMuted)
             }
@@ -52,7 +46,7 @@ struct DeckView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(QuenyaTheme.webLine)
                     Capsule().fill(QuenyaTheme.sage)
-                        .frame(width: geometry.size.width * CGFloat(min(10, seen % 10)) / 10)
+                        .frame(width: geometry.size.width * CGFloat(min(10, state.swipedCount % 10)) / 10)
                 }
             }
             .frame(height: 3)
@@ -60,12 +54,12 @@ struct DeckView: View {
 
             GeometryReader { geometry in
                 ZStack {
-                    if loading {
+                    if state.deck.isEmpty && state.deckLoading {
                         LoadingLabel(title: "Picking pieces for you", dark: true)
-                    } else if let error {
-                        ErrorPanel(message: error) { Task { await load() } }
+                    } else if let error = state.deckError {
+                        ErrorPanel(message: error) { Task { await state.reloadDeck() } }
                             .padding(.horizontal, 12)
-                    } else if items.isEmpty {
+                    } else if state.deck.isEmpty {
                         VStack(spacing: 14) {
                             Text("Enough to go on.")
                                 .font(.system(size: 20, weight: .semibold))
@@ -77,12 +71,12 @@ struct DeckView: View {
                             PillButton(title: "Build outfits", primary: true, dark: true) {
                                 Task { await state.deckDone() }
                             }
-                            PillButton(title: "10 more cards", dark: true) { Task { await load() } }
+                            PillButton(title: "10 more cards", dark: true) { Task { await state.reloadDeck() } }
                         }
                         .padding(24)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        ForEach(Array(items.prefix(3).enumerated().reversed()), id: \.element.id) { depth, item in
+                        ForEach(Array(state.deck.prefix(3).enumerated().reversed()), id: \.element.id) { depth, item in
                             SwipeCard(
                                 item: item,
                                 depth: depth,
@@ -101,7 +95,7 @@ struct DeckView: View {
             }
             .frame(minHeight: 300)
 
-            if !items.isEmpty && !loading {
+            if !state.deck.isEmpty && !state.deckLoading {
                 HStack {
                     Text("← Pass")
                     Spacer()
@@ -163,7 +157,7 @@ struct DeckView: View {
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(QuenyaTheme.webPhone)
-        .task(id: retryKey) { await load() }
+        .task(id: state.activeBoard?.id) { await state.ensureDeck() }
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
     }
 
@@ -178,33 +172,12 @@ struct DeckView: View {
             .background(QuenyaTheme.webSurface2, in: Capsule())
     }
 
-    private func load() async {
-        loadGeneration += 1
-        let generation = loadGeneration
-        loading = true
-        error = nil
-        do {
-            let result = try await state.api.deck(n: 10)
-            guard !Task.isCancelled, generation == loadGeneration else { return }
-            items = result
-            ImageCache.shared.prefetch(items.map(\.imagePath))
-        } catch is CancellationError {
-            return
-        } catch {
-            guard !Task.isCancelled, generation == loadGeneration else { return }
-            self.error = error.localizedDescription
-        }
-        guard !Task.isCancelled, generation == loadGeneration else { return }
-        loading = false
-    }
-
     private func commit(_ item: Item, liked: Bool) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-            items.removeAll { $0.id == item.id }
-            seen += 1
+            state.recordSwipe(item)
+            Task { await state.swipe(item, liked: liked) }
         }
-        Task { await state.swipe(item, liked: liked) }
     }
 }
 
