@@ -5,7 +5,7 @@ os.environ["QUENYA_WARM_CACHES"] = "0"
 import psycopg
 import pytest
 
-from app import db
+from app import accounts, db
 
 
 @pytest.fixture(autouse=True)
@@ -26,3 +26,11 @@ def clear_live_catalogue_cache():
     db.invalidate_live_catalogue()
     yield
     db.invalidate_live_catalogue()
+
+
+@pytest.fixture
+def auth_headers():
+    user, invite = accounts.create_user("Test user")
+    token = accounts.redeem_invite(invite)
+    yield {"Authorization": f"Bearer {token}"}
+    accounts.revoke_user(user["id"])

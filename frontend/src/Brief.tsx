@@ -39,13 +39,14 @@ export const DEFAULT_BRIEF: Brief = {
   sizes: { tops: "M", waist: "32", shoes: "9" },
 };
 
-export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew }: {
+export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew, allowNew = true }: {
   initial: Brief;
   busy: boolean;
   onSubmit: (b: Brief, photos: File[]) => void;
   mode: "new" | "edit";
   boardLabel?: string;
   onNew?: () => void;
+  allowNew?: boolean;
 }) {
   const [b, setB] = useState<Brief>(initial);
   const [photos, setPhotos] = useState<File[]>([]);
@@ -124,7 +125,7 @@ export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew }
       <button className="btn primary wide" disabled={busy || b.text.trim().length < 3} onClick={() => onSubmit(b, photos)}>
         {busy ? (mode === "edit" ? "Updating…" : "Creating…") : (mode === "edit" ? "Update style" : "Create style")}
       </button>
-      {mode === "edit" && <button className="small muted brief-new" onClick={onNew}>+ New style instead</button>}
+      {mode === "edit" && allowNew && <button className="small muted brief-new" onClick={onNew}>+ New style instead</button>}
     </section>
   );
 }

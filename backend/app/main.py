@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request
 
 from app import db
+from app.accounts import AdminUser, CurrentUser
+from app.accounts import router as accounts_router
 from app.config import (
     CURSOR_API_KEY,
     PROMPT_VERSION,
@@ -60,6 +62,18 @@ app.add_middleware(
 @app.exception_handler(HTTPException)
 async def http_error_handler(_request: Request, exc: HTTPException) -> JSONResponse:
     detail = exc.detail
+    if (
+        exc.status_code == 401
+        and detail == "Sign in with your invite link"
+    ) or (
+        exc.status_code == 403
+        and detail == "Tester accounts have one style"
+    ):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": detail},
+            headers=exc.headers,
+        )
     if not isinstance(detail, dict) or "error" not in detail:
         detail = {"error": str(detail), "request_ids": []}
     else:
@@ -144,6 +158,7 @@ def health() -> dict:
 
 @app.get("/api/items")
 def items(
+    _user: CurrentUser,
     slot: str | None = None,
     gender: Literal["m", "w", "u"] | None = None,
     condition: Literal["second-hand", "new"] | None = None,
@@ -159,8 +174,8 @@ def items(
 
 
 @app.post("/api/items/{item_id}/correct-tags")
-def correct_tags(item_id: str, body: CorrectionRequest) -> dict:
-    profile = db.active_profile("user")
+def correct_tags(item_id: str, body: CorrectionRequest, user: AdminUser) -> dict:
+    profile = db.active_profile("user", user["id"])
     if not profile:
         raise HTTPException(status_code=409, detail="Create a profile first")
     item = db.get_item(item_id)
@@ -205,7 +220,7 @@ def correct_tags(item_id: str, body: CorrectionRequest) -> dict:
 
 
 @app.get("/api/model/stats")
-def model_stats() -> list[dict]:
+def model_stats(_user: CurrentUser) -> list[dict]:
     return db.model_stats()
 
 
@@ -234,4 +249,5 @@ def get_image(filename: str):
 
 
 app.include_router(phase2_router)
+app.include_router(accounts_router)
 app.include_router(vinted_proxy_router)

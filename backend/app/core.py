@@ -13,8 +13,12 @@ def _jaccard(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left | right) if left | right else 0.0
 
 
-def shared_core(kind: str = "user") -> dict[str, Any]:
-    boards = db.profile_boards(kind)
+def shared_core(kind: str = "user", owner_id: str | None = None) -> dict[str, Any]:
+    boards = (
+        db.profile_boards(kind, owner_id)
+        if owner_id is not None
+        else db.profile_boards(kind)
+    )
     result: dict[str, Any] = {
         "rules": [],
         "likes": {},
