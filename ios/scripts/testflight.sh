@@ -9,9 +9,19 @@ BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+if [[ -x "$HOME/ios-work/venv/bin/python" ]]; then
+  PYTHON="$HOME/ios-work/venv/bin/python"
+else
+  PYTHON=python3
+fi
+
 if command -v xcodegen >/dev/null 2>&1; then
   xcodegen generate
 fi
+
+"$PYTHON" scripts/signing_setup.py
+
+KEYCHAIN="$("$PYTHON" -c 'import os; from pathlib import Path; print((Path(os.environ.get("QUENYA_SIGNING_DIR", "~/ios-work/signing")).expanduser().resolve() / "quenya-signing.keychain-db"))')"
 
 xcodebuild archive \
   -project Quenya.xcodeproj \
@@ -20,12 +30,11 @@ xcodebuild archive \
   -destination 'generic/platform=iOS' \
   -archivePath build/Quenya.xcarchive \
   DEVELOPMENT_TEAM=CJ74KDAF7R \
-  CODE_SIGN_STYLE=Automatic \
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY="Apple Distribution" \
+  PROVISIONING_PROFILE_SPECIFIER="Quenya App Store" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$ASC_KEY_PATH" \
-  -authenticationKeyID "$ASC_KEY_ID" \
-  -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+  OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN"
 
 xcodebuild -exportArchive \
   -archivePath build/Quenya.xcarchive \

@@ -23,6 +23,8 @@ Set the App Store Connect API credentials in your shell. Keep the `.p8`
 private key outside this repository:
 
 ```sh
+python3 -m venv "$HOME/ios-work/venv"  # if the venv does not exist
+"$HOME/ios-work/venv/bin/pip" install PyJWT cryptography
 export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8"
 export ASC_KEY_ID="<KEY_ID>"
 export ASC_ISSUER_ID="<ISSUER_ID>"
@@ -30,7 +32,10 @@ cd ios
 ./scripts/testflight.sh
 ```
 
-`BUILD_NUMBER` is optional and defaults to a UTC timestamp.
+`BUILD_NUMBER` is optional and defaults to a UTC timestamp. Signing keys,
+passwords, certificates and provisioning profiles are stored outside this
+repository in `~/ios-work/signing` by default. `QUENYA_SIGNING_DIR` can select
+another location outside the repository.
 
 ## Local API
 
