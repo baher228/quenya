@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errText, gbp, img, type User } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
-import { cacheKey, clearAll as clearCache, get as getCache, set as setCache } from "./cache";
+import { cacheKey, clearAll as clearCache, get as getCache, remove as removeCache, set as setCache } from "./cache";
 import { DeckScreen } from "./Deck";
 import { FindScreen } from "./Find";
 import { OutfitsScreen, REASONS } from "./Outfits";
@@ -230,6 +230,7 @@ export default function App() {
         try { await handleUpload(f); } catch (e) { setToast({ id: Date.now(), title: "Couldn't read a photo", lines: [errText(e)] }); }
       }
       if (r.fetch_job_id) void pollFetch(r.fetch_job_id);
+      removeCache(user.id, r.board.id, "deck");
       setDeckKey(k => k + 1);
       setPicking(false);
       setTab("swipe");

@@ -36,6 +36,14 @@ export function set<T>(userId: string, boardId: string, kind: CacheKind, data: T
   }
 }
 
+export function remove(userId: string, boardId: string, kind: CacheKind) {
+  try {
+    window.localStorage.removeItem(cacheKey(userId, boardId, kind));
+  } catch {
+    return;
+  }
+}
+
 export function clearAll() {
   try {
     const keys: string[] = [];
