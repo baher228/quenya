@@ -8,7 +8,7 @@ enum AuthPhase: Equatable {
     case signedIn
 }
 
-enum AppTab: String, CaseIterable, Identifiable {
+enum AppTab: String, CaseIterable, Codable, Identifiable {
     case brief, swipe, outfits, find, taste
 
     var id: String { rawValue }
@@ -116,7 +116,12 @@ final class AppState {
     var picking = true
     var deckLoading = false
     var deckError: String?
-    var selectedTab: AppTab = .brief
+    var selectedTab: AppTab = .brief {
+        didSet {
+            guard user != nil, activeBoard != nil else { return }
+            saveSessionSnapshot()
+        }
+    }
     var briefMode: BriefMode = .new
     var currentBrief: Brief = {
         var value = Brief.default
@@ -173,6 +178,11 @@ final class AppState {
                 if !snapshot.deck.isEmpty || !snapshot.outfits.isEmpty {
                     picking = false
                 }
+                selectedTab = cachedSession.lastTab ?? (
+                    !snapshot.deck.isEmpty || !snapshot.outfits.isEmpty ? .swipe : .brief
+                )
+            } else {
+                selectedTab = .brief
             }
             authPhase = .signedIn
         }
@@ -695,7 +705,13 @@ final class AppState {
     private func saveSessionSnapshot() {
         guard let user else { return }
         cache.saveSession(
-            SessionSnapshot(userId: user.id, user: user, boards: boards, taste: taste)
+            SessionSnapshot(
+                userId: user.id,
+                user: user,
+                boards: boards,
+                taste: taste,
+                lastTab: selectedTab
+            )
         )
     }
 

@@ -18,6 +18,7 @@ struct SessionSnapshot: Codable, Equatable {
     var user: User
     var boards: [Board]
     var taste: TasteState?
+    var lastTab: AppTab? = nil
 }
 
 @MainActor

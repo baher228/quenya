@@ -43,6 +43,25 @@ final class StyleCacheTests: XCTestCase {
         XCTAssertEqual(reopened.snapshot(for: "b1"), expected)
     }
 
+    func testSessionSnapshotRoundTripsLastTabAndDecodesLegacyJSON() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+        cache.saveSession(sessionSnapshot(lastTab: .outfits))
+
+        let reopened = StyleCache(directory: directory)
+        XCTAssertEqual(reopened.loadSession()?.lastTab, .outfits)
+
+        let sessionFile = directory.appendingPathComponent("session.json")
+        let encoded = try Data(contentsOf: sessionFile)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        json.removeValue(forKey: "lastTab")
+        try JSONSerialization.data(withJSONObject: json).write(to: sessionFile, options: .atomic)
+
+        XCTAssertNil(StyleCache(directory: directory).loadSession()?.lastTab)
+    }
+
     func testSignOutClearsStyleAndSessionSnapshots() async throws {
         let directory = makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -151,8 +170,14 @@ final class StyleCacheTests: XCTestCase {
         )
     }
 
-    private func sessionSnapshot() -> SessionSnapshot {
-        SessionSnapshot(userId: "u1", user: user(), boards: [board(id: "b1", active: true)], taste: nil)
+    private func sessionSnapshot(lastTab: AppTab? = nil) -> SessionSnapshot {
+        SessionSnapshot(
+            userId: "u1",
+            user: user(),
+            boards: [board(id: "b1", active: true)],
+            taste: nil,
+            lastTab: lastTab
+        )
     }
 
     private func itemsJSON(_ items: [Item]) throws -> String {
