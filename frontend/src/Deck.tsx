@@ -1,38 +1,93 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, gbp, img } from "./api";
+import { get as getCache, set as setCache } from "./cache";
 import { ErrorBox, Loading, Provenance, pretty, uniqueTasteEntries } from "./ui";
 import type { Item, TasteProfile } from "./types";
 
-export function DeckScreen({ profile, version, board, onChange, onSignal, onDone, onOpenItem }: {
+const CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const CACHE_MIN_ITEMS = 3;
+
+function appendUnique(existing: Item[], incoming: Item[], excluded: Set<string>) {
+  const ids = new Set([...existing.map(item => item.id), ...excluded]);
+  return [...existing, ...incoming.filter(item => !ids.has(item.id) && !!ids.add(item.id))];
+}
+
+export function DeckScreen({ profile, version, board, userId, boardId, onChange, onSignal, onDone, onOpenItem }: {
   profile: TasteProfile | null;
   version: number | null;
   board: string;
+  userId: string;
+  boardId: string;
   onChange: () => void;
   onSignal: (updateDue: boolean) => void;
   onDone: () => void;
   onOpenItem: (it: Item) => void;
 }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = useRef(getCache<Item[]>(userId, boardId, "deck")).current;
+  const cachedItems = Array.isArray(cached?.data) ? cached.data : [];
+  const [items, setItems] = useState<Item[]>(cachedItems);
+  const [loading, setLoading] = useState(!cached);
+  const [hasLoaded, setHasLoaded] = useState(!!cached);
   const [error, setError] = useState<unknown>(null);
   const [seen, setSeen] = useState(0);
   const [kick, setKick] = useState<{ dir: number; at: number } | null>(null);
   const [nudge, setNudge] = useState(() => !sessionStorage.getItem("q-nudged"));
+  const initialized = useRef(false);
+  const decidedIds = useRef(new Set<string>());
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try { setItems(await api.deck(10)); } catch (e) { setError(e); } finally { setLoading(false); }
+    const showLoading = items.length === 0;
+    if (showLoading) setLoading(true);
+    setError(null);
+    try {
+      const incoming = await api.deck(10);
+      setItems(current => appendUnique(current, incoming, decidedIds.current));
+      setHasLoaded(true);
+    } catch (e) {
+      if (showLoading) setError(e);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [items.length]);
+
+  const refreshQuietly = useCallback(async () => {
+    try {
+      const incoming = await api.deck(10);
+      setItems(current => appendUnique(current, incoming, decidedIds.current));
+      setHasLoaded(true);
+    } catch {
+      return;
+    }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    if (!cached) {
+      void load();
+    } else if (
+      cachedItems.length < CACHE_MIN_ITEMS
+      || Date.now() - cached.savedAt > CACHE_MAX_AGE_MS
+    ) {
+      void refreshQuietly();
+    }
+  }, [cached, cachedItems.length, load, refreshQuietly]);
+
+  useEffect(() => {
+    if (hasLoaded) setCache(userId, boardId, "deck", items);
+  }, [boardId, hasLoaded, items, userId]);
 
   const decide = useCallback((liked: boolean) => {
     const top = items[0];
     if (!top) return;
     setKick(null);
-    setItems(prev => prev.slice(1));
+    const remaining = items.slice(1);
+    decidedIds.current.add(top.id);
+    setItems(remaining);
+    setCache(userId, boardId, "deck", remaining);
     setSeen(n => n + 1);
     api.swipe(top.id, liked).then(r => onSignal(r.update_due)).catch(setError);
-  }, [items, onSignal]);
+  }, [boardId, items, onSignal, userId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
