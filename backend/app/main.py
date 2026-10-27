@@ -43,6 +43,7 @@ from app.prompts import (
 from app.tagging import tag_item
 from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
+from app.waitlist import router as waitlist_router
 
 app = FastAPI(title="Quenya API")
 logger = logging.getLogger(__name__)
@@ -260,3 +261,4 @@ def get_image(filename: str):
 app.include_router(phase2_router)
 app.include_router(accounts_router)
 app.include_router(vinted_proxy_router)
+app.include_router(waitlist_router)
