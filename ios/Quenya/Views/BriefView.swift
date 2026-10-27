@@ -172,6 +172,7 @@ struct BriefView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(QuenyaTheme.muted)
                         .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(20)

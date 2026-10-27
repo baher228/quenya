@@ -91,9 +91,9 @@ final class AppState {
         #endif
     }
 
-    init(tokenStore: TokenStore = KeychainTokenStore()) {
+    init(tokenStore: TokenStore = KeychainTokenStore(), apiClient: APIClient? = nil) {
         self.tokenStore = tokenStore
-        api = APIClient(baseURL: AppConfig.baseURL, tokenStore: tokenStore)
+        api = apiClient ?? APIClient(baseURL: AppConfig.baseURL, tokenStore: tokenStore)
         installUnauthorizedHandler()
     }
 

@@ -55,34 +55,41 @@ struct StylePickerView: View {
                                     Image(systemName: "plus").foregroundStyle(QuenyaTheme.rust)
                                 }
                                 .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
-                    Button {
-                        Task { await state.signOut() }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("Sign out").foregroundStyle(QuenyaTheme.ink)
-                                Text("Use another invite link").font(.system(size: 12)).foregroundStyle(QuenyaTheme.muted)
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.right").foregroundStyle(QuenyaTheme.muted)
-                        }
-                        .padding(.vertical, 14)
-                    }
-                    .buttonStyle(.plain)
                 }
+                Button {
+                    Task { await state.signOut() }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Sign out").foregroundStyle(QuenyaTheme.ink)
+                            Text("Use another invite link").font(.system(size: 12)).foregroundStyle(QuenyaTheme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.right").foregroundStyle(QuenyaTheme.muted)
+                    }
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 if state.isDebug {
                     Button("Debug") { showingDebug = true }
                         .font(.system(size: 13))
                         .foregroundStyle(QuenyaTheme.muted)
                 }
             }
-            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
         }
+        .scrollContentBackground(.hidden)
+        .background(QuenyaTheme.cream.ignoresSafeArea())
         .sheet(isPresented: $showingDebug) { DebugSettingsView() }
     }
 }

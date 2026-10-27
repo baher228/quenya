@@ -201,10 +201,13 @@ private struct SwipeCard: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.8))
                     if let tags = item.tags {
+                        let labels = ([tags.category] + Array(tags.aesthetics.prefix(2)) + (tags.era == "unknown" ? [] : [tags.era])).filter { !$0.isEmpty }
                         HStack(spacing: 6) {
-                            ForEach(Array(([tags.category] + Array(tags.aesthetics.prefix(2)) + (tags.era == "unknown" ? [] : [tags.era])).prefix(4)), id: \.self) { tag in
+                            ForEach(Array(labels.prefix(3)), id: \.self) { tag in
                                 Text(tag)
                                     .font(.system(size: 10, weight: .medium))
+                                    .lineLimit(1)
+                                    .fixedSize()
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 5)
                                     .background(.white.opacity(0.18), in: Capsule())
@@ -227,6 +230,11 @@ private struct SwipeCard: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.line, lineWidth: 1))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke((dragX >= 0 ? QuenyaTheme.rust : QuenyaTheme.ink).opacity(opacity * 0.35), lineWidth: 4)
+                    .allowsHitTesting(false)
+            }
             .offset(x: dragX, y: dragY)
             .rotationEffect(.degrees(Double(dragX / 22)))
             .gesture(
@@ -258,11 +266,6 @@ private struct SwipeCard: View {
             .onChange(of: command) { _, value in
                 guard depth == 0, value?.itemId == item.id, let value else { return }
                 flyOut(liked: value.liked, width: geometry.size.width)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 22)
-                    .stroke((dragX >= 0 ? QuenyaTheme.rust : QuenyaTheme.ink).opacity(opacity * 0.35), lineWidth: 4)
-                    .allowsHitTesting(false)
             }
         }
     }

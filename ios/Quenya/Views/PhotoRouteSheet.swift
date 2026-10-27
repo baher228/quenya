@@ -56,6 +56,7 @@ struct PhotoRouteSheet: View {
             }
             .padding(13)
             .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

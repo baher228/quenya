@@ -64,6 +64,7 @@ struct FindView: View {
                                 }
                                 .foregroundStyle(QuenyaTheme.ink)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -93,6 +94,7 @@ struct FindView: View {
                         .foregroundStyle(QuenyaTheme.ink)
                         .padding(14)
                         .overlay(RoundedRectangle(cornerRadius: 15).stroke(QuenyaTheme.line, lineWidth: 1))
+                        .contentShape(Rectangle())
                     }
                     .disabled(uploading)
                 }

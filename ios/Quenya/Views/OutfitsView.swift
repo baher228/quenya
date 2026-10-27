@@ -102,6 +102,7 @@ struct OutfitsView: View {
                             Text(item.source == "vinted" ? "Vinted" : item.source == "retail" ? "Retail" : item.source)
                                 .font(.system(size: 10)).foregroundStyle(QuenyaTheme.muted)
                         }
+                        .contentShape(Rectangle())
                         .foregroundStyle(QuenyaTheme.ink)
                     }
                     .buttonStyle(.plain)
@@ -111,15 +112,23 @@ struct OutfitsView: View {
                 ErrorPanel(message: error)
             }
             HStack(spacing: 7) {
-                compactButton("Not for me", disabled: busy != nil) {
-                    state.presentedSheet = .reject(outfit)
+                if outfit.verdict == "reject" {
+                    verdictLabel("Not for me · \(outfit.reason ?? "Rejected")", color: QuenyaTheme.muted)
+                } else {
+                    compactButton("Not for me", disabled: busy != nil) {
+                        state.presentedSheet = .reject(outfit)
+                    }
                 }
                 compactButton(
                     busy == outfit.id + "rebuild" ? "Rebuilding…" : (keep.isEmpty ? "Rebuild" : "Rebuild around locks"),
                     disabled: busy != nil
                 ) { Task { await rebuild(outfit) } }
-                compactButton(outfit.verdict == "like" ? "Kept" : "Keep", primary: true, disabled: busy != nil || outfit.verdict == "like") {
-                    Task { await state.verdict(outfit, like: true) }
+                if outfit.verdict == "like" {
+                    verdictLabel("Kept", color: QuenyaTheme.ink, outlined: true)
+                } else {
+                    compactButton("Keep", primary: true, disabled: busy != nil) {
+                        Task { await state.verdict(outfit, like: true) }
+                    }
                 }
             }
             ShareLink(item: shareText(outfit)) {
@@ -210,6 +219,17 @@ struct OutfitsView: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.5 : 1)
+    }
+
+    private func verdictLabel(_ title: String, color: Color, outlined: Bool = false) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .padding(.horizontal, 6)
+            .overlay(Capsule().stroke(outlined ? QuenyaTheme.ink : QuenyaTheme.line, lineWidth: 1))
     }
 
     private func toggleLock(_ outfit: Outfit, _ itemId: String) {

@@ -71,6 +71,8 @@ struct ItemDetailSheet: View {
             .background(QuenyaTheme.cream)
             .navigationTitle("Listing")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(QuenyaTheme.cream, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }.foregroundStyle(QuenyaTheme.ink)

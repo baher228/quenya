@@ -58,25 +58,32 @@ struct RootTabs: View {
 
     private var signedInContent: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("quenya")
-                    .font(.system(size: 25, weight: .semibold, design: .serif))
-                    .foregroundStyle(QuenyaTheme.ink)
-                Text(".").font(.system(size: 25, weight: .semibold, design: .serif)).foregroundStyle(QuenyaTheme.rust)
-                    .padding(.leading, -7)
-                Spacer()
-                Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
-                    .font(.system(size: 11))
-                    .foregroundStyle(QuenyaTheme.muted)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("quenya")
+                        .font(.system(size: 25, weight: .semibold, design: .serif))
+                        .foregroundStyle(QuenyaTheme.ink)
+                    Text(".").font(.system(size: 25, weight: .semibold, design: .serif)).foregroundStyle(QuenyaTheme.rust)
+                        .padding(.leading, -7)
+                    Spacer()
+                    Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
+                        .font(.system(size: 11))
+                        .foregroundStyle(QuenyaTheme.muted)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
 
-            if state.selectedTab != .swipe {
-                BoardStrip()
+                if state.selectedTab != .swipe {
+                    BoardStrip()
+                }
+
+                Rectangle()
+                    .fill(QuenyaTheme.line)
+                    .frame(height: 1)
             }
+            .background(QuenyaTheme.cream)
 
             TabView(selection: selection) {
                 BriefView().tag(AppTab.brief)
@@ -95,9 +102,14 @@ struct RootTabs: View {
             .toolbarBackground(.visible, for: .tabBar)
             .overlay(alignment: .bottom) {
                 if let toast = state.toast {
-                    ToastView(toast: toast) {
-                        state.toast = nil
-                        state.setTab(.taste)
+                    GeometryReader { geometry in
+                        ToastView(toast: toast) {
+                            state.toast = nil
+                            state.setTab(.taste)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, geometry.safeAreaInsets.bottom + 64)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
                     }
                 }
             }
