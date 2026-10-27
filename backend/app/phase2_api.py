@@ -14,7 +14,7 @@ from PIL import Image, ImageOps
 
 from app import db, images
 from app.accessories import is_accessory_slot
-from app.accounts import context_user, current_user
+from app.accounts import context_user, current_user, in_request
 from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
 from app.core import as_profile, shared_core
 from app.embedding_ranker import (
@@ -72,7 +72,11 @@ router = APIRouter(dependencies=[Depends(current_user)])
 
 def _owner_id() -> str | None:
     user = context_user()
-    return user["id"] if user else None
+    if user:
+        return user["id"]
+    if in_request():
+        raise HTTPException(status_code=401, detail="Sign in with your invite link")
+    return None
 
 
 def _route_input(

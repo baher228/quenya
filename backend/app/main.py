@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request
 
-from app import db
+from app import accounts, db
 from app.accounts import AdminUser, CurrentUser
 from app.accounts import router as accounts_router
 from app.config import (
@@ -57,6 +57,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    token = accounts._in_request.set(True)
+    try:
+        return await call_next(request)
+    finally:
+        accounts._in_request.reset(token)
 
 
 @app.exception_handler(HTTPException)

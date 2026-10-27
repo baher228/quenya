@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.testclient import TestClient
 
 from app import accounts, db, main, phase2_api
@@ -44,6 +44,26 @@ def test_authentication_required_but_health_stays_public(isolated_accounts_db):
             assert response.status_code == 401
             assert response.json() == {"detail": "Sign in with your invite link"}
         assert client.get("/api/health").status_code == 200
+
+
+def test_owner_lookup_fails_closed_inside_unauthenticated_http_request(
+    isolated_accounts_db,
+):
+    router = APIRouter()
+
+    @router.get("/_test-owner")
+    def test_owner() -> dict[str, str | None]:
+        return {"owner": phase2_api._owner_id()}
+
+    main.app.include_router(router)
+    with TestClient(main.app) as client:
+        response = client.get("/_test-owner")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Sign in with your invite link"}
+
+
+def test_direct_board_handler_keeps_legacy_fallback(isolated_accounts_db):
+    assert phase2_api.boards() == []
 
 
 def test_invite_rotation_sessions_revocation_and_logout_are_scoped(isolated_accounts_db):

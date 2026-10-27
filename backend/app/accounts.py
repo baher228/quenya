@@ -13,6 +13,7 @@ from app import db
 from app.config import QUENYA_APP_URL
 
 _user_context: ContextVar[dict[str, Any] | None] = ContextVar("user_context", default=None)
+_in_request: ContextVar[bool] = ContextVar("in_request", default=False)
 router = APIRouter()
 
 
@@ -144,6 +145,10 @@ AdminUser = Annotated[dict[str, Any], Depends(require_admin)]
 
 def context_user() -> dict[str, Any] | None:
     return _user_context.get()
+
+
+def in_request() -> bool:
+    return _in_request.get()
 
 
 def clear_context() -> None:
