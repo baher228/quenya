@@ -315,9 +315,7 @@ final class AppState {
 
     func setTab(_ tab: AppTab) {
         selectedTab = tab
-        if tab == .swipe {
-            Task { await refreshBoards() }
-        } else if tab == .brief, let board = activeBoard {
+        if tab == .brief, let board = activeBoard {
             briefMode = .edit
             currentBrief = board.brief.merged()
         } else if tab == .brief {
