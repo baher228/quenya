@@ -10,6 +10,9 @@ protocol TokenStore {
 final class KeychainTokenStore: TokenStore {
     private let service = "uk.ardivia.quenya"
     private let account = "session"
+    #if targetEnvironment(simulator)
+    private let simulatorFallbackKey = "uk.ardivia.quenya.session"
+    #endif
 
     func token() -> String? {
         let query: [String: Any] = [
@@ -20,9 +23,16 @@ final class KeychainTokenStore: TokenStore {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+           let data = result as? Data,
+           let token = String(data: data, encoding: .utf8) {
+            return token
+        }
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.string(forKey: simulatorFallbackKey)
+        #else
+        return nil
+        #endif
     }
 
     func save(_ token: String) {
@@ -34,6 +44,9 @@ final class KeychainTokenStore: TokenStore {
             kSecValueData as String: Data(token.utf8)
         ]
         SecItemAdd(query as CFDictionary, nil)
+        #if targetEnvironment(simulator)
+        UserDefaults.standard.set(token, forKey: simulatorFallbackKey)
+        #endif
     }
 
     func clear() {
@@ -43,6 +56,9 @@ final class KeychainTokenStore: TokenStore {
             kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
+        #if targetEnvironment(simulator)
+        UserDefaults.standard.removeObject(forKey: simulatorFallbackKey)
+        #endif
     }
 }
 
