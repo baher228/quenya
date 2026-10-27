@@ -1,0 +1,147 @@
+import SwiftUI
+
+struct RootTabs: View {
+    @Environment(AppState.self) private var state
+
+    private var webDarkChrome: Bool {
+        state.selectedTab == .outfits || (state.selectedTab == .swipe && !state.picking && state.hasProfile)
+    }
+
+    private var chromeBackground: Color {
+        webDarkChrome ? QuenyaTheme.webPhone : QuenyaTheme.cream
+    }
+
+    private var selection: Binding<AppTab> {
+        Binding(
+            get: { state.selectedTab },
+            set: { state.setTab($0) }
+        )
+    }
+
+    var body: some View {
+        Group {
+            switch state.authPhase {
+            case .loading:
+                VStack(spacing: 12) {
+                    ProgressView().tint(QuenyaTheme.rust)
+                    Text("Checking invite…").foregroundStyle(QuenyaTheme.muted)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(QuenyaTheme.cream.ignoresSafeArea())
+            case .signedOut:
+                InviteView()
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 16) {
+                    H3(text: "Couldn't reach Quenya.")
+                    ErrorPanel(message: message) { Task { await state.retryLaunch() } }
+                    PillButton(title: "Retry", primary: true) { Task { await state.retryLaunch() } }
+                    if state.isDebug { DebugSettingsView() }
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(QuenyaTheme.cream.ignoresSafeArea())
+            case .signedIn:
+                signedInContent
+            }
+        }
+        .background(chromeBackground.ignoresSafeArea())
+        .preferredColorScheme(webDarkChrome ? .dark : .light)
+        .sheet(item: Binding(
+            get: { state.presentedSheet },
+            set: { state.presentedSheet = $0 }
+        )) { sheet in
+            switch sheet {
+            case .item(let item):
+                ItemDetailSheet(item: item)
+            case .reject(let outfit):
+                RejectSheet { reason in
+                    state.presentedSheet = nil
+                    Task { await state.verdict(outfit, like: false, reason: reason) }
+                }
+            case .photo(let upload):
+                PhotoRouteSheet(upload: upload)
+            }
+        }
+    }
+
+    private var signedInContent: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    (
+                        Text("quenya").foregroundColor(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
+                        + Text(".").foregroundColor(webDarkChrome ? QuenyaTheme.sage : QuenyaTheme.rust)
+                    )
+                        .font(.system(size: 19, weight: .semibold))
+                    Spacer()
+                    Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
+                        .font(.system(size: 11))
+                        .foregroundStyle(webDarkChrome ? QuenyaTheme.webMuted : QuenyaTheme.muted)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+
+                if state.selectedTab != .swipe {
+                    BoardStrip()
+                }
+
+                Rectangle()
+                    .fill(webDarkChrome ? QuenyaTheme.webLine : QuenyaTheme.line)
+                    .frame(height: 1)
+            }
+            .background(chromeBackground)
+
+            TabView(selection: selection) {
+                BriefView().tag(AppTab.brief)
+                    .tabItem { Label(AppTab.brief.title, systemImage: AppTab.brief.symbol) }
+                swipeContent.tag(AppTab.swipe)
+                    .tabItem { Label(AppTab.swipe.title, systemImage: AppTab.swipe.symbol) }
+                OutfitsView().tag(AppTab.outfits)
+                    .tabItem { Label(AppTab.outfits.title, systemImage: AppTab.outfits.symbol) }
+                FindView().tag(AppTab.find)
+                    .tabItem { Label(AppTab.find.title, systemImage: AppTab.find.symbol) }
+                TasteView().tag(AppTab.taste)
+                    .tabItem { Label(AppTab.taste.title, systemImage: AppTab.taste.symbol) }
+            }
+            .tint(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
+            .toolbarBackground(chromeBackground, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .overlay(alignment: .bottom) {
+                if let toast = state.toast {
+                    GeometryReader { geometry in
+                        ToastView(toast: toast) {
+                            state.toast = nil
+                            state.setTab(.taste)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, geometry.safeAreaInsets.bottom + 64)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                }
+            }
+        }
+        .background(chromeBackground)
+    }
+
+    @ViewBuilder
+    private var swipeContent: some View {
+        if state.picking {
+            StylePickerView()
+        } else if state.hasProfile {
+            DeckView()
+                .id(state.deckKey)
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                H3(text: "Start with a brief.")
+                Text("Say what you're after first. Swipes and outfits come from it.")
+                    .foregroundStyle(QuenyaTheme.muted)
+                PillButton(title: "Write a brief", primary: true) { state.setTab(.brief) }
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(QuenyaTheme.cream)
+        }
+    }
+}
