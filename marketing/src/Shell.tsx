@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export const CONTACT_EMAIL = "hello@ardivia.co.uk";
+export const CONTACT_EMAIL = "hello@quenya.co.uk";
 
 export function Header({ home = true }: { home?: boolean }) {
   return (

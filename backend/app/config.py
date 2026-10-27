@@ -27,7 +27,7 @@ QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
 QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )
-QUENYA_APP_URL = os.getenv("QUENYA_APP_URL", "https://quenya-rho.vercel.app").rstrip("/")
+QUENYA_APP_URL = os.getenv("QUENYA_APP_URL", "https://app.quenya.co.uk").rstrip("/")
 QUENYA_CATALOGUE_TTL_S = int(os.getenv("QUENYA_CATALOGUE_TTL_S", "300"))
 QUENYA_WARM_CACHES = os.getenv("QUENYA_WARM_CACHES", "1").strip().lower() not in {
     "0",
