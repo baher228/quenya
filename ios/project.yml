@@ -30,6 +30,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
+        UIUserInterfaceStyle: Dark
         QuenyaAPIBaseURL: $(QUENYA_API_BASE_URL)
         NSPhotoLibraryUsageDescription: Choose inspiration photos to personalise your style.
         UILaunchScreen:

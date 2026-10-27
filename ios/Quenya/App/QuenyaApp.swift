@@ -8,7 +8,7 @@ struct QuenyaApp: App {
         WindowGroup {
             RootTabs()
                 .environment(appState)
-                .tint(QuenyaTheme.ink)
+                .tint(QuenyaTheme.webText)
                 .task { await appState.launch() }
                 .onOpenURL { url in
                     guard ["quenya", "https"].contains(url.scheme?.lowercased() ?? "") else { return }

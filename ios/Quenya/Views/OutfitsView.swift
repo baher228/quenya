@@ -198,9 +198,13 @@ struct OutfitsView: View {
                     Text(item.brand ?? item.tags?.category ?? "Piece")
                         .font(.system(size: 11, weight: .semibold))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                         .minimumScaleFactor(0.75)
                     Spacer(minLength: 6)
-                    Text(gbp(item.priceGbp)).font(.system(size: 11))
+                    Text(gbp(item.priceGbp))
+                        .font(.system(size: 11))
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
                 .foregroundStyle(QuenyaTheme.cream)
                 .padding(.horizontal, 9)
@@ -242,8 +246,14 @@ struct OutfitsView: View {
             Button { selectedItem = item } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(item.brand.map { "\($0) · " } ?? "")\(item.title)")
-                        .font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(gbp(item.priceGbp)).font(.system(size: 11)).foregroundStyle(QuenyaTheme.webMuted)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(gbp(item.priceGbp))
+                        .font(.system(size: 11))
+                        .foregroundStyle(QuenyaTheme.webMuted)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
                 .foregroundStyle(QuenyaTheme.webText)
                 .frame(maxWidth: .infinity, alignment: .leading)

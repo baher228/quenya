@@ -240,17 +240,25 @@ private struct SwipeCard: View {
                         Text(item.brand ?? "Unbranded")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(QuenyaTheme.sage)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer()
                         Text(gbp(item.priceGbp))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(QuenyaTheme.webText)
+                            .fixedSize()
+                            .layoutPriority(1)
+                            .frame(alignment: .trailing)
                     }
                     Text(item.title)
                         .font(.system(size: 19, weight: .semibold))
                         .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .multilineTextAlignment(.leading)
                     Text(provenance)
                         .font(.system(size: 11))
                         .foregroundStyle(QuenyaTheme.webSoft)
+                        .lineLimit(1)
                     if let tags = item.tags {
                         let labels = ([tags.category] + Array(tags.aesthetics.prefix(2)) + (tags.era == "unknown" ? [] : [tags.era])).filter { !$0.isEmpty }
                         HStack(spacing: 6) {
@@ -264,9 +272,20 @@ private struct SwipeCard: View {
                                     .background(QuenyaTheme.webText.opacity(0.12), in: Capsule())
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .clipped()
+                        .mask(LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0.85),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ))
                     }
                 }
                 .foregroundStyle(QuenyaTheme.webText)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 VStack {
                     HStack {

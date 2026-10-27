@@ -227,6 +227,11 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(client.resolve("not-a-url"))
     }
 
+    func testGBPUsesUKGroupingAndKeepsDecimalPrecision() {
+        XCTAssertEqual(gbp(1250), "£1,250")
+        XCTAssertEqual(gbp(39.5), "£39.50")
+    }
+
     func testInviteLinkParsing() {
         XCTAssertEqual(InviteLink.token(from: "https://app.quenya.co.uk/?invite=abc"), "abc")
         XCTAssertEqual(InviteLink.token(from: "quenya://invite?token=def"), "def")

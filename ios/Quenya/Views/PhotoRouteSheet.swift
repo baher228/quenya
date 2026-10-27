@@ -40,7 +40,7 @@ struct PhotoRouteSheet: View {
             }
             .padding(22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(QuenyaTheme.cream)
+            .background(QuenyaTheme.webPhone)
             .navigationTitle("Inspiration photo")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -55,7 +55,7 @@ struct PhotoRouteSheet: View {
                 Image(systemName: "arrow.right").foregroundStyle(QuenyaTheme.rust)
             }
             .padding(13)
-            .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+            .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 13))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -10,7 +10,7 @@ struct BoardStrip: View {
                     ChoicePill(
                         title: "+ New",
                         selected: state.briefMode == .new && state.selectedTab == .brief,
-                        dark: state.selectedTab == .outfits,
+                        dark: true,
                         outlined: state.selectedTab == .outfits
                     ) {
                         state.startNewStyle()
@@ -20,7 +20,7 @@ struct BoardStrip: View {
                     ChoicePill(
                         title: board.label + (board.version.map { " v\($0)" } ?? ""),
                         selected: board.active && !(state.briefMode == .new && state.selectedTab == .brief),
-                        dark: state.selectedTab == .outfits
+                        dark: true
                     ) {
                         Task {
                             if await state.activate(board) {
@@ -34,6 +34,6 @@ struct BoardStrip: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
         }
-        .background(state.selectedTab == .outfits ? QuenyaTheme.webPhone : QuenyaTheme.cream)
+        .background(QuenyaTheme.webPhone)
     }
 }

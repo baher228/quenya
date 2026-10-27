@@ -10,9 +10,13 @@ struct DebugSettingsView: View {
             Form {
                 Section("API base URL") {
                     TextField("https://app.quenya.co.uk", text: $value)
+                        .font(.system(size: 16))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                        .foregroundStyle(QuenyaTheme.webText)
+                        .tint(QuenyaTheme.sage)
+                        .listRowBackground(QuenyaTheme.webSurface)
                     Text("Current: \(state.currentBaseURLText())")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(QuenyaTheme.muted)
@@ -29,9 +33,11 @@ struct DebugSettingsView: View {
                         dismiss()
                     }
                 }
+                .listRowBackground(QuenyaTheme.webSurface)
             }
             .scrollContentBackground(.hidden)
-            .background(QuenyaTheme.cream)
+            .background(QuenyaTheme.webPhone)
+            .foregroundStyle(QuenyaTheme.webText)
             .navigationTitle("Debug settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
