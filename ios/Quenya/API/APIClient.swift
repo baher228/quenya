@@ -137,7 +137,6 @@ final class APIClient {
         return try decoder.decode([Item].self, from: data)
     }
 
-    func reset() async throws { _ = try await postEmptyData("/api/reset") }
     func checkout(outfitId: String) async throws -> Checkout {
         try await post("/api/checkout", body: CheckoutBody(outfitId: outfitId))
     }
@@ -177,10 +176,6 @@ final class APIClient {
 
     private func postData<Body: Encodable>(_ path: String, body: Body) async throws -> Data {
         try await send(try makeRequest(path: path, method: "POST", body: body), as: Data.self)
-    }
-
-    private func postEmptyData(_ path: String) async throws -> Data {
-        try await send(try makeRequest(path: path, method: "POST"), as: Data.self)
     }
 
     private func request(path: String, method: String) async throws -> Data {

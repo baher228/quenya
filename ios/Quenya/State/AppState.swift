@@ -358,6 +358,8 @@ final class AppState {
             )
             var updated = result.outfit
             if updated.pieces.isEmpty { updated.pieces = outfit.pieces }
+            updated.verdict = like ? "like" : "reject"
+            if !like { updated.reason = reason }
             replace(outfit, with: updated)
             announce(result.taste)
         } catch {

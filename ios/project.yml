@@ -6,7 +6,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_ALLOWED: YES
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     QUENYA_API_BASE_URL: https://quenya-rho.vercel.app
 targets:

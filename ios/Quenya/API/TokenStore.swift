@@ -1,5 +1,13 @@
 import Foundation
 import Security
+#if DEBUG
+import os
+
+private let keychainLogger = Logger(
+    subsystem: "uk.ardivia.quenya",
+    category: "KeychainTokenStore"
+)
+#endif
 
 protocol TokenStore {
     func token() -> String?
@@ -10,9 +18,6 @@ protocol TokenStore {
 final class KeychainTokenStore: TokenStore {
     private let service = "uk.ardivia.quenya"
     private let account = "session"
-    #if targetEnvironment(simulator)
-    private let simulatorFallbackKey = "uk.ardivia.quenya.session"
-    #endif
 
     func token() -> String? {
         let query: [String: Any] = [
@@ -23,16 +28,13 @@ final class KeychainTokenStore: TokenStore {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
-        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-           let data = result as? Data,
-           let token = String(data: data, encoding: .utf8) {
-            return token
-        }
-        #if targetEnvironment(simulator)
-        return UserDefaults.standard.string(forKey: simulatorFallbackKey)
-        #else
-        return nil
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        #if DEBUG
+        keychainLogger.debug("SecItemCopyMatching OSStatus: \(status, privacy: .public)")
         #endif
+        guard status == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     func save(_ token: String) {
@@ -43,9 +45,9 @@ final class KeychainTokenStore: TokenStore {
             kSecAttrAccount as String: account,
             kSecValueData as String: Data(token.utf8)
         ]
-        SecItemAdd(query as CFDictionary, nil)
-        #if targetEnvironment(simulator)
-        UserDefaults.standard.set(token, forKey: simulatorFallbackKey)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        #if DEBUG
+        keychainLogger.debug("SecItemAdd OSStatus: \(status, privacy: .public)")
         #endif
     }
 
@@ -56,9 +58,6 @@ final class KeychainTokenStore: TokenStore {
             kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
-        #if targetEnvironment(simulator)
-        UserDefaults.standard.removeObject(forKey: simulatorFallbackKey)
-        #endif
     }
 }
 
