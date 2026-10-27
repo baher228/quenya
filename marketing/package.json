@@ -10,8 +10,9 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@fontsource-variable/hanken-grotesk": "5.3.0",
-    "@fontsource-variable/newsreader": "5.3.0",
+    "@fontsource-variable/archivo": "5.3.0",
+    "@fontsource-variable/bodoni-moda": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
