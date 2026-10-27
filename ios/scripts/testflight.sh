@@ -21,7 +21,6 @@ xcodebuild archive \
   -archivePath build/Quenya.xcarchive \
   DEVELOPMENT_TEAM=CJ74KDAF7R \
   CODE_SIGN_STYLE=Automatic \
-  CODE_SIGN_IDENTITY="Apple Distribution" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   -allowProvisioningUpdates \
   -authenticationKeyPath "$ASC_KEY_PATH" \
