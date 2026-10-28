@@ -145,6 +145,18 @@ def _user_profile() -> dict[str, Any]:
     return profile
 
 
+def _board_profile(board_id: str | None) -> dict[str, Any]:
+    if board_id is None:
+        return _user_profile()
+    owner_id = _owner_id()
+    profile = db.get_profile(board_id, kind="user")
+    if profile and owner_id is not None and profile.get("owner_id") != owner_id:
+        profile = None
+    if not profile:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return profile
+
+
 def _ensure_can_create_style(user: dict[str, Any] | None = None) -> None:
     user = user or context_user()
     if user and user.get("role") == "tester" and db.profile_boards("user", user["id"]):
@@ -1176,7 +1188,7 @@ def taste_history() -> dict[str, Any]:
 
 @router.post("/api/outfits")
 def outfits(body: OutfitRequest) -> dict[str, Any]:
-    active = _user_profile()
+    active = _board_profile(body.board_id)
     current = db.latest_taste(active["id"])
     profile = current["profile"]
     items = db.live_catalogue()
@@ -1317,7 +1329,7 @@ def _interleave_base_candidates(
 
 @router.post("/api/outfits/{outfit_id}/swap")
 def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
-    active = _user_profile()
+    active = _board_profile(body.board_id)
     outfit = db.get_outfit(outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
@@ -1391,7 +1403,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
 
 @router.post("/api/outfits/{outfit_id}/verdict")
 def verdict(outfit_id: str, body: VerdictRequest) -> dict[str, Any]:
-    active = _user_profile()
+    active = _board_profile(body.board_id)
     outfit = db.get_outfit(outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
@@ -1418,7 +1430,7 @@ def verdict(outfit_id: str, body: VerdictRequest) -> dict[str, Any]:
 
 @router.post("/api/checkout")
 def checkout(body: CheckoutRequest) -> dict[str, Any]:
-    active = _user_profile()
+    active = _board_profile(body.board_id)
     outfit = db.get_outfit(body.outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")

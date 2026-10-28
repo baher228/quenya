@@ -109,20 +109,24 @@ class OutfitRequest(StrictModel):
     count: int = Field(default=3, ge=1, le=5)
     locked_ids: list[str] = Field(default_factory=list)
     exclude_ids: list[str] = Field(default_factory=list)
+    board_id: str | None = Field(default=None, min_length=1)
 
 
 class SwapRequest(StrictModel):
     item_id: str = Field(min_length=1)
     exclude_ids: list[str] = Field(default_factory=list, max_length=300)
+    board_id: str | None = Field(default=None, min_length=1)
 
 
 class VerdictRequest(StrictModel):
     verdict: Literal["like", "reject"]
     reason: str | None = Field(default=None, max_length=1000)
+    board_id: str | None = Field(default=None, min_length=1)
 
 
 class CheckoutRequest(StrictModel):
     outfit_id: str = Field(min_length=1)
+    board_id: str | None = Field(default=None, min_length=1)
 
 
 class LiveSearchRequest(StrictModel):

@@ -2,11 +2,20 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app import db, phase2_api, taste, warmup
 from app.outfits import validate_outfits
 from app.rank import rank_items
-from app.schemas import CheckoutRequest, Outfit, OutfitRequest, StylistOutput, TasteProfile
+from app.schemas import (
+    CheckoutRequest,
+    Outfit,
+    OutfitRequest,
+    StylistOutput,
+    SwapRequest,
+    TasteProfile,
+    VerdictRequest,
+)
 
 
 def _brief(**overrides):
@@ -574,16 +583,251 @@ def test_checkout_is_explicitly_simulated(monkeypatch):
         "active_profile",
         lambda _kind: {"id": "profile-1", "brief": _brief()},
     )
+    monkeypatch.setattr(
+        phase2_api.db,
+        "get_profile",
+        lambda profile_id, kind=None: {
+            "id": "profile-1",
+            "owner_id": "owner-1",
+            "brief": _brief(),
+        } if profile_id == "profile-1" and kind == "user" else None,
+    )
     monkeypatch.setattr(phase2_api.db, "get_outfit", lambda _outfit_id: outfit)
     monkeypatch.setattr(phase2_api.db, "get_item", lambda item_id: items[item_id])
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
 
-    result = phase2_api.checkout(CheckoutRequest(outfit_id="outfit-1"))
+    result = phase2_api.checkout(
+        CheckoutRequest(outfit_id="outfit-1", board_id="profile-1")
+    )
 
     assert result["simulated"] is True
     assert result["total_gbp"] == 42.5
     assert result["outfit_id"] == "outfit-1"
     assert len(result["lines"]) == 2
     assert result["order_ref"].startswith("DEMO-")
+
+
+def test_outfits_board_id_uses_owned_non_active_profile(monkeypatch):
+    board = {"id": "board-b", "owner_id": "owner-1", "brief": _brief()}
+    taste_profile = _taste_profile()
+    pool = [_item("item-1", "top")]
+    saved_profile_ids = []
+    taste_profile_ids = []
+
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
+    monkeypatch.setattr(
+        db,
+        "get_profile",
+        lambda profile_id, kind=None: board
+        if profile_id == "board-b" and kind == "user"
+        else None,
+    )
+    monkeypatch.setattr(
+        db,
+        "active_profile",
+        lambda _kind: {"id": "board-a", "brief": _brief()},
+    )
+    monkeypatch.setattr(
+        db,
+        "latest_taste",
+        lambda profile_id: (
+            taste_profile_ids.append(profile_id)
+            or {"version": 1, "profile": taste_profile}
+        ),
+    )
+    monkeypatch.setattr(db, "live_catalogue", lambda: pool)
+    monkeypatch.setattr(db, "swipe_history", lambda _profile_id: {})
+    monkeypatch.setattr(
+        phase2_api,
+        "build_pool",
+        lambda *_args, **_kwargs: pool,
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "stylist_user_content",
+        lambda *_args, **_kwargs: "prompt",
+    )
+    monkeypatch.setattr(phase2_api, "_core", lambda: {})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(
+        phase2_api,
+        "call_task",
+        lambda *_args: (StylistOutput(outfits=[]), SimpleNamespace(request_id="req-1")),
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "validate_outfits",
+        lambda *_args, **_kwargs: (
+            [
+                {
+                    "title": "Workwear",
+                    "mood": "Relaxed",
+                    "why": "Balanced pieces.",
+                    "piece_ids": [],
+                    "total_gbp": 30,
+                }
+            ],
+            [],
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "order_outfit_pieces", lambda pieces: pieces)
+    monkeypatch.setattr(
+        db,
+        "save_outfit",
+        lambda profile_id, *_args, **_kwargs: (
+            saved_profile_ids.append(profile_id) or "outfit-b"
+        ),
+    )
+
+    result = phase2_api.outfits(OutfitRequest(count=1, board_id="board-b"))
+
+    assert result["outfits"][0]["id"] == "outfit-b"
+    assert saved_profile_ids == ["board-b"]
+    assert taste_profile_ids == ["board-b"]
+    assert db.active_profile("user")["id"] == "board-a"
+
+
+def test_foreign_board_id_is_not_found_for_outfit_mutations(monkeypatch):
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
+    monkeypatch.setattr(
+        db,
+        "get_profile",
+        lambda profile_id, kind=None: {
+            "id": profile_id,
+            "owner_id": "owner-2",
+            "brief": _brief(),
+        }
+        if profile_id == "foreign" and kind == "user"
+        else None,
+    )
+    monkeypatch.setattr(
+        db,
+        "get_outfit",
+        lambda _outfit_id: pytest.fail("outfit lookup must follow board ownership"),
+    )
+
+    requests = (
+        lambda: phase2_api.outfits(OutfitRequest(board_id="foreign")),
+        lambda: phase2_api.swap(
+            "outfit-1", SwapRequest(item_id="item-1", board_id="foreign")
+        ),
+        lambda: phase2_api.verdict(
+            "outfit-1", VerdictRequest(verdict="like", board_id="foreign")
+        ),
+    )
+    for request in requests:
+        with pytest.raises(HTTPException) as exc:
+            request()
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Board not found"
+
+
+def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
+    board = {"id": "board-b", "owner_id": "owner-1", "brief": _brief()}
+    outfit = {
+        "id": "outfit-b",
+        "profile_id": "board-b",
+        "piece_ids": ["old"],
+        "total_gbp": 30,
+    }
+    old = _item("old", "top")
+    replacement = _item("replacement", "top")
+    profile_ids = []
+
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
+    monkeypatch.setattr(
+        db,
+        "get_profile",
+        lambda profile_id, kind=None: board
+        if profile_id == "board-b" and kind == "user"
+        else None,
+    )
+    monkeypatch.setattr(
+        db,
+        "active_profile",
+        lambda _kind: {"id": "board-a", "brief": _brief()},
+    )
+    monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: outfit)
+    monkeypatch.setattr(db, "live_catalogue", lambda: [old, replacement])
+    monkeypatch.setattr(
+        db,
+        "get_item_with_tags",
+        lambda item_id: {"old": old, "replacement": replacement}.get(item_id),
+    )
+    monkeypatch.setattr(
+        db,
+        "update_outfit_pieces",
+        lambda _outfit_id, piece_ids, total: outfit.update(
+            piece_ids=piece_ids, total_gbp=total
+        ),
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "_taste",
+        lambda profile_id: (
+            profile_ids.append(profile_id) or _taste_profile()
+        ),
+    )
+    monkeypatch.setattr(phase2_api, "_core", lambda: {})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "rank_items", lambda *_args, **_kwargs: [replacement])
+    monkeypatch.setattr(phase2_api, "layer_role", lambda _item: "base")
+    monkeypatch.setattr(phase2_api, "base_layer_subtype", lambda _item: "other")
+    monkeypatch.setattr(phase2_api, "is_outfit_eligible", lambda _item: True)
+    monkeypatch.setattr(phase2_api, "outfit_errors", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(phase2_api, "order_outfit_pieces", lambda pieces: pieces)
+    monkeypatch.setattr(phase2_api, "_public_outfit", lambda value: value)
+
+    swapped = phase2_api.swap(
+        "outfit-b", SwapRequest(item_id="old", board_id="board-b")
+    )
+
+    assert swapped["piece_ids"] == ["replacement"]
+    assert profile_ids == ["board-b"]
+
+    verdict_outfit = {
+        "id": "outfit-b",
+        "profile_id": "board-b",
+        "piece_ids": ["replacement"],
+    }
+    monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: verdict_outfit)
+    monkeypatch.setattr(
+        db,
+        "update_outfit_verdict",
+        lambda _outfit_id, verdict, reason: verdict_outfit.update(
+            verdict=verdict, reason=reason
+        ),
+    )
+    monkeypatch.setattr(
+        phase2_api,
+        "update_taste",
+        lambda profile: (
+            profile_ids.append(profile["id"])
+            or (2, _taste_profile(), SimpleNamespace(request_id="taste-2"), None)
+        ),
+    )
+
+    result = phase2_api.verdict(
+        "outfit-b", VerdictRequest(verdict="like", board_id="board-b")
+    )
+
+    assert result["outfit"]["verdict"] == "like"
+    assert profile_ids == ["board-b", "board-b"]
+
+    for handler in (
+        lambda: phase2_api.swap(
+            "outfit-b", SwapRequest(item_id="replacement", board_id="board-b")
+        ),
+        lambda: phase2_api.verdict(
+            "outfit-b", VerdictRequest(verdict="like", board_id="board-b")
+        ),
+    ):
+        mismatch = dict(verdict_outfit, profile_id="board-a")
+        monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: mismatch)
+        with pytest.raises(HTTPException) as exc:
+            handler()
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Outfit not found"
 
 
 def test_warmup_persona_uses_stubbed_calls_and_warmup_profile_kind(
