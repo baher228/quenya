@@ -52,11 +52,9 @@ extension View {
     }
 
     func dismissKeyboardOnTap() -> some View {
-        background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { dismissKeyboard() }
-        }
+        simultaneousGesture(
+            TapGesture().onEnded { dismissKeyboard() }
+        )
     }
 
     func keyboardDoneToolbar() -> some View {
