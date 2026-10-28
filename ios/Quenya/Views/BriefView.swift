@@ -190,7 +190,7 @@ struct BriefView: View {
             .padding(20)
         }
         .background(QuenyaTheme.cream)
-        .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboard(.immediately)
         .dismissKeyboardOnTap()
         .keyboardDoneToolbar()
         .onAppear { draft = state.currentBrief.merged() }
