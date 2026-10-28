@@ -64,7 +64,8 @@ struct OutfitsView: View {
                 }
             }
             .quenyaPage()
-            .padding(18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 18)
             .padding(.bottom, 24)
         }
         .background(QuenyaTheme.webPhone)
@@ -97,21 +98,24 @@ struct OutfitsView: View {
             }
             if !major.isEmpty {
                 if state.busy.isBusy(rebuildKey(outfit)) {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                        ForEach(major.indices, id: \.self) { _ in
-                            SkeletonBlock(cornerRadius: 15)
-                                .aspectRatio(4.0 / 5.0, contentMode: .fit)
+                    piecesGrid(count: major.count) { _, wide in
+                        SkeletonBlock(cornerRadius: 16)
+                            .aspectRatio(wide ? 4.0 / 3.0 : 3.0 / 4.0, contentMode: .fit)
                         }
-                    }
+                    .padding(.horizontal, -12)
                     .skeletonPulse()
                     .accessibilityHidden(true)
                     SlowHint()
                 } else {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                        ForEach(major) { item in
-                            pieceCard(item, outfit: outfit, isLocked: keep.contains(item.id))
-                        }
+                    piecesGrid(count: major.count) { index, wide in
+                        pieceCard(
+                            major[index],
+                            outfit: outfit,
+                            isLocked: keep.contains(major[index].id),
+                            aspect: wide ? 4.0 / 3.0 : 3.0 / 4.0
+                        )
                     }
+                    .padding(.horizontal, -12)
                 }
             }
             if let message = state.busy.error(rebuildKey(outfit)) {
@@ -214,7 +218,7 @@ struct OutfitsView: View {
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.webLine, lineWidth: 1))
     }
 
-    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
+    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool, aspect: CGFloat) -> some View {
         let swapping = state.busy.isBusy(swapKey(outfit, item))
         return VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
@@ -241,10 +245,10 @@ struct OutfitsView: View {
                     .padding(7)
                 }
             }
-            .aspectRatio(4.0 / 5.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 15))
+            .aspectRatio(aspect, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay {
-                RoundedRectangle(cornerRadius: 15)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(isLocked ? QuenyaTheme.sage : .clear, lineWidth: 2)
                     .allowsHitTesting(false)
             }
@@ -262,6 +266,7 @@ struct OutfitsView: View {
                     .fixedSize()
                     .layoutPriority(1)
             }
+            .padding(.horizontal, 6)
         }
         .opacity(swapping ? 0.45 : 1)
         .skeletonPulse(enabled: swapping)
@@ -629,11 +634,6 @@ struct SafariTarget: Identifiable {
 }
 
 private struct OutfitSkeletonCard: View {
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             GeometryReader { geometry in
@@ -648,16 +648,15 @@ private struct OutfitSkeletonCard: View {
             }
             .frame(height: 34)
 
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(0..<4, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: 6) {
-                        SkeletonBlock(cornerRadius: 15)
-                            .aspectRatio(4.0 / 5.0, contentMode: .fit)
-                        SkeletonBlock(cornerRadius: 3)
-                            .frame(width: 72, height: 6)
-                    }
+            piecesGrid(count: 4) { _, wide in
+                VStack(alignment: .leading, spacing: 6) {
+                    SkeletonBlock(cornerRadius: 16)
+                        .aspectRatio(wide ? 4.0 / 3.0 : 3.0 / 4.0, contentMode: .fit)
+                    SkeletonBlock(cornerRadius: 3)
+                        .frame(width: 72, height: 6)
                 }
             }
+            .padding(.horizontal, -12)
         }
         .padding(15)
         .background(QuenyaTheme.webSurface, in: RoundedRectangle(cornerRadius: 22))
@@ -669,6 +668,35 @@ private struct OutfitSkeletonCard: View {
     private func block(width: CGFloat, height: CGFloat) -> some View {
         SkeletonBlock(cornerRadius: height / 2)
             .frame(width: width, height: height)
+    }
+}
+
+@ViewBuilder
+private func piecesGrid<Content: View>(
+    count: Int,
+    @ViewBuilder tile: @escaping (Int, Bool) -> Content
+) -> some View {
+    let columns = [
+        GridItem(.flexible(), spacing: 3),
+        GridItem(.flexible(), spacing: 3)
+    ]
+    if count > 0 && count.isMultiple(of: 2) == false {
+        VStack(spacing: 8) {
+            tile(0, true)
+            if count > 1 {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(1..<count, id: \.self) { index in
+                        tile(index, false)
+                    }
+                }
+            }
+        }
+    } else {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(0..<count, id: \.self) { index in
+                tile(index, false)
+            }
+        }
     }
 }
 
