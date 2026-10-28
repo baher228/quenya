@@ -80,14 +80,36 @@ final class APIClient {
     func updateTaste() async throws -> TasteVersion { try await postEmpty("/api/taste/update") }
     func taste() async throws -> TasteState { try await get("/api/taste") }
 
-    func outfits(count: Int, lockedIds: [String] = [], excludeIds: [String] = []) async throws -> OutfitsResponse {
-        try await post("/api/outfits", body: OutfitRequestBody(count: count, lockedIds: lockedIds, excludeIds: excludeIds))
+    func outfits(
+        count: Int,
+        lockedIds: [String] = [],
+        excludeIds: [String] = [],
+        boardId: String? = nil
+    ) async throws -> OutfitsResponse {
+        try await post(
+            "/api/outfits",
+            body: OutfitRequestBody(
+                count: count,
+                lockedIds: lockedIds,
+                excludeIds: excludeIds,
+                boardId: boardId
+            )
+        )
     }
 
-    func swap(outfitId: String, itemId: String, excludeIds: [String] = []) async throws -> Outfit {
+    func swap(
+        outfitId: String,
+        itemId: String,
+        excludeIds: [String] = [],
+        boardId: String? = nil
+    ) async throws -> Outfit {
         let data = try await postData(
             "/api/outfits/\(escaped(outfitId))/swap",
-            body: SwapBody(itemId: itemId, excludeIds: Array(excludeIds.suffix(300)))
+            body: SwapBody(
+                itemId: itemId,
+                excludeIds: Array(excludeIds.suffix(300)),
+                boardId: boardId
+            )
         )
         if let wrapped = try? decoder.decode(OutfitEnvelope.self, from: data) {
             return wrapped.outfit
@@ -95,10 +117,15 @@ final class APIClient {
         return try decoder.decode(Outfit.self, from: data)
     }
 
-    func verdict(outfitId: String, verdict: String, reason: String? = nil) async throws -> VerdictResult {
+    func verdict(
+        outfitId: String,
+        verdict: String,
+        reason: String? = nil,
+        boardId: String? = nil
+    ) async throws -> VerdictResult {
         try await post(
             "/api/outfits/\(escaped(outfitId))/verdict",
-            body: VerdictBody(verdict: verdict, reason: reason)
+            body: VerdictBody(verdict: verdict, reason: reason, boardId: boardId)
         )
     }
 
@@ -145,8 +172,8 @@ final class APIClient {
         return try decoder.decode([Item].self, from: data)
     }
 
-    func checkout(outfitId: String) async throws -> Checkout {
-        try await post("/api/checkout", body: CheckoutBody(outfitId: outfitId))
+    func checkout(outfitId: String, boardId: String? = nil) async throws -> Checkout {
+        try await post("/api/checkout", body: CheckoutBody(outfitId: outfitId, boardId: boardId))
     }
     func stats() async throws -> [TaskStats] { try await get("/api/model/stats") }
     func core() async throws -> CoreProfile { try await get("/api/core") }
@@ -298,12 +325,17 @@ private struct InviteBody: Encodable { var token: String }
 private struct CreateProfileBody: Encodable { var brief: Brief; var newBoard: Bool }
 private struct BriefBody: Encodable { var brief: Brief }
 private struct SwipeBody: Encodable { var itemId: String; var liked: Bool }
-private struct OutfitRequestBody: Encodable { var count: Int; var lockedIds: [String]; var excludeIds: [String] }
-private struct SwapBody: Encodable { var itemId: String; var excludeIds: [String] }
-private struct VerdictBody: Encodable { var verdict: String; var reason: String? }
+private struct OutfitRequestBody: Encodable {
+    var count: Int
+    var lockedIds: [String]
+    var excludeIds: [String]
+    var boardId: String?
+}
+private struct SwapBody: Encodable { var itemId: String; var excludeIds: [String]; var boardId: String? }
+private struct VerdictBody: Encodable { var verdict: String; var reason: String?; var boardId: String? }
 private struct NoteBody: Encodable { var note: String }
 private struct SearchBody: Encodable { var q: String }
-private struct CheckoutBody: Encodable { var outfitId: String }
+private struct CheckoutBody: Encodable { var outfitId: String; var boardId: String? }
 private struct RenameBody: Encodable { var label: String }
 
 private struct AssignUploadBody: Encodable {

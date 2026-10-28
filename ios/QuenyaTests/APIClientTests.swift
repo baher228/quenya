@@ -105,14 +105,14 @@ final class APIClientTests: XCTestCase {
         ],"total_gbp":25.0}
         """)
 
-        let result = try await client.checkout(outfitId: "outfit-1")
+        let result = try await client.checkout(outfitId: "outfit-1", boardId: "board-a")
         let request = StubURLProtocol.lastRequest
         XCTAssertEqual(request?.url?.path, "/api/checkout")
         XCTAssertEqual(request?.httpMethod, "POST")
         XCTAssertEqual(request?.value(forHTTPHeaderField: "Authorization"), "Bearer test-token")
         let body = try XCTUnwrap(StubURLProtocol.lastBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
-        XCTAssertEqual(json, ["outfit_id": "outfit-1"])
+        XCTAssertEqual(json, ["outfit_id": "outfit-1", "board_id": "board-a"])
         XCTAssertEqual(result.orderRef, "order-1")
         XCTAssertEqual(result.lines.first?.sourceUrl, "https://example.test/jacket")
     }

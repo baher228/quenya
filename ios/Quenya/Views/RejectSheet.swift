@@ -3,6 +3,7 @@ import SwiftUI
 struct RejectSheet: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
+    let boardId: String
     @State private var ownReason = ""
     @State private var pendingReason = ""
     @FocusState private var reasonFocused: Bool
@@ -88,6 +89,6 @@ struct RejectSheet: View {
 
     private func submit(_ reason: String) async {
         guard !reason.isEmpty else { return }
-        if await state.verdict(outfit, like: false, reason: reason) { dismiss() }
+        if await state.verdict(outfit, like: false, reason: reason, styleId: boardId) { dismiss() }
     }
 }

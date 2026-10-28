@@ -58,8 +58,8 @@ struct RootTabs: View {
             switch sheet {
             case .item(let item):
                 ItemDetailSheet(item: item)
-            case .reject(let outfit):
-                RejectSheet(outfit: outfit)
+            case .reject(let outfit, let boardId):
+                RejectSheet(boardId: boardId, outfit: outfit)
             case .photo(let upload):
                 PhotoRouteSheet(upload: upload)
             }

@@ -44,13 +44,13 @@ private struct VerdictAttempt {
 
 enum PresentedSheet: Identifiable {
     case item(Item)
-    case reject(Outfit)
+    case reject(Outfit, boardId: String)
     case photo(UploadResult)
 
     var id: String {
         switch self {
         case .item(let item): "item-\(item.id)"
-        case .reject(let outfit): "reject-\(outfit.id)"
+        case .reject(let outfit, _): "reject-\(outfit.id)"
         case .photo(let upload): "photo-\(upload.uploadId)"
         }
     }
@@ -640,7 +640,7 @@ final class AppState {
         }
         let completed = await busy.run("outfits.build") {
             try await self.runOutfitGeneration(styleId: styleId, busyKey: "outfits.build") { generation in
-                let result = try await self.api.outfits(count: 3).outfits
+                let result = try await self.api.outfits(count: 3, boardId: styleId).outfits
                 guard !Task.isCancelled,
                       self.outfitBuildID == requestID,
                       self.isCurrentOutfitGeneration(styleId: styleId, generation: generation) else { return }
@@ -681,7 +681,8 @@ final class AppState {
             let next = try await self.api.swap(
                 outfitId: outfit.id,
                 itemId: item.id,
-                excludeIds: Array((current.swapSeen[outfit.id] ?? []).suffix(300))
+                excludeIds: Array((current.swapSeen[outfit.id] ?? []).suffix(300)),
+                boardId: styleId
             )
             self.cache.update(styleId) { snapshot in
                 var locks = snapshot.locked[outfit.id] ?? []
@@ -706,7 +707,12 @@ final class AppState {
             let otherPieces = snapshot.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
             let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
             try await self.runOutfitGeneration(styleId: styleId, busyKey: key) { generation in
-                let response = try await self.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
+                let response = try await self.api.outfits(
+                    count: 1,
+                    lockedIds: keep,
+                    excludeIds: excluded,
+                    boardId: styleId
+                )
                 guard let next = response.outfits.first else {
                     throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
                 }
@@ -739,7 +745,8 @@ final class AppState {
             let result = try await self.api.verdict(
                 outfitId: outfit.id,
                 verdict: like ? "like" : "reject",
-                reason: reason
+                reason: reason,
+                boardId: styleId
             )
             var updated = result.outfit
             if updated.pieces.isEmpty { updated.pieces = outfit.pieces }

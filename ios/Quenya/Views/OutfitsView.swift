@@ -4,7 +4,7 @@ struct OutfitsView: View {
     @Environment(AppState.self) private var state
     @State private var selectedItem: Item?
     @State private var safari: SafariTarget?
-    @State private var checkoutOutfit: Outfit?
+    @State private var checkoutSelection: CheckoutSelection?
     @State private var tapCount = 0
 
     private let minorSlots: Set<String> = ["shoes", "bag", "accessory"]
@@ -69,8 +69,8 @@ struct OutfitsView: View {
         }
         .background(QuenyaTheme.webPhone)
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
-        .sheet(item: $checkoutOutfit) { outfit in
-            CheckoutSheetView(outfit: outfit)
+        .sheet(item: $checkoutSelection) { selection in
+            CheckoutSheetView(outfit: selection.outfit, boardId: selection.boardId)
         }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }
@@ -163,7 +163,8 @@ struct OutfitsView: View {
                     verdictLabel("Not for me · \(outfit.reason ?? "Rejected")", color: QuenyaTheme.webMuted)
                 } else {
                     compactButton("Not for me", disabled: outfitActionBusy(outfit)) {
-                        state.presentedSheet = .reject(outfit)
+                        guard let boardId = state.activeBoard?.id else { return }
+                        state.presentedSheet = .reject(outfit, boardId: boardId)
                     }
                 }
                 compactButton(
@@ -178,12 +179,14 @@ struct OutfitsView: View {
                     verdictLabel("Saved", color: QuenyaTheme.webText, outlined: true)
                 } else {
                     compactButton("Love it", primary: true, disabled: outfitActionBusy(outfit), busy: state.busy.isBusy("verdict.\(outfit.id)")) {
-                        Task { await state.verdict(outfit, like: true) }
+                        guard let styleId = state.activeBoard?.id else { return }
+                        Task { await state.verdict(outfit, like: true, styleId: styleId) }
                     }
                 }
             }
             Button {
-                checkoutOutfit = outfit
+                guard let boardId = state.activeBoard?.id else { return }
+                checkoutSelection = CheckoutSelection(outfit: outfit, boardId: boardId)
             } label: {
                 Text("Buy the bundle · \(gbp(outfit.totalGbp))")
                     .font(.system(size: 13, weight: .medium))
@@ -424,7 +427,7 @@ struct OutfitsView: View {
     }
 
     private func rejectSheetIsPresented(for outfit: Outfit) -> Bool {
-        guard case let .some(.reject(rejectedOutfit)) = state.presentedSheet else { return false }
+        guard case let .some(.reject(rejectedOutfit, boardId: _)) = state.presentedSheet else { return false }
         return rejectedOutfit.id == outfit.id
     }
 
@@ -447,6 +450,7 @@ private struct CheckoutSheetView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     let outfit: Outfit
+    let boardId: String
     @State private var result: Checkout?
     @State private var error: String?
     @State private var loading = false
@@ -531,7 +535,7 @@ private struct CheckoutSheetView: View {
         error = nil
         defer { loading = false }
         do {
-            let response = try await state.api.checkout(outfitId: outfit.id)
+            let response = try await state.api.checkout(outfitId: outfit.id, boardId: boardId)
             guard !Task.isCancelled else { return }
             result = response
         } catch is CancellationError {
@@ -541,6 +545,13 @@ private struct CheckoutSheetView: View {
             self.error = error.localizedDescription
         }
     }
+}
+
+private struct CheckoutSelection: Identifiable {
+    let outfit: Outfit
+    let boardId: String
+
+    var id: String { outfit.id }
 }
 
 private struct CheckoutSkeletonRow: View {
