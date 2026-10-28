@@ -20,7 +20,7 @@ Sold or out-of-stock products are hidden from decks, outfits and Find. They're k
 
 ## AI providers and product tagging
 
-All model tasks use Cursor's `cursor-agent` CLI by default. Set `QUENYA_LLM_PROVIDER=openai` to use an OpenAI-compatible API instead; its base URL defaults to `https://api.openai.com/v1`. Cursor uses `QUENYA_CURSOR_MODEL` for every task, while OpenAI mode uses the per-task model constants in `backend/app/prompts.py`.
+All model tasks use Cursor's `cursor-agent` CLI by default. Set `QUENYA_LLM_PROVIDER=openai` to use an OpenAI-compatible API instead; its base URL defaults to `https://api.openai.com/v1`. Cursor uses `QUENYA_CURSOR_MODEL` for every task and `QUENYA_CURSOR_FALLBACK_MODEL` for transient retries (default `composer-2.5-fast`; empty disables fallback), while OpenAI mode uses the per-task model constants in `backend/app/prompts.py`.
 
 | Task | What it does |
 |---|---|
@@ -94,6 +94,7 @@ cd backend
 | `QUENYA_LLM_PROVIDER` | `cursor` (default) or `openai` |
 | `CURSOR_API_KEY` | Cursor CLI key; required for Cursor on a real server |
 | `QUENYA_CURSOR_MODEL` | Cursor model for all tasks; default `gemini-3.7-flash-high` |
+| `QUENYA_CURSOR_FALLBACK_MODEL` | Cursor model for transient retries; default `composer-2.5-fast`; empty disables fallback |
 | `QUENYA_CURSOR_BIN` | Optional path to `cursor-agent`; otherwise resolved from `PATH` or `~/.local/bin` |
 | `QUENYA_CURSOR_TIMEOUT_S` | Cursor subprocess timeout; default 120 seconds |
 | `QUENYA_LLM_API_KEY` | API key for the OpenAI-compatible fallback |

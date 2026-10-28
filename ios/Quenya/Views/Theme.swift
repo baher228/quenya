@@ -266,16 +266,33 @@ struct ErrorPanel: View {
     let message: String
     var requestIds: [String] = []
     var retry: (() -> Void)? = nil
+    var dismiss: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(message).font(.system(size: 14)).foregroundStyle(QuenyaTheme.webText)
-            if !requestIds.isEmpty {
-                Text("AI request \(requestIds.joined(separator: ", "))")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(QuenyaTheme.muted)
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(message).font(.system(size: 14)).foregroundStyle(QuenyaTheme.webText)
+                if !requestIds.isEmpty {
+                    Text("AI request \(requestIds.joined(separator: ", "))")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(QuenyaTheme.muted)
+                }
+                if let retry { PillButton(title: "Try again", action: retry) }
             }
-            if let retry { PillButton(title: "Try again", action: retry) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let dismiss {
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(QuenyaTheme.muted)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Dismiss")
+                .buttonStyle(.plain)
+                .padding(.top, -12)
+                .padding(.trailing, -12)
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -29,6 +29,31 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/api/profile")
     }
 
+    func testTasteUpdateErrorIsFriendlyAndDismissible() async throws {
+        let (state, session) = makeState()
+        defer { session.invalidateAndCancel() }
+        let rawDetail = "cursor-agent returned invalid outer JSON"
+        StubURLProtocol.setResponse(
+            status: 502,
+            json: #"{"detail":"cursor-agent returned invalid outer JSON"}"#
+        )
+
+        await state.runUpdate()
+
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/api/taste/update")
+        let displayedError = try XCTUnwrap(state.tasteUpdateError)
+        XCTAssertEqual(
+            displayedError,
+            "Couldn't update your taste just now. Your swipes are saved, so try again in a minute."
+        )
+        XCTAssertFalse(displayedError.contains("cursor-agent"))
+        XCTAssertEqual(state.busy.error("taste.update"), rawDetail)
+
+        state.dismissTasteUpdateError()
+
+        XCTAssertNil(state.tasteUpdateError)
+    }
+
     func testFailedVerdictClearsBusyAndExposesInlineError() async {
         let store = InMemoryTokenStore("test-token")
         let configuration = URLSessionConfiguration.ephemeral

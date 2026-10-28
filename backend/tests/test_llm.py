@@ -379,3 +379,123 @@ def test_daily_cap_stops_before_cursor_executable(monkeypatch, tmp_path):
         llm.call_task("tagger", "system", "model", "listing", ItemTags)
 
     assert not count_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("task_name", "primary_model"),
+    (("tagger", "gemini-primary"), ("stylist", "stylist-primary")),
+)
+def test_cursor_transient_retry_uses_fallback_and_logs_attempts(
+    monkeypatch, tmp_path, task_name, primary_model
+):
+    configure_cursor(monkeypatch, tmp_path, [])
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_MODEL", primary_model)
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_STYLIST_MODEL", primary_model)
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_FALLBACK_MODEL", "composer-2.5-fast")
+    attempts = []
+
+    def cursor_once(_system, model, _content, _out_model, _repair_error):
+        attempts.append(model)
+        meta = llm.CallMeta(
+            f"cursor-{len(attempts)}", model, 10, None, None
+        )
+        if len(attempts) == 1:
+            raise llm._CursorFailure(
+                "Connection lost", meta=meta, retryable=True
+            )
+        return ItemTags.model_validate(VALID_TAGS), meta
+
+    monkeypatch.setattr(llm, "_cursor_once", cursor_once)
+
+    parsed, _meta = llm._call_cursor_task(
+        task_name, "system", "listing", ItemTags, log_attempts=True
+    )
+
+    assert parsed.slot == "outerwear"
+    assert attempts == [primary_model, "composer-2.5-fast"]
+    with db.db_connection() as connection:
+        rows = connection.execute(
+            "SELECT model_requested, ok FROM llm_calls ORDER BY id"
+        ).fetchall()
+    assert [(row["model_requested"], row["ok"]) for row in rows] == [
+        (primary_model, 0),
+        ("composer-2.5-fast", 1),
+    ]
+
+
+def test_cursor_empty_fallback_retries_primary_model(monkeypatch, tmp_path):
+    configure_cursor(monkeypatch, tmp_path, [])
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_MODEL", "gemini-primary")
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_FALLBACK_MODEL", "")
+    attempts = []
+
+    def cursor_once(_system, model, _content, _out_model, _repair_error):
+        attempts.append(model)
+        meta = llm.CallMeta(f"cursor-{len(attempts)}", model, 10, None, None)
+        if len(attempts) == 1:
+            raise llm._CursorFailure(
+                "Connection lost", meta=meta, retryable=True
+            )
+        return ItemTags.model_validate(VALID_TAGS), meta
+
+    monkeypatch.setattr(llm, "_cursor_once", cursor_once)
+
+    parsed, _meta = llm._call_cursor_task(
+        "tagger", "system", "listing", ItemTags, log_attempts=False
+    )
+
+    assert parsed.slot == "outerwear"
+    assert attempts == ["gemini-primary", "gemini-primary"]
+
+
+def test_cursor_validation_retry_keeps_primary_model(monkeypatch, tmp_path):
+    configure_cursor(monkeypatch, tmp_path, [])
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_MODEL", "gemini-primary")
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_FALLBACK_MODEL", "composer-2.5-fast")
+    attempts = []
+
+    def cursor_once(_system, model, _content, _out_model, repair_error):
+        attempts.append((model, repair_error))
+        meta = llm.CallMeta(f"cursor-{len(attempts)}", model, 10, None, None)
+        if len(attempts) == 1:
+            raise llm._CursorFailure(
+                "ValidationError: invalid slot",
+                meta=meta,
+                validation_error=True,
+            )
+        return ItemTags.model_validate(VALID_TAGS), meta
+
+    monkeypatch.setattr(llm, "_cursor_once", cursor_once)
+
+    parsed, _meta = llm._call_cursor_task(
+        "tagger", "system", "listing", ItemTags, log_attempts=False
+    )
+
+    assert parsed.slot == "outerwear"
+    assert [model for model, _repair_error in attempts] == [
+        "gemini-primary",
+        "gemini-primary",
+    ]
+    assert attempts[0][1] is None
+    assert attempts[1][1] == "ValidationError: invalid slot"
+
+
+def test_cursor_nonretryable_failure_does_not_use_fallback(monkeypatch, tmp_path):
+    configure_cursor(monkeypatch, tmp_path, [])
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_MODEL", "gemini-primary")
+    monkeypatch.setattr(llm, "QUENYA_CURSOR_FALLBACK_MODEL", "composer-2.5-fast")
+    attempts = []
+
+    def cursor_once(_system, model, _content, _out_model, _repair_error):
+        attempts.append(model)
+        meta = llm.CallMeta("cursor-failure", model, 10, None, None)
+        raise llm._CursorFailure("Bad response", meta=meta)
+
+    monkeypatch.setattr(llm, "_cursor_once", cursor_once)
+
+    with pytest.raises(llm.TaskError, match="Bad response"):
+        llm._call_cursor_task(
+            "tagger", "system", "listing", ItemTags, log_attempts=False
+        )
+
+    assert attempts == ["gemini-primary"]

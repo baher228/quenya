@@ -30,7 +30,11 @@ struct TasteView: View {
                     }
                 }
                 if let error = state.tasteUpdateError {
-                    ErrorPanel(message: error) { Task { await state.runUpdate() } }
+                    ErrorPanel(
+                        message: error,
+                        retry: { Task { await state.runUpdate() } },
+                        dismiss: { state.dismissTasteUpdateError() }
+                    )
                 }
                 if loading { LoadingLabel(title: "Loading your profile") }
                 if state.taste == nil { LoadingLabel(title: "Loading your profile") }

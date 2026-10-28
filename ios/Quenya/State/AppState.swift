@@ -589,6 +589,8 @@ final class AppState {
         await buildOutfits()
     }
 
+    func dismissTasteUpdateError() { tasteUpdateError = nil }
+
     func runUpdate() async {
         guard !updating, !busy.isBusy("taste.update") else { return }
         updating = true
@@ -598,7 +600,9 @@ final class AppState {
             catch let error as APIError where error.status == 409 { }
             catch { throw error }
         }
-        if !completed { tasteUpdateError = busy.error("taste.update") }
+        if !completed {
+            tasteUpdateError = "Couldn't update your taste just now. Your swipes are saved, so try again in a minute."
+        }
         updating = false
     }
 

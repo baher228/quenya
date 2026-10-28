@@ -47,6 +47,9 @@ CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "")
 QUENYA_CURSOR_MODEL = os.getenv(
     "QUENYA_CURSOR_MODEL", "gemini-3.7-flash-high"
 )
+QUENYA_CURSOR_FALLBACK_MODEL = os.getenv(
+    "QUENYA_CURSOR_FALLBACK_MODEL", "composer-2.5-fast"
+)
 QUENYA_CURSOR_STYLIST_MODEL = os.getenv(
     "QUENYA_CURSOR_STYLIST_MODEL", "gpt-5.3-codex-low-fast"
 )
