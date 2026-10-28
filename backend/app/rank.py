@@ -1,6 +1,7 @@
 import json
 import random
 import re
+from functools import lru_cache
 from typing import Any
 
 from app.accessories import accessory_cap, is_accessory_slot
@@ -14,20 +15,40 @@ _KEY_PREFIX = re.compile(
 )
 
 
-def norm_token(value: Any) -> str:
-    token = _KEY_PREFIX.sub("", str(value).strip().lower(), count=1)
+@lru_cache(maxsize=65536)
+def _norm_token(value: str) -> str:
+    token = _KEY_PREFIX.sub("", value.strip().lower(), count=1)
     return " ".join(token.replace("_", " ").replace("-", " ").split())
+
+
+def norm_token(value: Any) -> str:
+    return _norm_token(str(value))
+
+
+@lru_cache(maxsize=4096)
+def _whole_word_pattern(value: str) -> re.Pattern:
+    return re.compile(r"\b" + re.escape(value) + r"\b")
+
+
+@lru_cache(maxsize=16384)
+def _whole_word_match_normalized(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    return bool(_whole_word_pattern(left).search(right) or _whole_word_pattern(right).search(left))
 
 
 def _whole_word_match(left: str, right: str) -> bool:
     left = norm_token(left)
     right = norm_token(right)
-    if not left or not right:
-        return False
-    return bool(
-        re.search(r"\b" + re.escape(left) + r"\b", right)
-        or re.search(r"\b" + re.escape(right) + r"\b", left)
-    )
+    if right < left:
+        left, right = right, left
+    return _whole_word_match_normalized(left, right)
+
+
+def _match_normalized_words(left: str, right: str) -> bool:
+    if right < left:
+        left, right = right, left
+    return _whole_word_match_normalized(left, right)
 
 
 def tags_for(item: dict[str, Any]) -> dict[str, Any]:
@@ -45,8 +66,7 @@ def tags_for(item: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def tokens(item: dict[str, Any]) -> set[str]:
-    tags = tags_for(item)
+def _tokens_from_tags(tags: dict[str, Any]) -> set[str]:
     values: list[Any] = []
     for key in ("aesthetics", "colours", "materials"):
         values.extend(tags.get(key) or [])
@@ -58,29 +78,92 @@ def tokens(item: dict[str, Any]) -> set[str]:
     }
 
 
-def score_item(item: dict[str, Any], profile: dict[str, Any]) -> float:
-    item_tokens = {norm_token(token) for token in tokens(item)}
-    likes = profile.get("likes") or {}
-    avoids = profile.get("avoids") or {}
+def tokens(item: dict[str, Any]) -> set[str]:
+    return _tokens_from_tags(tags_for(item))
 
-    def match_score(weights: dict[str, float]) -> float:
-        total = 0.0
-        for key, weight in weights.items():
-            token = norm_token(key)
-            if not token:
-                continue
-            if token in item_tokens:
-                total += float(weight)
-            elif any(_whole_word_match(token, value) for value in item_tokens):
-                total += 0.5 * float(weight)
-        return total
 
-    tags = tags_for(item)
-    score = match_score(likes) - 1.5 * match_score(avoids)
+def _normalized_weights(
+    weights: dict[str, float],
+) -> tuple[tuple[str, str, Any], ...]:
+    normalized = []
+    for key, weight in weights.items():
+        token = norm_token(key)
+        normalized.append((token, norm_token(token), weight))
+    return tuple(normalized)
+
+
+def _profile_weights(
+    profile: dict[str, Any],
+) -> tuple[
+    tuple[tuple[str, str, Any], ...],
+    tuple[tuple[str, str, Any], ...],
+]:
+    return (
+        _normalized_weights(profile.get("likes") or {}),
+        _normalized_weights(profile.get("avoids") or {}),
+    )
+
+
+@lru_cache(maxsize=32768)
+def _match_score(
+    item_tokens: tuple[frozenset[str], frozenset[str]],
+    weights: tuple[tuple[str, str, Any], ...],
+) -> float:
+    normalized_tokens, whole_word_tokens = item_tokens
+    total = 0.0
+    for token, whole_word_token, weight in weights:
+        if not token:
+            continue
+        if token in normalized_tokens:
+            total += float(weight)
+        elif any(
+            _match_normalized_words(whole_word_token, value)
+            for value in whole_word_tokens
+        ):
+            total += 0.5 * float(weight)
+    return total
+
+
+def _normalized_item_tokens(
+    tags: dict[str, Any],
+) -> tuple[frozenset[str], frozenset[str]]:
+    normalized_tokens = frozenset(
+        norm_token(token) for token in _tokens_from_tags(tags)
+    )
+    whole_word_tokens = frozenset(
+        norm_token(token) for token in normalized_tokens
+    )
+    return normalized_tokens, whole_word_tokens
+
+
+def _score_item(
+    item: dict[str, Any],
+    profile: dict[str, Any],
+    tags: dict[str, Any],
+    item_tokens: tuple[frozenset[str], frozenset[str]],
+    weights: tuple[
+        tuple[tuple[str, str, Any], ...],
+        tuple[tuple[str, str, Any], ...],
+    ],
+) -> float:
+    likes, avoids = weights
+    score = _match_score(item_tokens, likes) - 1.5 * _match_score(item_tokens, avoids)
+
     score -= 0.6 * abs(float(tags.get("niche", 0)) - float(profile.get("niche_level", 0)))
     if tags.get("logo_heavy") and any("logo" in rule.lower() for rule in profile.get("rules", [])):
         score -= 0.8
     return score
+
+
+def score_item(item: dict[str, Any], profile: dict[str, Any]) -> float:
+    tags = tags_for(item)
+    return _score_item(
+        item,
+        profile,
+        tags,
+        _normalized_item_tokens(tags),
+        _profile_weights(profile),
+    )
 
 
 def eligible(
@@ -90,7 +173,7 @@ def eligible(
     *,
     exclude_ids: set[str] | None = None,
 ) -> bool:
-    if item["id"] in (exclude_ids or set()):
+    if exclude_ids is not None and item["id"] in exclude_ids:
         return False
     availability = str(item.get("availability") or "").lower()
     if any(
@@ -107,13 +190,14 @@ def eligible(
         return False
     if gender == "womenswear" and tags.get("gender") not in {"womenswear", "unisex"}:
         return False
-    text_gender_value = text_gender(
-        item.get("title"), "", item.get("source_url")
-    )
-    if gender == "menswear" and text_gender_value == "womenswear":
-        return False
-    if gender == "womenswear" and text_gender_value == "menswear":
-        return False
+    if gender in {"menswear", "womenswear"}:
+        text_gender_value = text_gender(
+            item.get("title"), "", item.get("source_url")
+        )
+        if gender == "menswear" and text_gender_value == "womenswear":
+            return False
+        if gender == "womenswear" and text_gender_value == "menswear":
+            return False
     condition = profile.get("condition_preference", brief.get("condition", "both"))
     if condition != "both" and tags.get("condition") != condition:
         return False
@@ -161,15 +245,18 @@ def rank_items(
     exclude_ids: set[str] | None = None,
     core_profile: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    ranked = [
-        (
-            score_item(item, profile)
-            + (0.3 * score_item(item, core_profile) if core_profile else 0.0),
-            item,
-        )
-        for item in items
-        if tags_for(item) and eligible(item, brief, profile, exclude_ids=exclude_ids)
-    ]
+    weights = _profile_weights(profile)
+    core_weights = _profile_weights(core_profile) if core_profile else None
+    ranked = []
+    for item in items:
+        tags = tags_for(item)
+        if not tags or not eligible(item, brief, profile, exclude_ids=exclude_ids):
+            continue
+        item_tokens = _normalized_item_tokens(tags)
+        score = _score_item(item, profile, tags, item_tokens, weights)
+        if core_profile and core_weights:
+            score += 0.3 * _score_item(item, core_profile, tags, item_tokens, core_weights)
+        ranked.append((score, item))
     ranked.sort(
         key=lambda entry: (
             -entry[0],

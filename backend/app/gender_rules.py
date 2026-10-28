@@ -1,5 +1,6 @@
 import json
 import re
+from functools import lru_cache
 from urllib.parse import urlparse
 
 WOMEN = re.compile(
@@ -16,6 +17,7 @@ WOMEN_GARMENT = re.compile(
 )
 
 
+@lru_cache(maxsize=65536)
 def text_gender(title, product_type="", url=""):
     path = urlparse(url or "").path.replace("-", " ").replace("_", " ")
     text = " | ".join(x for x in (title or "", product_type or "", path) if x)
