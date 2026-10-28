@@ -10,6 +10,7 @@ tavily-python>=0.5
 python-dotenv>=1
 python-multipart>=0.0.9
 psycopg[binary]>=3.2
+psycopg-pool>=3.2
 numpy>=1.26
 onnxruntime>=1.18
 ftfy>=6.2

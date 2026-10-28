@@ -253,6 +253,12 @@ CREATE TABLE IF NOT EXISTS waitlist (
 _INIT_LOCK = Lock()
 _POSTGRES_INIT_ADVISORY_LOCK_KEY = 7301442001
 _INITIALIZED_DATABASES: set[str] = set()
+_POSTGRES_POOL_LOCK = Lock()
+_POSTGRES_POOL: Any | None = None
+_POSTGRES_POOL_PID: int | None = None
+_POSTGRES_POOL_DSN: str | None = None
+_POSTGRES_POOL_MAX_SIZE: int | None = None
+_POSTGRES_CONNECTION_CLASS: Any | None = None
 _LIVE_CATALOGUE_LOCK = Lock()
 _LIVE_CATALOGUE_CACHE: list[dict[str, Any]] | None = None
 _LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
@@ -281,8 +287,9 @@ def _postgres_row_factory(cursor):
 
 
 class _PostgresConnection:
-    def __init__(self, connection):
+    def __init__(self, connection, pool=None):
         self._connection = connection
+        self._pool = pool
         self._in_transaction = False
 
     def acquire_advisory_xact_lock(self, lock_key: int) -> None:
@@ -341,7 +348,22 @@ class _PostgresConnection:
         self._in_transaction = False
 
     def close(self):
-        self._connection.close()
+        try:
+            transaction_status = getattr(
+                getattr(self._connection, "info", None),
+                "transaction_status",
+                0,
+            )
+            if self._in_transaction or transaction_status != 0:
+                self.rollback()
+        finally:
+            if self._pool is None:
+                self._connection.close()
+            else:
+                try:
+                    self._pool.putconn(self._connection)
+                except Exception as exc:
+                    _raise_redacted_exception(exc)
 
     def __enter__(self):
         return self
@@ -371,31 +393,118 @@ def _redact_dsn(value: str) -> str:
     )
 
 
+def _redacted_exception(exc: Exception) -> Exception:
+    message = _redact_dsn(str(exc))
+    if message == str(exc):
+        return exc
+    try:
+        return type(exc)(message)
+    except Exception:
+        return RuntimeError(message)
+
+
+def _raise_redacted_exception(exc: Exception) -> None:
+    safe_exception = _redacted_exception(exc)
+    if safe_exception is exc:
+        raise exc
+    raise safe_exception from None
+
+
+def _postgres_connection_class():
+    global _POSTGRES_CONNECTION_CLASS
+    if _POSTGRES_CONNECTION_CLASS is None:
+        import psycopg
+
+        class RedactingConnection(psycopg.Connection):
+            @classmethod
+            def connect(cls, conninfo="", **kwargs):
+                try:
+                    return super().connect(conninfo, **kwargs)
+                except Exception as exc:
+                    _raise_redacted_exception(exc)
+
+        _POSTGRES_CONNECTION_CLASS = RedactingConnection
+    return _POSTGRES_CONNECTION_CLASS
+
+
+def _get_postgres_pool(dsn: str):
+    global _POSTGRES_POOL
+    global _POSTGRES_POOL_DSN
+    global _POSTGRES_POOL_MAX_SIZE
+    global _POSTGRES_POOL_PID
+
+    pid = os.getpid()
+    max_size = int(os.getenv("QUENYA_DB_POOL_MAX", "8"))
+    with _POSTGRES_POOL_LOCK:
+        if (
+            _POSTGRES_POOL is not None
+            and _POSTGRES_POOL_PID == pid
+            and _POSTGRES_POOL_DSN == dsn
+            and _POSTGRES_POOL_MAX_SIZE == max_size
+        ):
+            return _POSTGRES_POOL
+
+        from psycopg_pool import ConnectionPool
+
+        try:
+            pool = ConnectionPool(
+                conninfo=dsn,
+                connection_class=_postgres_connection_class(),
+                kwargs={
+                    "prepare_threshold": None,
+                    "row_factory": _postgres_row_factory,
+                },
+                min_size=1,
+                max_size=max_size,
+                max_idle=300,
+                max_lifetime=1800,
+                timeout=15,
+                check=ConnectionPool.check_connection,
+                open=True,
+            )
+        except Exception as exc:
+            _raise_redacted_exception(exc)
+
+        previous_pool = _POSTGRES_POOL
+        previous_pid = _POSTGRES_POOL_PID
+        _POSTGRES_POOL = pool
+        _POSTGRES_POOL_PID = pid
+        _POSTGRES_POOL_DSN = dsn
+        _POSTGRES_POOL_MAX_SIZE = max_size
+        if previous_pool is not None and previous_pid == pid:
+            try:
+                previous_pool.close()
+            except Exception:
+                logger.warning("Unable to close previous PostgreSQL connection pool")
+        return pool
+
+
 def connect_postgres(dsn: str, **kwargs):
     import psycopg
 
     try:
         return psycopg.connect(dsn, **kwargs)
     except Exception as exc:
-        message = _redact_dsn(str(exc))
-        if message == str(exc):
-            raise
-        try:
-            safe_exception = type(exc)(message)
-        except Exception:
-            safe_exception = RuntimeError(message)
-        raise safe_exception from None
+        _raise_redacted_exception(exc)
 
 
 def connect():
     database_url = os.getenv("QUENYA_DATABASE_URL")
     if database_url:
-        connection = connect_postgres(
-            database_url,
-            prepare_threshold=None,
-            row_factory=_postgres_row_factory,
-        )
-        return _PostgresConnection(connection)
+        if os.getenv("QUENYA_DB_POOL", "1").strip() == "0":
+            connection = connect_postgres(
+                database_url,
+                prepare_threshold=None,
+                row_factory=_postgres_row_factory,
+            )
+            return _PostgresConnection(connection)
+
+        pool = _get_postgres_pool(database_url)
+        try:
+            connection = pool.getconn()
+        except Exception as exc:
+            _raise_redacted_exception(exc)
+        return _PostgresConnection(connection, pool=pool)
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     import sqlite3

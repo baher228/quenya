@@ -1,5 +1,6 @@
 import json
 import re
+from functools import lru_cache
 from typing import Any, Literal
 
 from app.rank import rank_items, tags_for
@@ -77,13 +78,14 @@ SLOT_QUOTAS = {
 }
 
 
-def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
-    tags = tags_for(item)
-    slot = str(tags.get("slot") or "").strip().lower()
+@lru_cache(maxsize=65536)
+def _layer_role_for_text(
+    slot: str,
+    category: str,
+    title: str,
+) -> Literal["base", "mid", "outer"] | None:
     if slot not in _LAYER_SLOTS:
         return None
-    category = str(tags.get("category") or "").strip().lower()
-    title = str(item.get("title") or "").strip().lower()
     if _OUTER_LAYER.search(title):
         return "outer"
     if _MID_LAYER.search(title):
@@ -101,13 +103,26 @@ def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
     return {"outerwear": "outer", "knitwear": "mid", "top": "base"}[slot]
 
 
+def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
+    tags = tags_for(item)
+    slot = str(tags.get("slot") or "").strip().lower()
+    category = str(tags.get("category") or "").strip().lower()
+    title = str(item.get("title") or "").strip().lower()
+    return _layer_role_for_text(slot, category, title)
+
+
 def _item_texts(item: dict[str, Any]) -> list[str]:
     values = (tags_for(item).get("category"), item.get("title"))
     return [str(value) for value in values if value]
 
 
+@lru_cache(maxsize=65536)
+def _outfit_eligible_texts(texts: tuple[str, ...]) -> bool:
+    return not any(_NON_OUTFIT_BASE.search(text) for text in texts)
+
+
 def is_outfit_eligible(item: dict[str, Any]) -> bool:
-    return not any(_NON_OUTFIT_BASE.search(text) for text in _item_texts(item))
+    return _outfit_eligible_texts(tuple(_item_texts(item)))
 
 
 def warmth(item: dict[str, Any]) -> Literal["warm", "cold"] | None:
