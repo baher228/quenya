@@ -46,9 +46,11 @@ struct ItemDetailSheet: View {
                         FieldLabel(text: "Fix a tag")
                         HStack(spacing: 8) {
                             TextField("“this is 90s, not y2k”", text: $note)
+                                .font(.system(size: 16))
                                 .textInputAutocapitalization(.sentences)
                                 .padding(12)
-                                .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                                .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                                 .onChange(of: note) { _, value in if value.count > 300 { note = String(value.prefix(300)) } }
                             PillButton(title: busy ? "…" : "Fix", primary: true, disabled: busy || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                                 Task { await correct() }
@@ -68,10 +70,10 @@ struct ItemDetailSheet: View {
                 }
                 .padding(18)
             }
-            .background(QuenyaTheme.cream)
+            .background(QuenyaTheme.webPhone)
             .navigationTitle("Listing")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(QuenyaTheme.cream, for: .navigationBar)
+            .toolbarBackground(QuenyaTheme.webPhone, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

@@ -23,10 +23,12 @@ struct FindView: View {
                 H1(text: "Looking for one thing?")
                 HStack(spacing: 8) {
                     TextField("e.g. brown suede loafers", text: $query)
+                        .font(.system(size: 16))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(13)
-                        .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+                        .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                         .onSubmit { Task { await search(live: false) } }
                     PillButton(title: "Search", primary: true, disabled: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || mode != nil) {
                         Task { await search(live: false) }
@@ -89,12 +91,13 @@ struct FindView: View {
                             Image(systemName: "camera")
                             Text(uploading ? "Reading photo…" : "+ Add a photo")
                             Spacer()
-                            if uploading { ProgressView().tint(QuenyaTheme.rust) }
+                            if uploading { ProgressView().tint(QuenyaTheme.sage) }
                         }
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(QuenyaTheme.ink)
                         .padding(14)
-                        .overlay(RoundedRectangle(cornerRadius: 15).stroke(QuenyaTheme.line, lineWidth: 1))
+                        .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                         .contentShape(Rectangle())
                     }
                     .disabled(uploading)

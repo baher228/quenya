@@ -2,8 +2,6 @@ import SwiftUI
 
 struct OutfitsView: View {
     @Environment(AppState.self) private var state
-    @State private var locked: [String: [String]] = [:]
-    @State private var seen: [String: [String]] = [:]
     @State private var busy: String?
     @State private var rowErrors: [String: String] = [:]
     @State private var selectedItem: Item?
@@ -27,6 +25,8 @@ struct OutfitsView: View {
                 }
                 if state.outfitLoading {
                     LoadingLabel(title: "Styling outfits from your pool", dark: true)
+                    OutfitSkeletonCard()
+                    OutfitSkeletonCard()
                 } else if let error = state.outfitError {
                     ErrorPanel(message: error) { Task { await state.buildOutfits() } }
                 } else if state.outfits.isEmpty {
@@ -54,8 +54,9 @@ struct OutfitsView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
-            .padding(.bottom, 112)
+            .padding(.bottom, 24)
         }
         .background(QuenyaTheme.webPhone)
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
@@ -67,7 +68,7 @@ struct OutfitsView: View {
 
     @ViewBuilder
     private func outfitCard(_ outfit: Outfit) -> some View {
-        let keep = locked[outfit.id] ?? []
+        let keep = state.locked[outfit.id] ?? []
         let major = outfit.pieces.filter { !minorSlots.contains($0.tags?.slot ?? "") }
         let minor = outfit.pieces.filter { minorSlots.contains($0.tags?.slot ?? "") }
 
@@ -86,15 +87,9 @@ struct OutfitsView: View {
                 }
             }
             if !major.isEmpty {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 3), GridItem(.flexible(), spacing: 3)], spacing: 3) {
-                    ForEach(Array(major.enumerated()), id: \.element.id) { index, item in
-                        pieceCard(
-                            item,
-                            outfit: outfit,
-                            isLocked: keep.contains(item.id),
-                            isWide: major.count % 2 == 1 && index == 0
-                        )
-                            .gridCellColumns(major.count % 2 == 1 && index == 0 ? 2 : 1)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(major) { item in
+                        pieceCard(item, outfit: outfit, isLocked: keep.contains(item.id))
                     }
                 }
             }
@@ -178,58 +173,51 @@ struct OutfitsView: View {
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.webLine, lineWidth: 1))
     }
 
-    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool, isWide: Bool) -> some View {
-        GeometryReader { geometry in
-            ZStack {
+    private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geometry in
                 Button { selectedItem = item } label: {
                     RemoteImage(path: item.imagePath)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 }
                 .buttonStyle(.plain)
-
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.85)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-
-                HStack(alignment: .lastTextBaseline) {
-                    Text(item.brand ?? item.tags?.category ?? "Piece")
-                        .font(.system(size: 11, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    Spacer(minLength: 6)
-                    Text(gbp(item.priceGbp)).font(.system(size: 11))
-                }
-                .foregroundStyle(QuenyaTheme.cream)
-                .padding(.horizontal, 9)
-                .padding(.bottom, 7)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .allowsHitTesting(false)
-            }
-            .overlay(alignment: .top) {
-                HStack {
-                    pieceActionButton(isLocked ? "Locked" : "Lock", locked: isLocked) {
-                        toggleLock(outfit, item.id)
+                .overlay(alignment: .top) {
+                    HStack {
+                        pieceActionButton(isLocked ? "Locked" : "Lock", locked: isLocked) {
+                            toggleLock(outfit, item.id)
+                        }
+                        Spacer()
+                        pieceActionButton(
+                            busy == outfit.id + "swap" + item.id ? "…" : "Swap",
+                            disabled: busy != nil
+                        ) {
+                            Task { await swap(outfit, item: item) }
+                        }
                     }
-                    Spacer()
-                    pieceActionButton(
-                        busy == outfit.id + "swap" + item.id ? "…" : "Swap",
-                        disabled: busy != nil
-                    ) {
-                        Task { await swap(outfit, item: item) }
-                    }
+                    .padding(7)
                 }
-                .padding(7)
             }
-        }
-        .aspectRatio(isWide ? 4.0 / 3.0 : 3.0 / 4.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(isLocked ? QuenyaTheme.sage : .clear, lineWidth: 2)
-                .allowsHitTesting(false)
+            .aspectRatio(4.0 / 5.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 15))
+            .overlay {
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(isLocked ? QuenyaTheme.sage : .clear, lineWidth: 2)
+                    .allowsHitTesting(false)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(item.brand.map { "\($0) · \(item.title)" } ?? item.title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(QuenyaTheme.webText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                Text(gbp(item.priceGbp))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(QuenyaTheme.webSoft)
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
         }
     }
 
@@ -242,8 +230,14 @@ struct OutfitsView: View {
             Button { selectedItem = item } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(item.brand.map { "\($0) · " } ?? "")\(item.title)")
-                        .font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(gbp(item.priceGbp)).font(.system(size: 11)).foregroundStyle(QuenyaTheme.webMuted)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(gbp(item.priceGbp))
+                        .font(.system(size: 11))
+                        .foregroundStyle(QuenyaTheme.webMuted)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
                 .foregroundStyle(QuenyaTheme.webText)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,10 +339,10 @@ struct OutfitsView: View {
     }
 
     private func toggleLock(_ outfit: Outfit, _ itemId: String) {
-        var ids = locked[outfit.id] ?? []
+        var ids = state.locked[outfit.id] ?? []
         if ids.contains(itemId) { ids.removeAll { $0 == itemId } }
         else { ids.append(itemId) }
-        locked[outfit.id] = ids
+        state.locked[outfit.id] = ids
     }
 
     private func swap(_ outfit: Outfit, item: Item) async {
@@ -356,26 +350,26 @@ struct OutfitsView: View {
             let next = try await state.api.swap(
                 outfitId: outfit.id,
                 itemId: item.id,
-                excludeIds: Array((seen[outfit.id] ?? []).suffix(300))
+                excludeIds: Array((state.swapSeen[outfit.id] ?? []).suffix(300))
             )
-            var locks = locked[outfit.id] ?? []
+            var locks = state.locked[outfit.id] ?? []
             if locks.contains(item.id) { locks.removeAll { $0 == item.id } }
-            locked[next.id] = locks
-            seen[next.id] = uniqueOrdered((seen[outfit.id] ?? []) + outfit.pieces.map(\.id))
+            state.locked[next.id] = locks
+            state.swapSeen[next.id] = uniqueOrdered((state.swapSeen[outfit.id] ?? []) + outfit.pieces.map(\.id))
             state.replace(outfit, with: next)
         }
     }
 
     private func rebuild(_ outfit: Outfit) async {
         await run(outfit, key: "rebuild") {
-            let keep = locked[outfit.id] ?? []
+            let keep = state.locked[outfit.id] ?? []
             let otherPieces = state.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
             let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
             let response = try await state.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
             guard let next = response.outfits.first else {
                 throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
             }
-            locked[next.id] = keep
+            state.locked[next.id] = keep
             state.replace(outfit, with: next)
         }
     }
@@ -483,6 +477,65 @@ private struct CheckoutSheetView: View {
 struct SafariTarget: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+private struct OutfitSkeletonCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dimmed = false
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    private var pulseOpacity: Double {
+        reduceMotion ? 1 : (dimmed ? 0.55 : 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            GeometryReader { geometry in
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        bar(width: geometry.size.width * 0.55, height: 18)
+                        bar(width: geometry.size.width * 0.35, height: 12)
+                    }
+                    Spacer(minLength: 0)
+                    bar(width: 48, height: 14)
+                }
+            }
+            .frame(height: 34)
+
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 15)
+                            .fill(QuenyaTheme.webLine)
+                            .aspectRatio(4.0 / 5.0, contentMode: .fit)
+                            .opacity(pulseOpacity)
+                        bar(width: 72, height: 6)
+                    }
+                }
+            }
+        }
+        .padding(15)
+        .background(QuenyaTheme.webSurface, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.webLine, lineWidth: 1))
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                dimmed = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func bar(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: height / 2)
+            .fill(QuenyaTheme.webLine)
+            .frame(width: width, height: height)
+            .opacity(pulseOpacity)
+    }
 }
 
 private func uniqueOrdered(_ values: [String]) -> [String] {

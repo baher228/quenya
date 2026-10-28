@@ -46,9 +46,10 @@ struct BriefView: View {
                     FieldLabel(text: "In your words")
                     TextField("e.g. Autumn in London. Workwear but cleaner, Japanese labels, no big logos.", text: $draft.text, axis: .vertical)
                         .lineLimit(3...7)
-                        .font(.system(size: 15))
+                        .font(.system(size: 16))
                         .padding(14)
-                        .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                         .onChange(of: draft.text) { _, value in
                             if value.count > 600 { draft.text = String(value.prefix(600)) }
                         }
@@ -96,7 +97,7 @@ struct BriefView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     FieldLabel(text: "How niche", detail: nicheWord)
                     Slider(value: $draft.niche, in: 0...1)
-                        .tint(QuenyaTheme.rust)
+                        .tint(QuenyaTheme.sage)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     FieldLabel(text: "Budget per outfit", detail: "up to £\(Int(draft.budgetGbp).formatted())")
@@ -108,7 +109,7 @@ struct BriefView: View {
                         in: 0...Double(Self.budgetSteps.count - 1),
                         step: 1
                     )
-                    .tint(QuenyaTheme.rust)
+                    .tint(QuenyaTheme.sage)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     FieldLabel(text: "Sizes")
@@ -138,7 +139,7 @@ struct BriefView: View {
                                 .overlay(alignment: .topTrailing) {
                                     Image(systemName: "xmark.circle.fill")
                                         .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, QuenyaTheme.ink)
+                                        .foregroundStyle(QuenyaTheme.webPhone, QuenyaTheme.webText)
                                         .padding(4)
                                 }
                             }
@@ -201,9 +202,11 @@ struct BriefView: View {
                 get: { draft.sizes[keyPath: keyPath] },
                 set: { draft.sizes[keyPath: keyPath] = String($0.prefix(8)) }
             ))
+            .font(.system(size: 16))
             .textInputAutocapitalization(.characters)
             .padding(10)
-            .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+            .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -217,13 +220,23 @@ private struct SegmentedChoice: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             FieldLabel(text: title)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    ForEach(options, id: \.0) { value, label in
-                        ChoicePill(title: label, selected: selected == value) { selected = value }
+            HStack(spacing: 3) {
+                ForEach(options, id: \.0) { value, label in
+                    Button { selected = value } label: {
+                        Text(label)
+                            .font(.system(size: 14))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .foregroundStyle(selected == value ? QuenyaTheme.webText : QuenyaTheme.webSegmentMuted)
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .padding(.horizontal, 4)
+                            .background(selected == value ? QuenyaTheme.webSegmentSelected : .clear, in: RoundedRectangle(cornerRadius: 9))
                     }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(3)
+            .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }

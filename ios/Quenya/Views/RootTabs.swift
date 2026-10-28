@@ -3,12 +3,17 @@ import SwiftUI
 struct RootTabs: View {
     @Environment(AppState.self) private var state
 
-    private var webDarkChrome: Bool {
-        state.selectedTab == .outfits || (state.selectedTab == .swipe && !state.picking && state.hasProfile)
-    }
+    @State private var keyboardVisible = false
+    @State private var barHeight: CGFloat = 0
 
-    private var chromeBackground: Color {
-        webDarkChrome ? QuenyaTheme.webPhone : QuenyaTheme.cream
+    private let chromeBackground = QuenyaTheme.webPhone
+    private var showsCustomBar: Bool { !keyboardVisible }
+
+    @ViewBuilder
+    private var barSpacer: some View {
+        if showsCustomBar {
+            Color.clear.frame(height: barHeight)
+        }
     }
 
     private var selection: Binding<AppTab> {
@@ -23,7 +28,7 @@ struct RootTabs: View {
             switch state.authPhase {
             case .loading:
                 VStack(spacing: 12) {
-                    ProgressView().tint(QuenyaTheme.rust)
+                    ProgressView().tint(QuenyaTheme.sage)
                     Text("Checking invite…").foregroundStyle(QuenyaTheme.muted)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -45,7 +50,7 @@ struct RootTabs: View {
             }
         }
         .background(chromeBackground.ignoresSafeArea())
-        .preferredColorScheme(webDarkChrome ? .dark : .light)
+        .preferredColorScheme(.dark)
         .sheet(item: Binding(
             get: { state.presentedSheet },
             set: { state.presentedSheet = $0 }
@@ -69,14 +74,14 @@ struct RootTabs: View {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     (
-                        Text("quenya").foregroundColor(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
-                        + Text(".").foregroundColor(webDarkChrome ? QuenyaTheme.sage : QuenyaTheme.rust)
+                        Text("quenya").foregroundColor(QuenyaTheme.webText)
+                        + Text(".").foregroundColor(QuenyaTheme.sage)
                     )
                         .font(.system(size: 19, weight: .semibold))
                     Spacer()
                     Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
                         .font(.system(size: 11))
-                        .foregroundStyle(webDarkChrome ? QuenyaTheme.webMuted : QuenyaTheme.muted)
+                        .foregroundStyle(QuenyaTheme.webMuted)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 20)
@@ -88,26 +93,28 @@ struct RootTabs: View {
                 }
 
                 Rectangle()
-                    .fill(webDarkChrome ? QuenyaTheme.webLine : QuenyaTheme.line)
+                    .fill(QuenyaTheme.webLine)
                     .frame(height: 1)
             }
             .background(chromeBackground)
 
             TabView(selection: selection) {
                 BriefView().tag(AppTab.brief)
-                    .tabItem { Label(AppTab.brief.title, systemImage: AppTab.brief.symbol) }
+                    .toolbar(.hidden, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 swipeContent.tag(AppTab.swipe)
-                    .tabItem { Label(AppTab.swipe.title, systemImage: AppTab.swipe.symbol) }
+                    .toolbar(.hidden, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 OutfitsView().tag(AppTab.outfits)
-                    .tabItem { Label(AppTab.outfits.title, systemImage: AppTab.outfits.symbol) }
+                    .toolbar(.hidden, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 FindView().tag(AppTab.find)
-                    .tabItem { Label(AppTab.find.title, systemImage: AppTab.find.symbol) }
+                    .toolbar(.hidden, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
                 TasteView().tag(AppTab.taste)
-                    .tabItem { Label(AppTab.taste.title, systemImage: AppTab.taste.symbol) }
+                    .toolbar(.hidden, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { barSpacer }
             }
-            .tint(webDarkChrome ? QuenyaTheme.webText : QuenyaTheme.ink)
-            .toolbarBackground(chromeBackground, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
             .overlay(alignment: .bottom) {
                 if let toast = state.toast {
                     GeometryReader { geometry in
@@ -116,13 +123,25 @@ struct RootTabs: View {
                             state.setTab(.taste)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.bottom, geometry.safeAreaInsets.bottom + 64)
+                        .padding(.bottom, geometry.safeAreaInsets.bottom + (showsCustomBar ? barHeight + 12 : 12))
                         .frame(maxHeight: .infinity, alignment: .bottom)
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                if showsCustomBar {
+                    CustomTabBar(selection: state.selectedTab) { state.setTab($0) }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
+                }
+            }
         }
         .background(chromeBackground)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
+        }
     }
 
     @ViewBuilder

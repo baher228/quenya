@@ -89,7 +89,7 @@ struct StylePickerView: View {
             .padding(18)
         }
         .scrollContentBackground(.hidden)
-        .background(QuenyaTheme.cream.ignoresSafeArea())
+        .background(QuenyaTheme.webPhone.ignoresSafeArea())
         .sheet(isPresented: $showingDebug) { DebugSettingsView() }
     }
 }

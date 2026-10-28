@@ -1,24 +1,28 @@
 import SwiftUI
 
 enum QuenyaTheme {
-    static let cream = Color(hex: 0xF3EEE4)
-    static let surface = Color(hex: 0xEAE3D6)
-    static let line = Color(hex: 0xD8CFC0)
-    static let ink = Color(hex: 0x15120F)
-    static let softInk = Color(hex: 0x4A433B)
-    static let muted = Color(hex: 0x7A7064)
-    static let rust = Color(hex: 0xB4532A)
-    static let rustSoft = Color(hex: 0xE7C9B8)
+    // Web tokens, mapped onto the existing app-wide names.
+    static let cream = Color(hex: 0x171411)
+    static let surface = Color(hex: 0x221E1A)
+    static let line = Color(hex: 0x2A2520)
+    static let ink = Color(hex: 0xEDE6DA)
+    static let softInk = Color(hex: 0xC9C0B3)
+    static let muted = Color(hex: 0x8E8579)
+    static let rust = Color(hex: 0xB9C4A8)
+    static let rustSoft = Color(hex: 0xD9897A)
     static let sage = Color(hex: 0xB9C4A8)
     static let coral = Color(hex: 0xD9897A)
     static let webPhone = Color(hex: 0x171411)
     static let webSurface = Color(hex: 0x1F1B17)
     static let webSurface2 = Color(hex: 0x221E1A)
     static let webLine = Color(hex: 0x2A2520)
+    static let webLine2 = Color(hex: 0x2F2A24)
     static let webText = Color(hex: 0xEDE6DA)
     static let webSoft = Color(hex: 0xC9C0B3)
     static let webMuted = Color(hex: 0x8E8579)
     static let webDim = Color(hex: 0x7D7468)
+    static let webSegmentSelected = Color(hex: 0x3A332C)
+    static let webSegmentMuted = Color(hex: 0x9A9184)
 }
 
 extension Color {
@@ -73,12 +77,12 @@ struct FieldLabel: View {
             Text(text.uppercased())
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(1.2)
-                .foregroundStyle(QuenyaTheme.softInk)
+                .foregroundStyle(QuenyaTheme.webMuted)
             Spacer(minLength: 8)
             if let detail {
                 Text(detail)
                     .font(.system(size: 12))
-                    .foregroundStyle(QuenyaTheme.muted)
+                    .foregroundStyle(QuenyaTheme.webSoft)
             }
         }
     }
@@ -95,11 +99,11 @@ struct PillButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(primary ? (dark ? QuenyaTheme.webPhone : QuenyaTheme.cream) : (dark ? QuenyaTheme.webText : QuenyaTheme.ink))
+                .foregroundStyle(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
                 .frame(minHeight: 44)
                 .padding(.horizontal, 20)
-                .background(primary ? (dark ? QuenyaTheme.webText : QuenyaTheme.ink) : (dark ? QuenyaTheme.webSurface2 : Color.clear), in: Capsule())
-                .overlay(Capsule().stroke(primary ? Color.clear : (dark ? QuenyaTheme.webLine : QuenyaTheme.ink), lineWidth: 1))
+                .background(primary ? QuenyaTheme.webText : QuenyaTheme.webSurface2, in: Capsule())
+                .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.webLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -118,11 +122,11 @@ struct ChoicePill: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(dark ? (selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft) : (selected ? QuenyaTheme.cream : QuenyaTheme.ink))
+                .foregroundStyle(selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(dark ? (selected ? QuenyaTheme.webText : (outlined ? Color.clear : QuenyaTheme.webSurface2)) : (selected ? QuenyaTheme.ink : QuenyaTheme.surface), in: Capsule())
-                .overlay(Capsule().stroke(dark && outlined ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1))
+                .background(selected ? QuenyaTheme.webText : (outlined ? Color.clear : QuenyaTheme.webSurface2), in: Capsule())
+                .overlay(Capsule().stroke(outlined ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -135,7 +139,7 @@ struct ErrorPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(message).font(.system(size: 14)).foregroundStyle(QuenyaTheme.ink)
+            Text(message).font(.system(size: 14)).foregroundStyle(QuenyaTheme.webText)
             if !requestIds.isEmpty {
                 Text("AI request \(requestIds.joined(separator: ", "))")
                     .font(.system(size: 11, design: .monospaced))
@@ -145,7 +149,7 @@ struct ErrorPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(QuenyaTheme.rustSoft.opacity(0.58), in: RoundedRectangle(cornerRadius: 16))
+        .background(QuenyaTheme.coral.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -155,17 +159,23 @@ struct LoadingLabel: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView().tint(dark ? QuenyaTheme.sage : QuenyaTheme.rust)
-            Text(title).font(.system(size: 14)).foregroundStyle(dark ? QuenyaTheme.webSoft : QuenyaTheme.softInk)
+            ProgressView().tint(QuenyaTheme.sage)
+            Text(title).font(.system(size: 14)).foregroundStyle(QuenyaTheme.webSoft)
         }
         .padding(.vertical, 18)
     }
 }
 
 func gbp(_ amount: Double) -> String {
-    "£" + (amount.rounded() == amount
-           ? String(format: "%.0f", amount)
-           : String(format: "%.2f", amount))
+    let formatter = NumberFormatter()
+    formatter.locale = Locale(identifier: "en_GB")
+    formatter.numberStyle = .currency
+    formatter.currencyCode = "GBP"
+    formatter.currencySymbol = "£"
+    formatter.usesGroupingSeparator = true
+    formatter.minimumFractionDigits = amount.rounded() == amount ? 0 : 2
+    formatter.maximumFractionDigits = 2
+    return formatter.string(from: NSNumber(value: amount)) ?? "£\(amount)"
 }
 
 func pretty(_ key: String) -> String {

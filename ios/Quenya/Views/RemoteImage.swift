@@ -46,9 +46,13 @@ struct RemoteImage: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let resolvedURL = path.flatMap {
+                URL(string: $0, relativeTo: AppConfig.baseURL)?.absoluteURL
+            }
+            let displayedImage = image ?? resolvedURL.flatMap { ImageCache.shared.image(for: $0) }
             Group {
-                if let image {
-                    Image(uiImage: image)
+                if let displayedImage {
+                    Image(uiImage: displayedImage)
                         .resizable()
                         .aspectRatio(contentMode: contentMode)
                 } else {

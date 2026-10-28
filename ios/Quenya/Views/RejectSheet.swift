@@ -30,8 +30,10 @@ struct RejectSheet: View {
                         .buttonStyle(.plain)
                     }
                     TextField("Or say it yourself: “no square-toe shoes”", text: $ownReason)
+                        .font(.system(size: 16))
                         .padding(12)
-                        .background(QuenyaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                         .onChange(of: ownReason) { _, value in if value.count > 200 { ownReason = String(value.prefix(200)) } }
                     PillButton(title: "Send", primary: true, disabled: ownReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                         onPick(ownReason.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -40,7 +42,7 @@ struct RejectSheet: View {
                 }
                 .padding(20)
             }
-            .background(QuenyaTheme.cream)
+            .background(QuenyaTheme.webPhone)
             .navigationTitle("Not for me")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
