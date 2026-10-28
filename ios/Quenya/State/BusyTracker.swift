@@ -11,6 +11,10 @@ final class BusyTracker {
     func isBusy(_ key: String) -> Bool { active.contains(key) }
     func error(_ key: String) -> String? { errors[key] }
     func clearError(_ key: String) { errors[key] = nil }
+    func cancel(_ key: String) {
+        active.remove(key)
+        errors[key] = nil
+    }
 
     @discardableResult
     func run(_ key: String, _ op: () async throws -> Void) async -> Bool {

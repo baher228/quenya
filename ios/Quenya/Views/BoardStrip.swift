@@ -31,12 +31,7 @@ struct BoardStrip: View {
                         busy: state.busy.isBusy(key),
                         disabled: activating && !state.busy.isBusy(key)
                     ) {
-                        Task {
-                            if await state.activate(board) {
-                                state.selectedTab = .brief
-                                state.briefMode = .edit
-                            }
-                        }
+                        Task { await state.activateFromStrip(board) }
                     }
                     }
                 }

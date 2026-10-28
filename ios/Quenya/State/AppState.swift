@@ -39,6 +39,7 @@ struct ToastMessage: Identifiable {
 private struct VerdictAttempt {
     let like: Bool
     let reason: String?
+    let styleId: String
 }
 
 enum PresentedSheet: Identifiable {
@@ -65,6 +66,9 @@ final class AppState {
     private var tasteRefreshID = UUID()
     private var outfitBuildID = UUID()
     private var deckLoadID = UUID()
+    private var outfitGenerations: [String: UUID] = [:]
+    private var outfitTasks: [String: [UUID: Task<Void, Error>]] = [:]
+    private var outfitTaskBusyKeys: [String: [UUID: String]] = [:]
     let cache: StyleCache
     let busy = BusyTracker()
 
@@ -254,8 +258,10 @@ final class AppState {
             self.user = redeemedUser
             self.cache.activate(userId: redeemedUser.id)
             self.authPhase = .signedIn
-            let boardsRefreshed = await self.refreshBoards()
-            let tasteRefreshed = await self.refreshTaste()
+            async let boardsTask = self.refreshBoards()
+            async let tasteTask = self.refreshTaste()
+            let boardsRefreshed = await boardsTask
+            let tasteRefreshed = await tasteTask
             self.syncBriefWithActiveBoard()
             if let styleId = self.activeBoard?.id {
                 let snapshot = self.cache.snapshot(for: styleId)
@@ -374,6 +380,16 @@ final class AppState {
         return true
     }
 
+    func activateFromStrip(_ board: Board) async -> Bool {
+        let wasOnBrief = selectedTab == .brief
+        guard await activate(board) else { return false }
+        if wasOnBrief {
+            selectedTab = .brief
+            briefMode = .edit
+        }
+        return true
+    }
+
     func selectBoardForSwipe(_ board: Board) async {
         if await activate(board) { picking = false }
     }
@@ -395,8 +411,10 @@ final class AppState {
             } else {
                 result = try await self.api.createProfile(brief, newBoard: true)
             }
-            let tasteRefreshed = await self.refreshTaste()
-            let boardsRefreshed = await self.refreshBoards()
+            async let tasteTask = self.refreshTaste()
+            async let boardsTask = self.refreshBoards()
+            let tasteRefreshed = await tasteTask
+            let boardsRefreshed = await boardsTask
             for photo in photos {
                 do { try await self.upload(photo, boardId: self.activeBoard?.id) }
                 catch { self.showToast("Couldn't read a photo", lines: [error.localizedDescription]) }
@@ -583,8 +601,9 @@ final class AppState {
         let changes = Array((version.changes ?? version.profile.changes).prefix(3))
         toast = ToastMessage(title: "Taste v\(version.version)", lines: changes, isTaste: true)
         Task {
-            await refreshTaste()
-            await refreshBoards()
+            async let tasteTask = refreshTaste()
+            async let boardsTask = refreshBoards()
+            _ = await (tasteTask, boardsTask)
         }
         dismissToastLater(id: toast?.id)
     }
@@ -614,22 +633,102 @@ final class AppState {
             if outfitBuildID == requestID { outfitLoading = false }
         }
         let completed = await busy.run("outfits.build") {
-            let result = try await self.api.outfits(count: 3).outfits
-            guard !Task.isCancelled, self.outfitBuildID == requestID else { return }
-            self.cache.update(styleId) { $0.outfits = result }
+            try await self.runOutfitGeneration(styleId: styleId, busyKey: "outfits.build") { generation in
+                let result = try await self.api.outfits(count: 3).outfits
+                guard !Task.isCancelled,
+                      self.outfitBuildID == requestID,
+                      self.isCurrentOutfitGeneration(styleId: styleId, generation: generation) else { return }
+                self.cache.update(styleId) { $0.outfits = result }
+            }
         }
         if !completed { outfitError = busy.error("outfits.build") }
     }
 
-    func replace(_ old: Outfit, with next: Outfit) {
-        outfits = outfits.map { $0.id == old.id ? next : $0 }
+    func runOutfitGeneration(
+        styleId: String,
+        busyKey: String? = nil,
+        operation: @escaping @MainActor (UUID) async throws -> Void
+    ) async throws {
+        let generation = UUID()
+        outfitGenerations[styleId] = generation
+        let task = Task { try await operation(generation) }
+        outfitTasks[styleId, default: [:]][generation] = task
+        if let busyKey { outfitTaskBusyKeys[styleId, default: [:]][generation] = busyKey }
+        defer {
+            outfitTasks[styleId]?[generation] = nil
+            if outfitTasks[styleId]?.isEmpty == true { outfitTasks[styleId] = nil }
+            outfitTaskBusyKeys[styleId]?[generation] = nil
+            if outfitTaskBusyKeys[styleId]?.isEmpty == true { outfitTaskBusyKeys[styleId] = nil }
+        }
+        try await task.value
+    }
+
+    func isCurrentOutfitGeneration(styleId: String, generation: UUID) -> Bool {
+        outfitGenerations[styleId] == generation
     }
 
     @discardableResult
-    func verdict(_ outfit: Outfit, like: Bool, reason: String? = nil) async -> Bool {
+    func swapOutfit(_ outfit: Outfit, item: Item, styleId: String) async -> Bool {
+        let key = "outfit.\(outfit.id).swap.\(item.id)"
+        return await busy.run(key) {
+            let current = self.cache.snapshot(for: styleId)
+            let next = try await self.api.swap(
+                outfitId: outfit.id,
+                itemId: item.id,
+                excludeIds: Array((current.swapSeen[outfit.id] ?? []).suffix(300))
+            )
+            self.cache.update(styleId) { snapshot in
+                var locks = snapshot.locked[outfit.id] ?? []
+                if locks.contains(item.id) { locks.removeAll { $0 == item.id } }
+                snapshot.locked[next.id] = locks
+                var seen = Set<String>()
+                snapshot.swapSeen[next.id] = ((snapshot.swapSeen[outfit.id] ?? []) + outfit.pieces.map(\.id))
+                    .filter { seen.insert($0).inserted }
+                if let index = snapshot.outfits.firstIndex(where: { $0.id == outfit.id }) {
+                    snapshot.outfits[index] = next
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    func rebuildOutfit(_ outfit: Outfit, styleId: String) async -> Bool {
+        let key = "outfit.\(outfit.id).rebuild"
+        return await busy.run(key) {
+            let snapshot = self.cache.snapshot(for: styleId)
+            let keep = snapshot.locked[outfit.id] ?? []
+            let otherPieces = snapshot.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
+            let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
+            try await self.runOutfitGeneration(styleId: styleId, busyKey: key) { generation in
+                let response = try await self.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
+                guard let next = response.outfits.first else {
+                    throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
+                }
+                guard !Task.isCancelled,
+                      self.isCurrentOutfitGeneration(styleId: styleId, generation: generation) else { return }
+                self.cache.update(styleId) { snapshot in
+                    snapshot.locked[next.id] = keep
+                    if let index = snapshot.outfits.firstIndex(where: { $0.id == outfit.id }) {
+                        snapshot.outfits[index] = next
+                    }
+                }
+            }
+        }
+    }
+
+    func replace(_ old: Outfit, with next: Outfit, styleId: String) {
+        cache.update(styleId) { snapshot in
+            guard let index = snapshot.outfits.firstIndex(where: { $0.id == old.id }) else { return }
+            snapshot.outfits[index] = next
+        }
+    }
+
+    @discardableResult
+    func verdict(_ outfit: Outfit, like: Bool, reason: String? = nil, styleId: String? = nil) async -> Bool {
+        guard let styleId = styleId ?? activeBoard?.id else { return false }
         let key = "verdict.\(outfit.id)"
         guard !busy.isBusy(key) else { return false }
-        lastVerdictAttempts[outfit.id] = VerdictAttempt(like: like, reason: reason)
+        lastVerdictAttempts[outfit.id] = VerdictAttempt(like: like, reason: reason, styleId: styleId)
         return await busy.run(key) {
             let result = try await self.api.verdict(
                 outfitId: outfit.id,
@@ -640,15 +739,15 @@ final class AppState {
             if updated.pieces.isEmpty { updated.pieces = outfit.pieces }
             updated.verdict = like ? "like" : "reject"
             if !like { updated.reason = reason }
-            self.replace(outfit, with: updated)
-            self.announce(result.taste)
+            self.replace(outfit, with: updated, styleId: styleId)
+            if self.activeBoard?.id == styleId { self.announce(result.taste) }
         }
     }
 
     @discardableResult
     func retryVerdict(_ outfit: Outfit) async -> Bool {
         guard let attempt = lastVerdictAttempts[outfit.id] else { return false }
-        return await verdict(outfit, like: attempt.like, reason: attempt.reason)
+        return await verdict(outfit, like: attempt.like, reason: attempt.reason, styleId: attempt.styleId)
     }
 
     func upload(_ jpeg: Data, boardId: String? = nil) async throws {
@@ -684,14 +783,26 @@ final class AppState {
     func boardChanged() {
         deckLoadID = UUID()
         outfitBuildID = UUID()
+        for (styleId, tasks) in outfitTasks {
+            for (generation, task) in tasks {
+                task.cancel()
+                if let key = outfitTaskBusyKeys[styleId]?[generation] { busy.cancel(key) }
+            }
+        }
+        outfitTasks.removeAll()
+        outfitTaskBusyKeys.removeAll()
+        for styleId in Array(outfitGenerations.keys) {
+            outfitGenerations[styleId] = UUID()
+        }
         deckLoading = false
         deckError = nil
         outfitError = nil
         outfitLoading = false
         deckKey += 1
         Task {
-            await refreshTaste()
-            await refreshBoards()
+            async let tasteTask = refreshTaste()
+            async let boardsTask = refreshBoards()
+            _ = await (tasteTask, boardsTask)
         }
     }
 

@@ -15,6 +15,7 @@ struct FindView: View {
     @State private var lastSearchLive = false
     @State private var retrySelection: PhotosPickerItem?
     @State private var tapCount = 0
+    @FocusState private var queryFocused: Bool
 
     private var uploading: Bool { busy.isBusy("photo.upload") }
 
@@ -29,12 +30,17 @@ struct FindView: View {
                 HStack(spacing: 8) {
                     TextField("e.g. brown suede loafers", text: $query)
                         .font(.system(size: 16))
+                        .focused($queryFocused)
+                        .submitLabel(.search)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(13)
                         .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
-                        .onSubmit { Task { await search(live: false) } }
+                        .onSubmit {
+                            queryFocused = false
+                            Task { await search(live: false) }
+                        }
                     PillButton(title: "Search", primary: true, disabled: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, busy: mode == "saved") {
                         Task { await search(live: false) }
                     }
@@ -130,6 +136,9 @@ struct FindView: View {
             .padding(18)
         }
         .background(QuenyaTheme.cream)
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTap()
+        .keyboardDoneToolbar()
         .onChange(of: selection) { _, value in
             guard let value else { return }
             Task { await upload(value) }

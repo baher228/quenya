@@ -9,6 +9,7 @@ struct ItemDetailSheet: View {
     @State private var requestId: String?
     @State private var safari: SafariTarget?
     @State private var tags: ItemTags?
+    @FocusState private var noteFocused: Bool
 
     private var provenance: String {
         let source = item.source == "vinted" ? "Vinted" : item.source == "retail" ? "Retail" : item.source
@@ -46,6 +47,9 @@ struct ItemDetailSheet: View {
                         HStack(spacing: 8) {
                             TextField("“this is 90s, not y2k”", text: $note)
                                 .font(.system(size: 16))
+                                .focused($noteFocused)
+                                .submitLabel(.done)
+                                .onSubmit { noteFocused = false }
                                 .textInputAutocapitalization(.sentences)
                                 .padding(12)
                                 .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
@@ -73,6 +77,8 @@ struct ItemDetailSheet: View {
                 .padding(18)
             }
             .background(QuenyaTheme.webPhone)
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTap()
             .navigationTitle("Listing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(QuenyaTheme.webPhone, for: .navigationBar)
@@ -84,6 +90,7 @@ struct ItemDetailSheet: View {
             }
         }
         .quenyaSheet()
+        .keyboardDoneToolbar()
         .onAppear { tags = item.tags }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum QuenyaTheme {
     // Web tokens, mapped onto the existing app-wide names.
@@ -48,6 +49,32 @@ extension View {
 
     func skeletonPulse(enabled: Bool = true) -> some View {
         modifier(SkeletonPulse(enabled: enabled))
+    }
+
+    func dismissKeyboardOnTap() -> some View {
+        background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { dismissKeyboard() }
+        }
+    }
+
+    func keyboardDoneToolbar() -> some View {
+        toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { dismissKeyboard() }
+            }
+        }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 }
 

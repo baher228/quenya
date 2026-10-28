@@ -7,6 +7,7 @@ struct BriefView: View {
     @State private var draft = Brief.default
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var photoData: [Data] = []
+    @FocusState private var fieldFocused: Bool
 
     private let slots: [(String, String)] = [
         ("outerwear", "Outerwear"), ("top", "Tops"), ("knitwear", "Knitwear"),
@@ -46,6 +47,9 @@ struct BriefView: View {
                     FieldLabel(text: "In your words")
                     TextField("e.g. Autumn in London. Workwear but cleaner, Japanese labels, no big logos.", text: $draft.text, axis: .vertical)
                         .lineLimit(3...7)
+                        .focused($fieldFocused)
+                        .submitLabel(.done)
+                        .onSubmit { fieldFocused = false }
                         .font(.system(size: 16))
                         .padding(14)
                         .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 14))
@@ -186,6 +190,9 @@ struct BriefView: View {
             .padding(20)
         }
         .background(QuenyaTheme.cream)
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTap()
+        .keyboardDoneToolbar()
         .onAppear { draft = state.currentBrief.merged() }
         .onChange(of: state.currentBrief) { _, value in draft = value.merged() }
         .onChange(of: photoSelection) { _, items in
@@ -210,6 +217,9 @@ struct BriefView: View {
                 set: { draft.sizes[keyPath: keyPath] = String($0.prefix(8)) }
             ))
             .font(.system(size: 16))
+            .focused($fieldFocused)
+            .submitLabel(.done)
+            .onSubmit { fieldFocused = false }
             .textInputAutocapitalization(.characters)
             .padding(10)
             .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))

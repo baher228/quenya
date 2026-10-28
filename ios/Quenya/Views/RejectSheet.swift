@@ -5,6 +5,7 @@ struct RejectSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var ownReason = ""
     @State private var pendingReason = ""
+    @FocusState private var reasonFocused: Bool
     let outfit: Outfit
     private let reasons = [
         "Too generic", "Colours don't work together", "Too expensive",
@@ -41,6 +42,13 @@ struct RejectSheet: View {
                     }
                     TextField("Or say it yourself: “no square-toe shoes”", text: $ownReason)
                         .font(.system(size: 16))
+                        .focused($reasonFocused)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            reasonFocused = false
+                            pendingReason = ownReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task { await submit(pendingReason) }
+                        }
                         .padding(12)
                         .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
@@ -63,6 +71,8 @@ struct RejectSheet: View {
                 .padding(20)
             }
             .background(QuenyaTheme.webPhone)
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTap()
             .navigationTitle("Not for me")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -73,6 +83,7 @@ struct RejectSheet: View {
         }
         .quenyaSheet()
         .presentationDetents([.medium, .large])
+        .keyboardDoneToolbar()
     }
 
     private func submit(_ reason: String) async {

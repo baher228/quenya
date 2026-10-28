@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OutfitsView: View {
     @Environment(AppState.self) private var state
-    @State private var busy = BusyTracker()
     @State private var selectedItem: Item?
     @State private var safari: SafariTarget?
     @State private var checkoutOutfit: Outfit?
@@ -97,7 +96,7 @@ struct OutfitsView: View {
                 }
             }
             if !major.isEmpty {
-                if busy.isBusy(rebuildKey(outfit)) {
+                if state.busy.isBusy(rebuildKey(outfit)) {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                         ForEach(major.indices, id: \.self) { _ in
                             SkeletonBlock(cornerRadius: 15)
@@ -115,11 +114,17 @@ struct OutfitsView: View {
                     }
                 }
             }
-            if let message = busy.error(rebuildKey(outfit)) {
-                ErrorPanel(message: message) { Task { await rebuild(outfit) } }
-            } else if let failedItem = outfit.pieces.first(where: { busy.error(swapKey(outfit, $0)) != nil }),
-                      let message = busy.error(swapKey(outfit, failedItem)) {
-                ErrorPanel(message: message) { Task { await swap(outfit, item: failedItem) } }
+            if let message = state.busy.error(rebuildKey(outfit)) {
+                ErrorPanel(message: message) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.rebuildOutfit(outfit, styleId: styleId) }
+                }
+            } else if let failedItem = outfit.pieces.first(where: { state.busy.error(swapKey(outfit, $0)) != nil }),
+                      let message = state.busy.error(swapKey(outfit, failedItem)) {
+                ErrorPanel(message: message) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.swapOutfit(outfit, item: failedItem, styleId: styleId) }
+                }
             }
             if let message = state.busy.error("verdict.\(outfit.id)"),
                !rejectSheetIsPresented(for: outfit) {
@@ -164,8 +169,11 @@ struct OutfitsView: View {
                 compactButton(
                     keep.isEmpty ? "Rebuild" : "Rebuild around locks",
                     disabled: outfitActionBusy(outfit),
-                    busy: busy.isBusy(rebuildKey(outfit))
-                ) { Task { await rebuild(outfit) } }
+                    busy: state.busy.isBusy(rebuildKey(outfit))
+                ) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.rebuildOutfit(outfit, styleId: styleId) }
+                }
                 if outfit.verdict == "like" {
                     verdictLabel("Saved", color: QuenyaTheme.webText, outlined: true)
                 } else {
@@ -204,7 +212,7 @@ struct OutfitsView: View {
     }
 
     private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
-        let swapping = busy.isBusy(swapKey(outfit, item))
+        let swapping = state.busy.isBusy(swapKey(outfit, item))
         return VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
                 Button { selectedItem = item } label: {
@@ -223,7 +231,8 @@ struct OutfitsView: View {
                             disabled: outfitActionBusy(outfit),
                             busy: swapping
                         ) {
-                            Task { await swap(outfit, item: item) }
+                            guard let styleId = state.activeBoard?.id else { return }
+                            Task { await state.swapOutfit(outfit, item: item, styleId: styleId) }
                         }
                     }
                     .padding(7)
@@ -256,7 +265,7 @@ struct OutfitsView: View {
     }
 
     private func minorRow(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
-        let swapping = busy.isBusy(swapKey(outfit, item))
+        let swapping = state.busy.isBusy(swapKey(outfit, item))
         return HStack(spacing: 9) {
             Button { selectedItem = item } label: {
                 RemoteImage(path: item.imagePath).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
@@ -288,7 +297,8 @@ struct OutfitsView: View {
                     busy: swapping,
                     onPhotoTile: false
                 ) {
-                    Task { await swap(outfit, item: item) }
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.swapOutfit(outfit, item: item, styleId: styleId) }
                 }
             }
         }
@@ -409,8 +419,8 @@ struct OutfitsView: View {
     private func outfitActionBusy(_ outfit: Outfit) -> Bool {
         state.busy.isBusy("outfits.build")
             || state.busy.isBusy("verdict.\(outfit.id)")
-            || busy.isBusy(rebuildKey(outfit))
-            || outfit.pieces.contains { busy.isBusy(swapKey(outfit, $0)) }
+            || state.busy.isBusy(rebuildKey(outfit))
+            || outfit.pieces.contains { state.busy.isBusy(swapKey(outfit, $0)) }
     }
 
     private func rejectSheetIsPresented(for outfit: Outfit) -> Bool {
@@ -424,37 +434,6 @@ struct OutfitsView: View {
 
     private func swapKey(_ outfit: Outfit, _ item: Item) -> String {
         "outfit.\(outfit.id).swap.\(item.id)"
-    }
-
-    private func swap(_ outfit: Outfit, item: Item) async {
-        let key = swapKey(outfit, item)
-        await busy.run(key) {
-            let next = try await state.api.swap(
-                outfitId: outfit.id,
-                itemId: item.id,
-                excludeIds: Array((state.swapSeen[outfit.id] ?? []).suffix(300))
-            )
-            var locks = state.locked[outfit.id] ?? []
-            if locks.contains(item.id) { locks.removeAll { $0 == item.id } }
-            state.locked[next.id] = locks
-            state.swapSeen[next.id] = uniqueOrdered((state.swapSeen[outfit.id] ?? []) + outfit.pieces.map(\.id))
-            state.replace(outfit, with: next)
-        }
-    }
-
-    private func rebuild(_ outfit: Outfit) async {
-        let key = rebuildKey(outfit)
-        await busy.run(key) {
-            let keep = state.locked[outfit.id] ?? []
-            let otherPieces = state.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
-            let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
-            let response = try await state.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
-            guard let next = response.outfits.first else {
-                throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
-            }
-            state.locked[next.id] = keep
-            state.replace(outfit, with: next)
-        }
     }
 
     private func shareText(_ outfit: Outfit) -> String {
