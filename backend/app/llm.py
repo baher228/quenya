@@ -24,6 +24,7 @@ from app.config import (
     CURSOR_API_KEY,
     PROMPT_VERSION,
     QUENYA_CURSOR_BIN,
+    QUENYA_CURSOR_FALLBACK_MODEL,
     QUENYA_CURSOR_MODEL,
     QUENYA_CURSOR_STYLIST_MODEL,
     QUENYA_CURSOR_TIMEOUT_S,
@@ -684,6 +685,11 @@ def _call_cursor_task(
                 continue
             if exc.retryable and transient_retries < _CURSOR_RETRIES:
                 transient_retries += 1
+                if (
+                    QUENYA_CURSOR_FALLBACK_MODEL
+                    and model != QUENYA_CURSOR_FALLBACK_MODEL
+                ):
+                    model = QUENYA_CURSOR_FALLBACK_MODEL
                 continue
             raise TaskError(
                 f"{task_name} failed: {_safe_error(exc)}",

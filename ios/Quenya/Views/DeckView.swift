@@ -62,7 +62,11 @@ struct DeckView: View {
                 .padding(.bottom, 8)
             }
             if let error = state.tasteUpdateError {
-                ErrorPanel(message: error) { Task { await state.runUpdate() } }
+                ErrorPanel(
+                    message: error,
+                    retry: { Task { await state.runUpdate() } },
+                    dismiss: { state.dismissTasteUpdateError() }
+                )
                     .padding(.bottom, 8)
             }
 
