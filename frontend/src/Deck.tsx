@@ -19,8 +19,8 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
   userId: string;
   boardId: string;
   onChange: () => void;
-  onSignal: (updateDue: boolean) => void;
-  onDone: () => void;
+  onSignal: (updateDue: boolean, boardId: string) => void;
+  onDone: (boardId: string) => void;
   onOpenItem: (it: Item) => void;
 }) {
   const cached = useRef(getCache<Item[]>(userId, boardId, "deck")).current;
@@ -40,7 +40,7 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
     if (showLoading) setLoading(true);
     setError(null);
     try {
-      const incoming = await api.deck(10);
+      const incoming = await api.deck(10, boardId);
       setItems(current => appendUnique(current, incoming, decidedIds.current));
       setHasLoaded(true);
     } catch (e) {
@@ -48,17 +48,17 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [items.length]);
+  }, [boardId, items.length]);
 
   const refreshQuietly = useCallback(async () => {
     try {
-      const incoming = await api.deck(10);
+      const incoming = await api.deck(10, boardId);
       setItems(current => appendUnique(current, incoming, decidedIds.current));
       setHasLoaded(true);
     } catch {
       return;
     }
-  }, []);
+  }, [boardId]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -86,7 +86,10 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
     setItems(remaining);
     setCache(userId, boardId, "deck", remaining);
     setSeen(n => n + 1);
-    api.swipe(top.id, liked).then(r => onSignal(r.update_due)).catch(setError);
+    const requestBoardId = boardId;
+    api.swipe(top.id, liked, requestBoardId)
+      .then(r => onSignal(r.update_due, requestBoardId))
+      .catch(setError);
   }, [boardId, items, onSignal, userId]);
 
   useEffect(() => {
@@ -134,7 +137,7 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
           <div className="deck-done">
             <p className="h3">Enough to go on.</p>
             <p className="muted">Your swipes are in. Build outfits from them, or keep calibrating.</p>
-            <button className="btn primary" onClick={onDone}>Build outfits</button>
+            <button className="btn primary" onClick={() => onDone(boardId)}>Build outfits</button>
             <button className="btn ghost" onClick={load}>10 more cards</button>
           </div>
         )}

@@ -327,19 +327,24 @@ final class AppState {
     }
 
     @discardableResult
-    func refreshTaste() async -> Bool {
+    func refreshTaste(styleId: String? = nil) async -> Bool {
+        let requestStyleId = styleId ?? activeBoard?.id
         let requestID = UUID()
         tasteRefreshID = requestID
         do {
-            let result = try await api.taste()
-            guard !Task.isCancelled, tasteRefreshID == requestID else { return false }
+            let result = try await api.taste(boardId: requestStyleId)
+            guard !Task.isCancelled,
+                  tasteRefreshID == requestID,
+                  activeBoard?.id == requestStyleId else { return false }
             taste = result
             saveSessionSnapshot()
             return true
         } catch is CancellationError {
             return false
         } catch {
-            guard !Task.isCancelled, tasteRefreshID == requestID else { return false }
+            guard !Task.isCancelled,
+                  tasteRefreshID == requestID,
+                  activeBoard?.id == requestStyleId else { return false }
             if taste == nil {
                 taste = TasteState(current: nil, history: [], counts: [:], core: nil)
             }
@@ -490,7 +495,7 @@ final class AppState {
         }
 
         do {
-            let result = try await api.deck(n: 10)
+            let result = try await api.deck(n: 10, boardId: styleId)
             guard !Task.isCancelled,
                   deckLoadID == requestID,
                   cache.userId == userId,
@@ -532,7 +537,7 @@ final class AppState {
         if deckLoading && beforeFetch.deck.isEmpty { return }
 
         do {
-            let result = try await api.deck(n: 10)
+            let result = try await api.deck(n: 10, boardId: styleId)
             guard !Task.isCancelled,
                   cache.userId == userId,
                   activeBoard?.id == styleId else { return }
@@ -561,8 +566,12 @@ final class AppState {
             recordSwipe(item, styleId: styleId)
         }
         do {
-            let result = try await api.swipe(itemId: item.id, liked: liked)
-            if result.updateDue && !updating { await runUpdate() }
+            let result = try await api.swipe(
+                itemId: item.id,
+                liked: liked,
+                boardId: styleId
+            )
+            if result.updateDue && !updating { await runUpdate(styleId: styleId) }
         } catch {
             showToast("Swipe not saved", lines: [error.localizedDescription])
         }
@@ -585,18 +594,24 @@ final class AppState {
     }
 
     func deckDone() async {
-        await runUpdate()
+        let styleId = activeBoard?.id
+        await runUpdate(styleId: styleId)
+        guard activeBoard?.id == styleId else { return }
         await buildOutfits()
     }
 
     func dismissTasteUpdateError() { tasteUpdateError = nil }
 
-    func runUpdate() async {
+    func runUpdate(styleId: String? = nil) async {
         guard !updating, !busy.isBusy("taste.update") else { return }
+        let requestStyleId = styleId ?? activeBoard?.id
         updating = true
         tasteUpdateError = nil
         let completed = await busy.run("taste.update") {
-            do { self.announce(try await self.api.updateTaste()) }
+            do {
+                let result = try await self.api.updateTaste(boardId: requestStyleId)
+                self.announce(result, styleId: requestStyleId)
+            }
             catch let error as APIError where error.status == 409 { }
             catch { throw error }
         }
@@ -606,12 +621,13 @@ final class AppState {
         updating = false
     }
 
-    func announce(_ version: TasteVersion?) {
+    func announce(_ version: TasteVersion?, styleId: String? = nil) {
         guard let version else { return }
+        let requestStyleId = styleId ?? activeBoard?.id
         let changes = Array((version.changes ?? version.profile.changes).prefix(3))
         toast = ToastMessage(title: "Taste v\(version.version)", lines: changes, isTaste: true)
         Task {
-            async let tasteTask = refreshTaste()
+            async let tasteTask = refreshTaste(styleId: requestStyleId)
             async let boardsTask = refreshBoards()
             _ = await (tasteTask, boardsTask)
         }

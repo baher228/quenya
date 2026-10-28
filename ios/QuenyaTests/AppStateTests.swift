@@ -88,6 +88,64 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/api/outfits/outfit-1/verdict")
     }
 
+    func testSwipeRequestKeepsCapturedBoardAfterBoardSwitch() async throws {
+        let (state, session) = makeState()
+        defer { session.invalidateAndCancel() }
+        let boardA = makeBoard("board-a", active: true)
+        let boardB = makeBoard("board-b", active: false)
+        state.cache.activate(userId: "swipe-\(UUID().uuidString)")
+        state.boards = [boardA, boardB]
+        StubURLProtocol.setResponse(
+            json: #"{"swipes_since_update":1,"update_due":false}"#
+        )
+        StubURLProtocol.holdRequests(path: "/api/swipe")
+
+        let swipeTask = Task {
+            await state.swipe(Item(id: "item-1", title: "Jacket"), liked: true)
+        }
+        await waitForPending(path: "/api/swipe", count: 1)
+        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+
+        state.boards = [
+            makeBoard(boardA.id, active: false),
+            makeBoard(boardB.id, active: true),
+        ]
+        StubURLProtocol.completeNext(
+            path: "/api/swipe",
+            status: 200,
+            json: #"{"swipes_since_update":1,"update_due":false}"#
+        )
+        await swipeTask.value
+    }
+
+    func testTasteUpdateRequestKeepsCapturedBoardAfterBoardSwitch() async throws {
+        let (state, session) = makeState()
+        defer { session.invalidateAndCancel() }
+        let boardA = makeBoard("board-a", active: true)
+        let boardB = makeBoard("board-b", active: false)
+        state.boards = [boardA, boardB]
+        StubURLProtocol.setResponse(
+            status: 502,
+            json: #"{"detail":"Taste update failed"}"#
+        )
+        StubURLProtocol.holdRequests(path: "/api/taste/update")
+
+        let updateTask = Task { await state.runUpdate() }
+        await waitForPending(path: "/api/taste/update", count: 1)
+        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+
+        state.boards = [
+            makeBoard(boardA.id, active: false),
+            makeBoard(boardB.id, active: true),
+        ]
+        StubURLProtocol.completeNext(
+            path: "/api/taste/update",
+            status: 502,
+            json: #"{"detail":"Taste update failed"}"#
+        )
+        await updateTask.value
+    }
+
     func testRetryFailedRejectRepeatsVerdictAndReason() async throws {
         let store = InMemoryTokenStore("test-token")
         let configuration = URLSessionConfiguration.ephemeral

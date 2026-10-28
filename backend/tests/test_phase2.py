@@ -13,7 +13,9 @@ from app.schemas import (
     OutfitRequest,
     StylistOutput,
     SwapRequest,
+    SwipeRequest,
     TasteProfile,
+    TasteUpdateRequest,
     VerdictRequest,
 )
 
@@ -714,6 +716,185 @@ def test_foreign_board_id_is_not_found_for_outfit_mutations(monkeypatch):
         lambda: phase2_api.verdict(
             "outfit-1", VerdictRequest(verdict="like", board_id="foreign")
         ),
+    )
+    for request in requests:
+        with pytest.raises(HTTPException) as exc:
+            request()
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Board not found"
+
+
+def _create_board_pair(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "board-id.sqlite")
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
+    db.create_profile("board-a", _brief(), active=True, owner_id="owner-1")
+    db.create_profile("board-b", _brief(), active=False, owner_id="owner-1")
+    for board_id in ("board-a", "board-b"):
+        db.save_taste_version(
+            board_id,
+            1,
+            TasteProfile.model_validate(_taste_profile()).model_dump(),
+            {},
+            f"taste-{board_id}",
+        )
+
+
+def _insert_tagged_items(*items):
+    for item in items:
+        db.insert_items([{key: value for key, value in item.items() if key != "tags"}])
+        db.save_tags(item["id"], item["tags"], "tag-test")
+
+
+def test_swipe_board_id_uses_owned_non_active_profile(monkeypatch, tmp_path):
+    _create_board_pair(monkeypatch, tmp_path)
+    _insert_tagged_items(_item("target-item", "outerwear"))
+
+    result = phase2_api.swipe(
+        SwipeRequest(item_id="target-item", liked=True, board_id="board-b")
+    )
+
+    assert result["swipes_since_update"] == 1
+    assert db.profile_swipes("board-a") == []
+    assert db.profile_swipes("board-b") == [
+        {"item_id": "target-item", "liked": True}
+    ]
+    assert db.active_profile("user", owner_id="owner-1")["id"] == "board-a"
+
+
+def test_swipe_without_board_id_uses_active_profile(monkeypatch, tmp_path):
+    _create_board_pair(monkeypatch, tmp_path)
+    _insert_tagged_items(_item("active-item", "outerwear"))
+
+    phase2_api.swipe(SwipeRequest(item_id="active-item", liked=False))
+
+    assert db.profile_swipes("board-a") == [
+        {"item_id": "active-item", "liked": False}
+    ]
+    assert db.profile_swipes("board-b") == []
+
+
+def test_deck_board_id_filters_swipes_and_records_events_for_target(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    item_a = _item("item-a", "outerwear")
+    item_b = _item("item-b", "top")
+    _insert_tagged_items(item_a, item_b)
+    db.insert_swipe("board-a", "item-b", True)
+    db.insert_swipe("board-b", "item-a", True)
+    monkeypatch.setenv("QUENYA_RANKER", "tags")
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
+    monkeypatch.setattr(db, "live_catalogue", lambda: [item_a, item_b])
+    monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
+
+    targeted = phase2_api.deck(n=10, board_id="board-b")
+    active = phase2_api.deck(n=10)
+
+    assert [item["id"] for item in targeted] == ["item-b"]
+    assert [item["id"] for item in active] == ["item-a"]
+    assert db.recent_deck_item_ids("board-b") == ["item-b"]
+    assert db.recent_deck_item_ids("board-a") == ["item-a"]
+
+
+def test_taste_update_board_id_consumes_only_target_signals(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    _insert_tagged_items(
+        _item("signal-a", "outerwear"),
+        _item("signal-b", "top"),
+    )
+    db.insert_swipe("board-a", "signal-a", True)
+    db.insert_swipe("board-b", "signal-b", False)
+    output = TasteProfile.model_validate(_taste_profile())
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            output,
+            SimpleNamespace(request_id="taste-update", latency_ms=5),
+        ),
+    )
+
+    result = phase2_api.taste_update(TasteUpdateRequest(board_id="board-b"))
+
+    assert result["version"] == 2
+    assert not db.unconsumed_signals("board-b")["swipes"]
+    assert [row["item_id"] for row in db.unconsumed_signals("board-a")["swipes"]] == [
+        "signal-a"
+    ]
+
+
+def test_taste_history_board_id_reads_target_profile(monkeypatch, tmp_path):
+    _create_board_pair(monkeypatch, tmp_path)
+
+    result = phase2_api.taste_history(board_id="board-b")
+
+    assert result["profile_id"] == "board-b"
+    assert result["current"]["version"] == 1
+
+
+def test_taste_update_without_body_uses_active_profile(monkeypatch, tmp_path):
+    _create_board_pair(monkeypatch, tmp_path)
+    _insert_tagged_items(
+        _item("signal-a", "outerwear"),
+        _item("signal-b", "top"),
+    )
+    db.insert_swipe("board-a", "signal-a", True)
+    db.insert_swipe("board-b", "signal-b", False)
+    output = TasteProfile.model_validate(_taste_profile())
+    monkeypatch.setattr(
+        taste,
+        "call_task",
+        lambda *_args: (
+            output,
+            SimpleNamespace(request_id="taste-update", latency_ms=5),
+        ),
+    )
+
+    result = phase2_api.taste_update()
+
+    assert result["version"] == 2
+    assert not db.unconsumed_signals("board-a")["swipes"]
+    assert [row["item_id"] for row in db.unconsumed_signals("board-b")["swipes"]] == [
+        "signal-b"
+    ]
+
+
+def test_swipe_deck_and_taste_reject_foreign_board_ids(monkeypatch):
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-1")
+    monkeypatch.setattr(
+        db,
+        "get_profile",
+        lambda profile_id, kind=None: {
+            "id": profile_id,
+            "owner_id": "owner-2",
+            "brief": _brief(),
+        }
+        if profile_id == "foreign" and kind == "user"
+        else None,
+    )
+    monkeypatch.setattr(
+        db,
+        "active_profile",
+        lambda *_args, **_kwargs: pytest.fail(
+            "a supplied board_id must not use the active profile"
+        ),
+    )
+    monkeypatch.setattr(
+        db,
+        "get_item_with_tags",
+        lambda _item_id: pytest.fail("ownership must be checked before item lookup"),
+    )
+
+    requests = (
+        lambda: phase2_api.deck(board_id="foreign"),
+        lambda: phase2_api.swipe(
+            SwipeRequest(item_id="item", liked=True, board_id="foreign")
+        ),
+        lambda: phase2_api.taste_update(TasteUpdateRequest(board_id="foreign")),
+        lambda: phase2_api.taste_history(board_id="foreign"),
     )
     for request in requests:
         with pytest.raises(HTTPException) as exc:

@@ -180,6 +180,60 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(client.resolve(wrapped.first?.imagePath)?.absoluteString, "https://api.example.test/img/a.jpg")
     }
 
+    func testDeckAndTasteIncludeBoardIdInQuery() async throws {
+        StubURLProtocol.setResponse(json: "[]")
+        _ = try await client.deck(boardId: "board-b")
+        var components = URLComponents(
+            url: try XCTUnwrap(StubURLProtocol.lastRequest?.url),
+            resolvingAgainstBaseURL: false
+        )
+        XCTAssertEqual(
+            components?.queryItems?.first(where: { $0.name == "board_id" })?.value,
+            "board-b"
+        )
+
+        StubURLProtocol.setResponse(json: """
+        {"current":null,"history":[],"counts":{},"core":null}
+        """)
+        _ = try await client.taste(boardId: "board-b")
+        components = URLComponents(
+            url: try XCTUnwrap(StubURLProtocol.lastRequest?.url),
+            resolvingAgainstBaseURL: false
+        )
+        XCTAssertEqual(
+            components?.queryItems?.first(where: { $0.name == "board_id" })?.value,
+            "board-b"
+        )
+    }
+
+    func testSwipeAndTasteUpdateIncludeBoardIdInBody() async throws {
+        StubURLProtocol.setResponse(json: #"{"swipes_since_update":1,"update_due":false}"#)
+        _ = try await client.swipe(itemId: "item-1", liked: true, boardId: "board-b")
+        var body = try XCTUnwrap(StubURLProtocol.lastBody)
+        var payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Any]
+        )
+        XCTAssertEqual(payload["item_id"] as? String, "item-1")
+        XCTAssertEqual(payload["liked"] as? Bool, true)
+        XCTAssertEqual(payload["board_id"] as? String, "board-b")
+
+        StubURLProtocol.setResponse(
+            status: 502,
+            json: #"{"detail":"Taste update failed"}"#
+        )
+        do {
+            _ = try await client.updateTaste(boardId: "board-b")
+            XCTFail("Expected a 502")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, 502)
+        }
+        body = try XCTUnwrap(StubURLProtocol.lastBody)
+        payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Any]
+        )
+        XCTAssertEqual(payload["board_id"] as? String, "board-b")
+    }
+
     func testSearchDecodesArrayAndWrappedLiveResults() async throws {
         StubURLProtocol.setResponse(json: "[\(realItem)]")
         let saved = try await client.search(q: "brown shoes & more")

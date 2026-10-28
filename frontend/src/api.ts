@@ -94,11 +94,16 @@ export const api = {
       body: JSON.stringify({ brief }),
     }),
   fetchJob: (id: string) => req<FetchJob>(`/api/fetch/${id}`),
-  deck: (n = 10) => req<Item[] | { items: Item[] }>(`/api/deck?n=${n}`).then(r => (Array.isArray(r) ? r : r.items)),
-  swipe: (item_id: string, liked: boolean) =>
-    post<{ swipes_since_update: number; update_due: boolean }>("/api/swipe", { item_id, liked }),
-  updateTaste: () => post<TasteVersion>("/api/taste/update"),
-  taste: () => req<TasteState>("/api/taste"),
+  deck: (n = 10, board_id?: string) =>
+    req<Item[] | { items: Item[] }>(
+      `/api/deck?n=${n}${board_id ? `&board_id=${encodeURIComponent(board_id)}` : ""}`,
+    ).then(r => (Array.isArray(r) ? r : r.items)),
+  swipe: (item_id: string, liked: boolean, board_id?: string) =>
+    post<{ swipes_since_update: number; update_due: boolean }>("/api/swipe", { item_id, liked, board_id }),
+  updateTaste: (board_id?: string) =>
+    post<TasteVersion>("/api/taste/update", board_id ? { board_id } : undefined),
+  taste: (board_id?: string) =>
+    req<TasteState>(`/api/taste${board_id ? `?board_id=${encodeURIComponent(board_id)}` : ""}`),
   outfits: (count: number, locked_ids: string[] = [], exclude_ids: string[] = [], board_id?: string) =>
     post<OutfitsResponse>("/api/outfits", { count, locked_ids, exclude_ids, board_id }),
   swap: (outfitId: string, item_id: string, exclude_ids: string[] = [], board_id?: string) =>
