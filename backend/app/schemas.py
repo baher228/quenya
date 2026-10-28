@@ -103,6 +103,11 @@ class StylistOutput(StrictModel):
 class SwipeRequest(StrictModel):
     item_id: str = Field(min_length=1)
     liked: bool
+    board_id: str | None = Field(default=None, min_length=1)
+
+
+class TasteUpdateRequest(StrictModel):
+    board_id: str | None = Field(default=None, min_length=1)
 
 
 class OutfitRequest(StrictModel):

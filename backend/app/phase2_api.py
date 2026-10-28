@@ -59,6 +59,7 @@ from app.schemas import (
     StylistOutput,
     SwapRequest,
     SwipeRequest,
+    TasteUpdateRequest,
     UploadAssignRequest,
     VerdictRequest,
 )
@@ -1010,12 +1011,14 @@ def _ensure_live_vinted_items(
 
 @router.get("/api/deck")
 def deck(
-    n: int = 10, background_tasks: BackgroundTasks = None
+    n: int = 10,
+    background_tasks: BackgroundTasks = None,
+    board_id: str | None = None,
 ) -> list[dict[str, Any]]:
     if n < 1 or n > 50:
         raise HTTPException(status_code=422, detail="n must be between 1 and 50")
     background_tasks = background_tasks or BackgroundTasks()
-    active = _user_profile()
+    active = _board_profile(board_id)
     taste = _taste(active["id"])
     share = secondhand_share(active["brief"], taste)
     with db.db_connection() as connection:
@@ -1151,7 +1154,7 @@ def deck(
 
 @router.post("/api/swipe")
 def swipe(body: SwipeRequest) -> dict[str, Any]:
-    active = _user_profile()
+    active = _board_profile(body.board_id)
     item = db.get_item_with_tags(body.item_id)
     if not item or not item.get("tags"):
         raise HTTPException(status_code=404, detail="Tagged item not found")
@@ -1164,13 +1167,15 @@ def swipe(body: SwipeRequest) -> dict[str, Any]:
 
 
 @router.post("/api/taste/update")
-def taste_update() -> dict[str, Any]:
-    return _taste_update_result(_user_profile())
+def taste_update(body: TasteUpdateRequest | None = None) -> dict[str, Any]:
+    return _taste_update_result(
+        _board_profile(body.board_id if body else None)
+    )
 
 
 @router.get("/api/taste")
-def taste_history() -> dict[str, Any]:
-    active = _user_profile()
+def taste_history(board_id: str | None = None) -> dict[str, Any]:
+    active = _board_profile(board_id)
     current = db.latest_taste(active["id"])
     if not current:
         raise HTTPException(status_code=404, detail="Taste profile not found")

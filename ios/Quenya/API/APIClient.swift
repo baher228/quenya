@@ -67,18 +67,32 @@ final class APIClient {
         try await postEmpty("/api/boards/\(escaped(id))/activate")
     }
 
-    func deck(n: Int = 10) async throws -> [Item] {
-        let data = try await request(path: "/api/deck?n=\(n)", method: "GET")
+    func deck(n: Int = 10, boardId: String? = nil) async throws -> [Item] {
+        let boardQuery = boardId.map { "&board_id=\(escaped($0))" } ?? ""
+        let data = try await request(path: "/api/deck?n=\(n)\(boardQuery)", method: "GET")
         if let items = try? decoder.decode([Item].self, from: data) { return items }
         return try decoder.decode(ItemList.self, from: data).items
     }
 
-    func swipe(itemId: String, liked: Bool) async throws -> SwipeResult {
-        try await post("/api/swipe", body: SwipeBody(itemId: itemId, liked: liked))
+    func swipe(itemId: String, liked: Bool, boardId: String? = nil) async throws -> SwipeResult {
+        try await post(
+            "/api/swipe",
+            body: SwipeBody(itemId: itemId, liked: liked, boardId: boardId)
+        )
     }
 
-    func updateTaste() async throws -> TasteVersion { try await postEmpty("/api/taste/update") }
-    func taste() async throws -> TasteState { try await get("/api/taste") }
+    func updateTaste(boardId: String? = nil) async throws -> TasteVersion {
+        guard let boardId else { return try await postEmpty("/api/taste/update") }
+        return try await post(
+            "/api/taste/update",
+            body: TasteUpdateBody(boardId: boardId)
+        )
+    }
+
+    func taste(boardId: String? = nil) async throws -> TasteState {
+        let boardQuery = boardId.map { "?board_id=\(escaped($0))" } ?? ""
+        return try await get("/api/taste\(boardQuery)")
+    }
 
     func outfits(
         count: Int,
@@ -324,7 +338,8 @@ private struct EmptyBody: Encodable {}
 private struct InviteBody: Encodable { var token: String }
 private struct CreateProfileBody: Encodable { var brief: Brief; var newBoard: Bool }
 private struct BriefBody: Encodable { var brief: Brief }
-private struct SwipeBody: Encodable { var itemId: String; var liked: Bool }
+private struct SwipeBody: Encodable { var itemId: String; var liked: Bool; var boardId: String? }
+private struct TasteUpdateBody: Encodable { var boardId: String }
 private struct OutfitRequestBody: Encodable {
     var count: Int
     var lockedIds: [String]

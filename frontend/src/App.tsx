@@ -135,24 +135,33 @@ export default function App() {
   useEffect(() => { if (!routeNote) return; const h = window.setTimeout(() => setRouteNote(null), 15000); return () => window.clearTimeout(h); }, [routeNote]);
 
   const version = taste?.current?.version ?? null;
-  const refreshTaste = useCallback(() => { api.taste().then(setTaste).catch(() => setTaste({ current: null, history: [], counts: {} })); }, []);
+  const refreshTaste = useCallback((boardId = activeBoard?.id) => {
+    if (!boardId) return;
+    api.taste(boardId).then(result => {
+      if (activeBoardIdRef.current === boardId) setTaste(result);
+    }).catch(() => {
+      if (activeBoardIdRef.current === boardId) {
+        setTaste({ current: null, history: [], counts: {} });
+      }
+    });
+  }, [activeBoard?.id]);
   useEffect(() => {
     if (!authLoading && user) refreshTaste();
   }, [authLoading, refreshTaste, user]);
 
-  const announce = useCallback((t: TasteVersion | null | undefined, _why: string) => {
+  const announce = useCallback((t: TasteVersion | null | undefined, _why: string, boardId = activeBoard?.id) => {
     if (!t) return;
     setToast({ id: Date.now(), title: `Taste v${t.version}`, lines: [], pill: true });
-    refreshTaste(); refreshBoards();
-  }, [refreshTaste, refreshBoards]);
+    refreshTaste(boardId); refreshBoards();
+  }, [activeBoard?.id, refreshTaste, refreshBoards]);
   useEffect(() => { if (!toast) return; const h = window.setTimeout(() => setToast(null), toast.pill ? 3200 : 6000); return () => window.clearTimeout(h); }, [toast]);
 
-  const runUpdate = useCallback(async (why: string) => {
+  const runUpdate = useCallback(async (why: string, boardId = activeBoard?.id) => {
     setUpdating(true);
-    try { announce(await api.updateTaste(), why); }
+    try { announce(await api.updateTaste(boardId), why, boardId); }
     catch (e) { if (!(e instanceof Error && "status" in e && (e as { status: number }).status === 409)) setToast({ id: Date.now(), title: "Taste update failed", lines: [errText(e)] }); }
     finally { setUpdating(false); }
-  }, [announce]);
+  }, [activeBoard?.id, announce]);
 
   const boardChanged = useCallback(() => {
     setDeckKey(k => k + 1); refreshTaste(); refreshBoards();
@@ -266,9 +275,8 @@ export default function App() {
     }
   }, [activeBoard, user]);
 
-  const deckDone = async () => {
-    const boardId = activeBoard?.id ?? null;
-    await runUpdate("from your swipes");
+  const deckDone = async (boardId: string) => {
+    await runUpdate("from your swipes", boardId);
     void build(boardId);
   };
 
@@ -372,7 +380,7 @@ export default function App() {
           {tab === "swipe" && (hasProfile && !picking
             ? activeBoard ? <DeckScreen key={`${deckKey}:${user.id}:${activeBoard.id}`} userId={user.id} boardId={activeBoard.id} profile={taste?.current?.profile ?? null} version={version}
                 board={activeBoard?.label ?? ""} onChange={() => setPicking(true)}
-                onSignal={due => { if (due && !updating) void runUpdate("from your swipes"); }}
+                onSignal={(due, boardId) => { if (due && !updating) void runUpdate("from your swipes", boardId); }}
                 onDone={deckDone} onOpenItem={item => setSheet({ kind: "item", item })} />
               : <Loading>Loading your style…</Loading>
             : boards.length > 0
