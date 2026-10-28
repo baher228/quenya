@@ -37,6 +37,7 @@ struct DebugSettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(QuenyaTheme.webPhone)
+            .quenyaPage()
             .foregroundStyle(QuenyaTheme.webText)
             .navigationTitle("Debug settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -46,6 +47,7 @@ struct DebugSettingsView: View {
                 }
             }
         }
+        .quenyaSheet()
         .onAppear { value = state.currentBaseURLText() }
     }
 }

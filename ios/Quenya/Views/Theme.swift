@@ -35,6 +35,77 @@ extension Color {
     }
 }
 
+extension View {
+    func quenyaPage() -> some View {
+        frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    func quenyaSheet() -> some View {
+        background(QuenyaTheme.webPhone.ignoresSafeArea())
+            .presentationBackground(QuenyaTheme.webPhone)
+            .preferredColorScheme(.dark)
+    }
+
+    func skeletonPulse(enabled: Bool = true) -> some View {
+        modifier(SkeletonPulse(enabled: enabled))
+    }
+}
+
+struct SkeletonBlock: View {
+    var cornerRadius: CGFloat = 8
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(QuenyaTheme.webLine)
+    }
+}
+
+private struct SkeletonPulse: ViewModifier {
+    var enabled: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dimmed = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(reduceMotion ? 1 : (dimmed ? 0.55 : 1))
+            .onAppear { animateIfAllowed() }
+            .onChange(of: reduceMotion) { _, _ in animateIfAllowed() }
+            .onChange(of: enabled) { _, _ in animateIfAllowed() }
+    }
+
+    private func animateIfAllowed() {
+        guard !reduceMotion, enabled else {
+            dimmed = false
+            return
+        }
+        withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+            dimmed = true
+        }
+    }
+}
+
+struct SlowHint: View {
+    var text = "Still working, the stylist is picking pieces…"
+    @State private var visible = false
+
+    var body: some View {
+        Group {
+            if visible {
+                Text(text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(QuenyaTheme.webMuted)
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            guard !visible else { return }
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.35)) { visible = true }
+        }
+    }
+}
+
 struct Eyebrow: View {
     let text: String
 
@@ -93,21 +164,38 @@ struct PillButton: View {
     var primary = false
     var disabled = false
     var dark = false
+    var busy = false
     var action: () -> Void
+    @State private var tapCount = 0
+
+    private var foreground: Color {
+        primary ? QuenyaTheme.webPhone : QuenyaTheme.webText
+    }
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
+        Button {
+            tapCount += 1
+            action()
+        } label: {
+            ZStack {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(foreground)
+                    .opacity(busy ? 0 : 1)
+                if busy {
+                    ProgressView().controlSize(.small).tint(foreground)
+                }
+            }
                 .frame(minHeight: 44)
                 .padding(.horizontal, 20)
                 .background(primary ? QuenyaTheme.webText : QuenyaTheme.webSurface2, in: Capsule())
                 .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.webLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.45 : 1)
+        .disabled(disabled || busy)
+        .opacity(disabled && !busy ? 0.45 : 1)
+        .accessibilityLabel(busy ? "Loading" : title)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
     }
 }
 
@@ -116,19 +204,36 @@ struct ChoicePill: View {
     var selected = false
     var dark = false
     var outlined = false
+    var busy = false
+    var disabled = false
     var action: () -> Void
+    @State private var tapCount = 0
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft)
+        Button {
+            tapCount += 1
+            action()
+        } label: {
+            ZStack {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft)
+                    .opacity(busy ? 0 : 1)
+                if busy {
+                    ProgressView().controlSize(.small)
+                        .tint(selected ? QuenyaTheme.webPhone : outlined ? QuenyaTheme.sage : QuenyaTheme.webSoft)
+                }
+            }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(selected ? QuenyaTheme.webText : (outlined ? Color.clear : QuenyaTheme.webSurface2), in: Capsule())
                 .overlay(Capsule().stroke(outlined ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .disabled(disabled || busy)
+        .opacity(disabled && !busy ? 0.5 : 1)
+        .accessibilityLabel(busy ? "Loading" : title)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
     }
 }
 

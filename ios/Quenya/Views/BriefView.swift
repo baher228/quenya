@@ -157,18 +157,24 @@ struct BriefView: View {
                     }
                 }
 
-                if let error = state.briefError { ErrorPanel(message: error) }
+                if state.creatingBrief {
+                    LoadingLabel(title: "Building your style")
+                    SlowHint(text: "Still working, reading your brief and picking a first deck…")
+                } else if let error = state.briefError {
+                    ErrorPanel(message: error) {
+                        Task { await state.submitBrief(draft, photos: photoData) }
+                    }
+                }
                 PillButton(
-                    title: state.creatingBrief
-                    ? (state.briefMode == .edit ? "Updating…" : "Creating…")
-                    : (state.briefMode == .edit ? "Update style" : "Create style"),
+                    title: state.briefMode == .edit ? "Update style" : "Create style",
                     primary: true,
-                    disabled: state.creatingBrief || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).count < 3
+                    disabled: draft.text.trimmingCharacters(in: .whitespacesAndNewlines).count < 3,
+                    busy: state.busy.isBusy("brief.submit")
                 ) {
                     Task { await state.submitBrief(draft, photos: photoData) }
                 }
                 .frame(maxWidth: .infinity)
-                if state.briefMode == .edit && state.canCreateStyle {
+                if !state.creatingBrief && state.briefMode == .edit && state.canCreateStyle {
                     Button("+ New style instead") { state.startNewStyle() }
                         .font(.system(size: 13))
                         .foregroundStyle(QuenyaTheme.muted)
@@ -176,6 +182,7 @@ struct BriefView: View {
                         .contentShape(Rectangle())
                 }
             }
+            .quenyaPage()
             .padding(20)
         }
         .background(QuenyaTheme.cream)

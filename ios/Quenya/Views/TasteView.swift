@@ -21,6 +21,17 @@ struct TasteView: View {
             VStack(alignment: .leading, spacing: 15) {
                 Eyebrow(text: "\(state.activeBoard?.label ?? "Your taste")\(state.currentVersion.map { " · v\($0)" } ?? "")")
                 H1(text: "What we've learned.")
+                if state.updating {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small).tint(QuenyaTheme.sage)
+                        Text("Updating your taste…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(QuenyaTheme.webMuted)
+                    }
+                }
+                if let error = state.tasteUpdateError {
+                    ErrorPanel(message: error) { Task { await state.runUpdate() } }
+                }
                 if loading { LoadingLabel(title: "Loading your profile") }
                 if state.taste == nil { LoadingLabel(title: "Loading your profile") }
                 if let profile {
@@ -111,6 +122,7 @@ struct TasteView: View {
                     }
                 }
             }
+            .quenyaPage()
             .padding(18)
         }
         .background(QuenyaTheme.cream)

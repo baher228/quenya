@@ -24,11 +24,16 @@ struct InviteView: View {
                     .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                     .lineLimit(1...3)
-                PillButton(title: "Continue", primary: true, disabled: input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                PillButton(
+                    title: "Continue",
+                    primary: true,
+                    disabled: input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    busy: state.busy.isBusy("auth.invite")
+                ) {
                     Task { await state.redeemInvite(input) }
                 }
                 if case .signedOut(let message) = state.authPhase, let message {
-                    ErrorPanel(message: message)
+                    ErrorPanel(message: message) { Task { await state.redeemInvite(input) } }
                 }
                 if state.isDebug {
                     Button("Debug") { showingDebug = true }
@@ -38,9 +43,11 @@ struct InviteView: View {
                 }
                 Spacer(minLength: 40)
             }
+            .quenyaPage()
             .padding(24)
         }
         .background(QuenyaTheme.webPhone.ignoresSafeArea())
         .sheet(isPresented: $showingDebug) { DebugSettingsView() }
+        .quenyaSheet()
     }
 }
