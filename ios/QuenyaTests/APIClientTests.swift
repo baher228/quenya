@@ -87,6 +87,17 @@ final class APIClientTests: XCTestCase {
             .contains(#"name="file"; filename="photo.jpg""#))
     }
 
+    #if !PERFORMANCE_BASELINE
+    @MainActor
+    func testJSONResponseDecodingDoesNotRunOnMainThread() async throws {
+        StubURLProtocol.setResponse(json: #"{"id":"u1","name":"Tester","role":"tester"}"#)
+
+        _ = try await client.me()
+
+        XCTAssertEqual(client.lastDecodeWasMainThread, false)
+    }
+    #endif
+
     func testCheckoutUsesAuthenticatedOutfitRequest() async throws {
         StubURLProtocol.setResponse(json: """
         {"order_ref":"order-1","simulated":true,"lines":[

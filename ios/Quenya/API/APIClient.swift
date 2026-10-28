@@ -19,6 +19,9 @@ final class APIClient {
     var onUnauthorized: (() -> Void)?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    #if DEBUG
+    private(set) var lastDecodeWasMainThread: Bool?
+    #endif
 
     init(baseURL: URL, tokenStore: TokenStore, session: URLSession = .shared) {
         self.baseURL = baseURL
@@ -254,8 +257,17 @@ final class APIClient {
             throw apiError(data: data, status: http.statusCode)
         }
         if type == Data.self, let value = data as? T { return value }
+        #if DEBUG
+        lastDecodeWasMainThread = Self.isMainThread()
+        #endif
         return try decoder.decode(type, from: data)
     }
+
+    #if DEBUG
+    private static func isMainThread() -> Bool {
+        Thread.isMainThread
+    }
+    #endif
 
     private func apiError(data: Data, status: Int) -> APIError {
         let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

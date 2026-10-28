@@ -203,6 +203,7 @@ final class AppState {
             let refreshedUser = try await api.me()
             guard !Task.isCancelled, launchID == requestID else { return }
             if let cachedSession, cachedSession.userId != refreshedUser.id {
+                await cache.flush()
                 cache.clear()
                 resetPerUserState()
                 cache.activate(userId: refreshedUser.id)
@@ -226,6 +227,7 @@ final class AppState {
             return
         } catch let error as APIError where error.status == 401 {
             guard !Task.isCancelled, launchID == requestID else { return }
+            await cache.flush()
             cache.clear()
             resetPerUserState()
             authPhase = .signedOut(nil)
@@ -253,6 +255,7 @@ final class AppState {
             self.tokenStore.save(result.token)
             let redeemedUser = try await self.api.me()
             if self.cache.userId != nil && self.cache.userId != redeemedUser.id {
+                await self.cache.flush()
                 self.cache.clear()
             }
             self.user = redeemedUser
@@ -273,6 +276,7 @@ final class AppState {
         }
         if !completed {
             tokenStore.clear()
+            await cache.flush()
             cache.clear()
             resetPerUserState()
             authPhase = .signedOut(busy.error("auth.invite"))
@@ -281,6 +285,7 @@ final class AppState {
 
     func signOut() async {
         guard !busy.isBusy("auth.signout") else { return }
+        await cache.flush()
         await busy.run("auth.signout") {
             _ = try await self.api.logout()
         }
@@ -290,13 +295,14 @@ final class AppState {
         authPhase = .signedOut(nil)
     }
 
-    func changeBaseURL(_ value: String?) {
+    func changeBaseURL(_ value: String?) async {
         if let value, let url = AppConfig.validURL(value) {
             UserDefaults.standard.set(url.absoluteString, forKey: AppConfig.userDefaultsKey)
         } else {
             UserDefaults.standard.removeObject(forKey: AppConfig.userDefaultsKey)
         }
         tokenStore.clear()
+        await cache.flush()
         cache.clear()
         resetPerUserState()
         configureAPI()
@@ -811,6 +817,10 @@ final class AppState {
         await refreshDeckQuietly(maxAge: 600)
     }
 
+    func flushCache() async {
+        await cache.flush()
+    }
+
     func currentBaseURLText() -> String {
         AppConfig.baseURL.absoluteString
     }
@@ -869,6 +879,7 @@ final class AppState {
         api.onUnauthorized = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                await self.cache.flush()
                 self.cache.clear()
                 self.resetPerUserState()
                 self.authPhase = .signedOut(nil)

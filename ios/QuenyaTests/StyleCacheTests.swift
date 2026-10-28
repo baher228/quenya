@@ -23,7 +23,7 @@ final class StyleCacheTests: XCTestCase {
         XCTAssertEqual(state.deck.count, 2)
     }
 
-    func testSnapshotRoundTripsAcrossCacheInstances() {
+    func testSnapshotRoundTripsAcrossCacheInstances() async {
         let directory = makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = StyleCache(directory: directory)
@@ -36,6 +36,7 @@ final class StyleCacheTests: XCTestCase {
             $0.deckFetchedAt = Date(timeIntervalSince1970: 1_234_567_890)
         }
         let expected = cache.snapshot(for: "b1")
+        await cache.flush()
 
         let reopened = StyleCache(directory: directory)
         reopened.activate(userId: "u1")
@@ -43,12 +44,13 @@ final class StyleCacheTests: XCTestCase {
         XCTAssertEqual(reopened.snapshot(for: "b1"), expected)
     }
 
-    func testSessionSnapshotRoundTripsLastTabAndDecodesLegacyJSON() throws {
+    func testSessionSnapshotRoundTripsLastTabAndDecodesLegacyJSON() async throws {
         let directory = makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = StyleCache(directory: directory)
         cache.activate(userId: "u1")
         cache.saveSession(sessionSnapshot(lastTab: .outfits))
+        await cache.flush()
 
         let reopened = StyleCache(directory: directory)
         XCTAssertEqual(reopened.loadSession()?.lastTab, .outfits)
@@ -92,6 +94,37 @@ final class StyleCacheTests: XCTestCase {
         XCTAssertEqual(cache.snapshot(for: "b1"), StyleSnapshot(userId: "u2", styleId: "b1"))
     }
 
+    func testRapidUpdatesCoalesceAndFlushPersistsLatestSnapshot() async throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+
+        for value in 1...50 {
+            cache.update("b1") { $0.swiped = value }
+        }
+        await cache.flush()
+
+        let writeCount = await cache.writeCount(forStyleId: "b1")
+        XCTAssertEqual(writeCount, 1)
+        let data = try Data(contentsOf: directory.appendingPathComponent("u1/b1.json"))
+        let persisted = try JSONDecoder().decode(StyleSnapshot.self, from: data)
+        XCTAssertEqual(persisted, cache.snapshot(for: "b1"))
+    }
+
+    func testClearWithPendingUpdateDoesNotRecreateCacheFiles() async {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+        cache.update("b1") { $0.deck = [item("pending")] }
+
+        cache.clear()
+        await cache.flush()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
     func testSwipeIsPersistedAndNeverReaddedByRefresh() async throws {
         let directory = makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -107,6 +140,7 @@ final class StyleCacheTests: XCTestCase {
         StubURLProtocol.setResponse(json: #"{"swipes_since_update":1,"update_due":false}"#)
 
         await state.swipe(swiped, liked: true)
+        await cache.flush()
 
         let data = try Data(contentsOf: directory.appendingPathComponent("u1/b1.json"))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

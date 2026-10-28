@@ -25,16 +25,22 @@ struct DebugSettingsView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(QuenyaTheme.muted)
                     Button("Use local (http://localhost:8000)") {
-                        state.changeBaseURL("http://localhost:8000")
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL("http://localhost:8000")
+                            dismiss()
+                        }
                     }
                     Button("Apply URL") {
-                        state.changeBaseURL(value)
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL(value)
+                            dismiss()
+                        }
                     }
                     Button("Reset to default") {
-                        state.changeBaseURL(nil)
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL(nil)
+                            dismiss()
+                        }
                     }
                 }
                 .listRowBackground(QuenyaTheme.webSurface)
