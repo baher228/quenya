@@ -41,7 +41,6 @@ struct FindView: View {
                             queryFocused = false
                             Task { await search(live: false) }
                         }
-                        .keyboardDoneToolbar()
                     PillButton(title: "Search", primary: true, disabled: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, busy: mode == "saved") {
                         Task { await search(live: false) }
                     }
@@ -139,6 +138,7 @@ struct FindView: View {
         .background(QuenyaTheme.cream)
         .scrollDismissesKeyboard(.immediately)
         .dismissKeyboardOnTap()
+        .keyboardDoneToolbar()
         .onChange(of: selection) { _, value in
             guard let value else { return }
             Task { await upload(value) }
