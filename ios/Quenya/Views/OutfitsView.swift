@@ -510,7 +510,7 @@ private struct OutfitSkeletonCard: View {
                 ForEach(0..<4, id: \.self) { _ in
                     VStack(alignment: .leading, spacing: 6) {
                         RoundedRectangle(cornerRadius: 15)
-                            .fill(QuenyaTheme.webSurface2)
+                            .fill(QuenyaTheme.webLine)
                             .aspectRatio(4.0 / 5.0, contentMode: .fit)
                             .opacity(pulseOpacity)
                         bar(width: 72, height: 6)
@@ -532,7 +532,7 @@ private struct OutfitSkeletonCard: View {
 
     private func bar(width: CGFloat, height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: height / 2)
-            .fill(QuenyaTheme.webSurface2)
+            .fill(QuenyaTheme.webLine)
             .frame(width: width, height: height)
             .opacity(pulseOpacity)
     }
