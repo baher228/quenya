@@ -10,6 +10,13 @@ export const shops = [
   "Represent",
 ];
 
+export const styleOptions = [
+  { key: "quiet", label: "Quiet luxury", brief: "quiet luxury" },
+  { key: "gorp", label: "Gorpcore", brief: "gorpcore but city-friendly" },
+  { key: "techno", label: "Berlin techno", brief: "Berlin techno, all black" },
+  { key: "graphic", label: "90s skate", brief: "90s skate, loud graphics" },
+] as const;
+
 export const tasteRows = [
   { label: "Technical outerwear", value: 0.8 },
   { label: "Arc'teryx", value: 0.8 },
