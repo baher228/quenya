@@ -279,6 +279,7 @@ struct ErrorPanel: View {
                 }
                 if let retry { PillButton(title: "Try again", action: retry) }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let dismiss {
                 Button(action: dismiss) {
                     Image(systemName: "xmark")
@@ -289,6 +290,8 @@ struct ErrorPanel: View {
                 }
                 .accessibilityLabel("Dismiss")
                 .buttonStyle(.plain)
+                .padding(.top, -12)
+                .padding(.trailing, -12)
             }
         }
         .padding(14)
