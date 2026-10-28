@@ -8,7 +8,7 @@ export function Privacy() {
   return (
     <Page home={false}>
       <article className="legal">
-        <p className="kicker">Privacy notice · Tester waitlist</p>
+        <p className="kicker">Privacy notice for the tester waitlist</p>
         <h1 className="display small">Your waitlist details.</h1>
         <p className="lede">
           This notice explains what we keep when you join the Quenya tester waitlist, why, and how to have it deleted.

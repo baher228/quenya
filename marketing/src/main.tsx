@@ -1,6 +1,3 @@
-import "@fontsource-variable/hanken-grotesk/wght.css";
-import "@fontsource-variable/newsreader/opsz.css";
-import "@fontsource-variable/newsreader/opsz-italic.css";
 import "./styles.css";
 import { StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";

@@ -73,14 +73,14 @@ export function WaitlistForm() {
 
   if (status.kind === "done") {
     return (
-      <div className="form-done" role="status" aria-live="polite">
+      <div className="form-done signup-done" role="status" aria-live="polite">
         <p className="kicker">You're on the list</p>
         <p className="done-title">Thank you. We'll be in touch.</p>
         <p className="done-body">
           We've saved <strong>{status.email}</strong>. When a testing place opens up, the invite comes to that address.
           Signed up before? We've just updated your details.
         </p>
-        <button type="button" className="link-btn" onClick={() => setStatus({ kind: "idle" })}>
+        <button type="button" className="link-btn signup-link" onClick={() => setStatus({ kind: "idle" })}>
           Sign up another email
         </button>
       </div>
@@ -89,31 +89,31 @@ export function WaitlistForm() {
 
   const sending = status.kind === "sending";
   return (
-    <form className="form" onSubmit={submit} noValidate={false}>
-      <div className="field">
+    <form className="form signup-form" onSubmit={submit} noValidate={false}>
+      <div className="field signup-field">
         <label htmlFor="wl-email">Email <span className="req">required</span></label>
         <input id="wl-email" name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} placeholder="you@example.com" />
       </div>
-      <div className="field-row">
-        <div className="field">
+      <div className="field-row signup-field-row">
+        <div className="field signup-field">
           <label htmlFor="wl-name">First name</label>
           <input id="wl-name" name="name" type="text" autoComplete="given-name" maxLength={80} />
         </div>
-        <div className="field">
+        <div className="field signup-field">
           <label htmlFor="wl-handle">Instagram or TikTok</label>
           <input id="wl-handle" name="handle" type="text" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={64} placeholder="@handle" />
         </div>
       </div>
-      <div className="field">
+      <div className="field signup-field">
         <label htmlFor="wl-style">Describe your style in a few words</label>
         <input id="wl-style" name="style_text" type="text" maxLength={280} placeholder="e.g. gorpcore but city-friendly" />
       </div>
 
-      <fieldset className="field devices">
+      <fieldset className="field devices signup-field">
         <legend>What would you test on?</legend>
-        <div className="chips">
+        <div className="chips device-options">
           {DEVICES.map(d => (
-            <label key={d.id} className="chip">
+            <label key={d.id} className="chip device-chip">
               <input type="checkbox" checked={devices.includes(d.id)} onChange={() => toggle(d.id)} />
               <span>{d.label}</span>
             </label>
@@ -121,11 +121,11 @@ export function WaitlistForm() {
         </div>
       </fieldset>
 
-      <label className="check">
+      <label className="check consent-line">
         <input type="checkbox" name="wants_testing" defaultChecked />
         <span>I want to test the app early</span>
       </label>
-      <label className="check">
+      <label className="check consent-line">
         <input type="checkbox" name="consent" required />
         <span>
           I agree to Quenya storing these details to contact me about the waitlist and testing, as described in the{" "}
@@ -141,7 +141,7 @@ export function WaitlistForm() {
       {status.kind === "error" && (
         <p className="form-error" role="alert">{status.message}</p>
       )}
-      <button className="btn" type="submit" disabled={sending}>
+      <button className="btn signup-submit" type="submit" disabled={sending}>
         {sending ? "Saving…" : "Join the waitlist"}
       </button>
       <p className="form-note">No spam, never shared. Ask us to delete your details any time.</p>

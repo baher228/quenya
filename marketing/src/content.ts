@@ -1,28 +1,3 @@
-export const briefs = [
-  "gorpcore but city-friendly",
-  "chocolate brown satin tops",
-  "Berlin techno",
-  "muted colours, no huge logos",
-];
-
-export const steps = [
-  {
-    n: "01",
-    title: "Describe it",
-    body: "Write a style in your own words. Pick a budget, then set the niche slider from familiar to deep cuts.",
-  },
-  {
-    n: "02",
-    title: "Swipe it",
-    body: "Real product cards, one at a time. Every like and pass teaches that style's taste profile right away.",
-  },
-  {
-    n: "03",
-    title: "Wear it",
-    body: "Quenya builds full outfits from your taste. Lock what you love, swap the rest, and buy straight from the shop.",
-  },
-];
-
 export const shops = [
   "Stüssy",
   "Carhartt WIP",
@@ -35,13 +10,24 @@ export const shops = [
   "Represent",
 ];
 
-export const layers = [
-  "Base: tee or shirt",
-  "Mid layer",
-  "Outer layer",
-  "Bottoms",
-  "Shoes",
-  "Bag and accessories, optional",
+export const styleOptions = [
+  { key: "quiet", label: "Quiet luxury", brief: "quiet luxury" },
+  { key: "gorp", label: "Gorpcore", brief: "gorpcore but city-friendly" },
+  { key: "techno", label: "Berlin techno", brief: "Berlin techno, all black" },
+  { key: "graphic", label: "90s skate", brief: "90s skate, loud graphics" },
+] as const;
+
+export const tasteRows = [
+  { label: "Technical outerwear", value: 0.8 },
+  { label: "Arc'teryx", value: 0.8 },
+  { label: "Black", value: 0.7 },
+  { label: "Gorpcore", value: 0.7 },
+  { label: "Shell jacket", value: 0.6 },
+  { label: "Cargo trousers", value: 0.6 },
+  { label: "The North Face", value: 0.5 },
+  { label: "Fleece", value: -0.4 },
+  { label: "Wool", value: -0.5 },
+  { label: "Logo-heavy", value: -0.6 },
 ];
 
 export const faq: { q: string; a: string }[] = [
