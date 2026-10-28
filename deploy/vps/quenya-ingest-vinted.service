@@ -6,4 +6,4 @@ Requires=docker.service
 [Service]
 Type=oneshot
 Nice=10
-ExecStart=/usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 40 --tag --embed
+ExecStart=/usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 40 --tag --embed --tag-concurrency 1 --embed-batch-size 8

@@ -52,7 +52,9 @@ sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.time
 
 Vinted runs every three hours with a 40-query sample and a ten-minute
 randomized delay. Retail runs daily at 04:00 UTC. Both jobs use `Nice=10` and
-the wrapper's 1500 MiB / 0.75 CPU Docker limits. Run one job manually with:
+the wrapper's 2560 MiB memory limit, equal memory-plus-swap limit (no extra
+swap), and 0.75 CPU Docker limit. Tagging uses concurrency 1 and embeddings use
+batches of 8 to keep peak memory lower. Run one job manually with:
 
 ```sh
 sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed

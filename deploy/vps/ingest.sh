@@ -18,7 +18,8 @@ esac
 
 exec flock -n "/run/quenya-ingest-$source.lock" \
     docker run --rm \
-    --memory 1500m \
+    --memory 2560m \
+    --memory-swap 2560m \
     --cpus 0.75 \
     --network container:quenya-quenya-api-1 \
     --env-file /etc/quenya/quenya.env \
