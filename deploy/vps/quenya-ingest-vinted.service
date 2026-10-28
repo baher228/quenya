@@ -1,0 +1,9 @@
+[Unit]
+Description=Ingest public Vinted seed listings into Quenya
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 40 --tag --embed

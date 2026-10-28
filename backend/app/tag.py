@@ -31,11 +31,12 @@ def tag_untagged(
     concurrency: int,
     source: str | None = None,
     retry_failed: bool = False,
+    item_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if concurrency < 1 or concurrency > 4:
         raise ValueError("concurrency must be between 1 and 4")
     db.init_db()
-    items = db.untagged_items(limit, source, retry_failed)
+    items = db.untagged_items(limit, source, retry_failed, item_ids)
     ok = failed = 0
     latencies: list[int] = []
     errors: list[str] = []

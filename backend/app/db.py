@@ -727,9 +727,14 @@ def source_urls() -> set[str]:
 
 
 def untagged_items(
-    limit: int, source: str | None = None, retry_failed: bool = False
+    limit: int,
+    source: str | None = None,
+    retry_failed: bool = False,
+    item_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     init_db()
+    if item_ids is not None and not item_ids:
+        return []
     query = "SELECT * FROM items WHERE tags_json IS NULL"
     params: list[Any] = []
     if not retry_failed:
@@ -737,6 +742,10 @@ def untagged_items(
     if source:
         query += " AND source=?"
         params.append(source)
+    if item_ids is not None:
+        placeholders = ",".join("?" for _ in item_ids)
+        query += f" AND id IN ({placeholders})"
+        params.extend(item_ids)
     query += " ORDER BY fetched_at LIMIT ?"
     params.append(limit)
     with db_connection() as connection:

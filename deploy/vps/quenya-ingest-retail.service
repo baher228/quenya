@@ -1,0 +1,9 @@
+[Unit]
+Description=Ingest public retail seed listings into Quenya
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/local/sbin/quenya-ingest retail --per-query 5 --tag --embed
