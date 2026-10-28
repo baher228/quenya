@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errText, gbp, img, type User } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
+import { cacheKey, clearAll as clearCache, get as getCache, remove as removeCache, set as setCache } from "./cache";
 import { DeckScreen } from "./Deck";
 import { FindScreen } from "./Find";
 import { OutfitsScreen, REASONS } from "./Outfits";
@@ -20,6 +21,11 @@ interface RouteNote { route: Route; board: Board }
 
 interface Toast { id: number; title: string; lines: string[]; pill?: boolean }
 
+interface OutfitCacheData {
+  outfits: Outfit[];
+  locked: Record<string, string[]>;
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("brief");
   const [brief, setBrief] = useState<Brief>({ ...DEFAULT_BRIEF, text: "" });
@@ -29,6 +35,8 @@ export default function App() {
   const [fetchNote, setFetchNote] = useState<string | null>(null);
   const [taste, setTaste] = useState<TasteState | null>(null);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [outfitLocks, setOutfitLocks] = useState<Record<string, string[]>>({});
+  const [outfitsCacheReadyKey, setOutfitsCacheReadyKey] = useState<string | null>(null);
   const [outLoading, setOutLoading] = useState(false);
   const [outErr, setOutErr] = useState<unknown>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
@@ -44,6 +52,9 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
+  const activeOutfitsCacheKey = user && activeBoard
+    ? cacheKey(user.id, activeBoard.id, "outfits")
+    : null;
   const canCreateStyle = !user || user.max_styles !== 1 || boards.length < 1;
   const writingNew = tab === "brief" && briefMode === "new";
   useEffect(() => {
@@ -55,11 +66,26 @@ export default function App() {
       try {
         const invite = new URLSearchParams(window.location.search).get("invite");
         if (invite) {
+          const hadPreviousToken = !!window.localStorage.getItem("quenya.token");
+          let previousUserId: string | null = null;
+          if (hadPreviousToken) {
+            try { previousUserId = (await api.me()).id; } catch { /* invite redemption may replace an expired session */ }
+          }
           const result = await api.invite(invite);
+          if (!hadPreviousToken || previousUserId !== result.user.id) {
+            clearCache();
+            setBoards([]);
+            setOutfits([]);
+            setOutfitLocks({});
+            setOutfitsCacheReadyKey(null);
+          }
           window.localStorage.setItem("quenya.token", result.token);
           window.history.replaceState({}, "", window.location.pathname);
+          setUser(result.user);
+        } else {
+          setUser(await api.me());
         }
-        setUser(await api.me());
+        setInviteOnly(false);
       } catch {
         setInviteOnly(true);
       } finally {
@@ -70,7 +96,12 @@ export default function App() {
   }, []);
   useEffect(() => {
     const unauthorized = () => {
+      clearCache();
       setUser(null);
+      setBoards([]);
+      setOutfits([]);
+      setOutfitLocks({});
+      setOutfitsCacheReadyKey(null);
       setInviteOnly(true);
     };
     window.addEventListener("quenya:unauthorized", unauthorized);
@@ -79,6 +110,23 @@ export default function App() {
   useEffect(() => {
     if (!authLoading && user) refreshBoards();
   }, [authLoading, refreshBoards, user]);
+  useEffect(() => {
+    if (!user || !activeBoard) {
+      setOutfitsCacheReadyKey(null);
+      return;
+    }
+    const key = cacheKey(user.id, activeBoard.id, "outfits");
+    const cached = getCache<OutfitCacheData>(user.id, activeBoard.id, "outfits")?.data;
+    setOutfits(Array.isArray(cached?.outfits) ? cached.outfits : []);
+    setOutfitLocks(cached?.locked && typeof cached.locked === "object" ? cached.locked : {});
+    setOutErr(null);
+    setOutLoading(false);
+    setOutfitsCacheReadyKey(key);
+  }, [activeBoard?.id, user?.id]);
+  useEffect(() => {
+    if (!user || !activeBoard || outfitsCacheReadyKey !== activeOutfitsCacheKey) return;
+    setCache(user.id, activeBoard.id, "outfits", { outfits, locked: outfitLocks });
+  }, [activeBoard?.id, activeOutfitsCacheKey, outfitLocks, outfits, outfitsCacheReadyKey, user?.id]);
   useEffect(() => {
     if (!authLoading && user && tab === "swipe" && picking) refreshBoards();
   }, [authLoading, tab, picking, refreshBoards, user]);
@@ -105,7 +153,7 @@ export default function App() {
   }, [announce]);
 
   const boardChanged = useCallback(() => {
-    setOutfits([]); setDeckKey(k => k + 1); refreshTaste(); refreshBoards();
+    setDeckKey(k => k + 1); refreshTaste(); refreshBoards();
   }, [refreshTaste, refreshBoards]);
 
   const handleUpload = useCallback(async (f: File) => {
@@ -124,7 +172,11 @@ export default function App() {
       if (tab === "brief") showBoardBrief();
       return true;
     }
-    try { await api.activate(b.id); showBoardBrief(); boardChanged(); setRouteNote(null); return true; }
+    try {
+      await api.activate(b.id);
+      setBoards(current => current.map(board => ({ ...board, active: board.id === b.id })));
+      showBoardBrief(); boardChanged(); setRouteNote(null); return true;
+    }
     catch (e) { setToast({ id: Date.now(), title: "Couldn't switch board", lines: [errText(e)] }); return false; }
   };
 
@@ -164,14 +216,21 @@ export default function App() {
       const r = briefMode === "edit"
         ? await api.updateBrief(activeBoard!.id, b)
         : await api.createProfile(b, true);
+      setBoards(current => current.some(board => board.id === r.board.id)
+        ? current.map(board => ({ ...board, ...r.board, active: board.id === r.board.id }))
+        : [...current.map(board => ({ ...board, active: false })), { ...r.board, active: true }]);
       if (briefMode === "edit") announce(r.taste, "from your new brief");
       else if (r.route && r.board) setRouteNote({ route: r.route, board: r.board });
       setOutfits([]);
+      setOutfitLocks({});
+      setCache(user.id, r.board.id, "outfits", { outfits: [], locked: {} });
+      setOutfitsCacheReadyKey(cacheKey(user.id, r.board.id, "outfits"));
       refreshTaste(); refreshBoards();
       for (const f of photos) {
         try { await handleUpload(f); } catch (e) { setToast({ id: Date.now(), title: "Couldn't read a photo", lines: [errText(e)] }); }
       }
       if (r.fetch_job_id) void pollFetch(r.fetch_job_id);
+      removeCache(user.id, r.board.id, "deck");
       setDeckKey(k => k + 1);
       setPicking(false);
       setTab("swipe");
@@ -191,8 +250,13 @@ export default function App() {
 
   const build = useCallback(async () => {
     setTab("outfits"); setOutLoading(true); setOutErr(null);
-    try { setOutfits((await api.outfits(3)).outfits); } catch (e) { setOutErr(e); } finally { setOutLoading(false); }
-  }, []);
+    try {
+      const next = (await api.outfits(3)).outfits;
+      setOutfits(next);
+      setOutfitLocks({});
+      if (user && activeBoard) setCache(user.id, activeBoard.id, "outfits", { outfits: next, locked: {} });
+    } catch (e) { setOutErr(e); } finally { setOutLoading(false); }
+  }, [activeBoard, user]);
 
   const deckDone = async () => { await runUpdate("from your swipes"); void build(); };
 
@@ -218,9 +282,11 @@ export default function App() {
 
   const reset = async () => {
     if (!window.confirm("Reset the demo? All boards, swipes, outfits and taste versions are deleted.")) return;
+    clearCache();
+    setOutfitsCacheReadyKey(null);
     await api.reset().catch(() => undefined);
     setBoards([]); setRouteNote(null); setBriefKey(k => k + 1);
-    setOutfits([]); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setBriefMode("new"); setTab("brief");
+    setOutfits([]); setOutfitLocks({}); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setBriefMode("new"); setTab("brief");
   };
 
   const hasProfile = !!taste?.current;
@@ -271,15 +337,26 @@ export default function App() {
             </>
           )}
           {tab === "swipe" && (hasProfile && !picking
-            ? <DeckScreen key={deckKey} profile={taste?.current?.profile ?? null} version={version}
+            ? activeBoard ? <DeckScreen key={`${deckKey}:${user.id}:${activeBoard.id}`} userId={user.id} boardId={activeBoard.id} profile={taste?.current?.profile ?? null} version={version}
                 board={activeBoard?.label ?? ""} onChange={() => setPicking(true)}
                 onSignal={due => { if (due && !updating) void runUpdate("from your swipes"); }}
                 onDone={deckDone} onOpenItem={item => setSheet({ kind: "item", item })} />
+              : <Loading>Loading your style…</Loading>
             : boards.length > 0
-              ? <StylePicker boards={boards} allowNew={canCreateStyle} onNew={newBoard} onPick={async b => { if (await switchBoard(b)) setPicking(false); }} onSignOut={() => { void api.logout().finally(() => { window.localStorage.removeItem("quenya.token"); setUser(null); }); }} />
+              ? <StylePicker boards={boards} allowNew={canCreateStyle} onNew={newBoard} onPick={async b => { if (await switchBoard(b)) setPicking(false); }} onSignOut={() => {
+                  clearCache();
+                  setOutfitsCacheReadyKey(null);
+                  setOutfits([]);
+                  setOutfitLocks({});
+                  setBoards([]);
+                  void api.logout().catch(() => undefined);
+                  window.localStorage.removeItem("quenya.token");
+                  setUser(null);
+                  setInviteOnly(true);
+                }} />
               : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "outfits" && (hasProfile
-            ? <OutfitsScreen outfits={outfits} loading={outLoading} error={outErr} version={version} onBuild={build}
+            ? <OutfitsScreen outfits={outfits} locked={outfitLocks} setLocked={setOutfitLocks} loading={outLoading} error={outErr} version={version} onBuild={build}
                 onReplace={replace} onReject={o => setSheet({ kind: "reject", outfit: o })} onLike={like}
                 onCheckout={checkout} onOpenItem={item => setSheet({ kind: "item", item })} />
             : <NeedsBrief go={() => setTab("brief")} />)}
@@ -299,7 +376,6 @@ export default function App() {
         <nav className="tabs">
           {([["brief", "Brief"], ["swipe", "Swipe"], ["outfits", "Outfits"], ["find", "Find"], ["taste", "Taste"]] as [Tab, string][]).map(([t, l]) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => {
-              if (t === "swipe") setPicking(true);
               if (t === "brief") {
                 if (activeBoard) {
                   setBriefMode("edit");

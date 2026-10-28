@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { api, gbp, img } from "./api";
 import { ErrorBox, Loading, Provenance } from "./ui";
 import type { Item, Outfit } from "./types";
 
 export const REASONS = ["Too generic", "Colours don't work together", "Too expensive", "Wrong fit for me", "Too costume-y"];
 
-export function OutfitsScreen({ outfits, loading, error, version, onBuild, onReplace, onReject, onLike, onCheckout, onOpenItem }: {
+export function OutfitsScreen({ outfits, locked, setLocked, loading, error, version, onBuild, onReplace, onReject, onLike, onCheckout, onOpenItem }: {
   outfits: Outfit[];
+  locked: Record<string, string[]>;
+  setLocked: Dispatch<SetStateAction<Record<string, string[]>>>;
   loading: boolean;
   error: unknown;
   version: number | null;
@@ -17,7 +19,6 @@ export function OutfitsScreen({ outfits, loading, error, version, onBuild, onRep
   onCheckout: (o: Outfit) => void;
   onOpenItem: (it: Item) => void;
 }) {
-  const [locked, setLocked] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [rowErr, setRowErr] = useState<Record<string, unknown>>({});
   const [seen, setSeen] = useState<Record<string, string[]>>({});
