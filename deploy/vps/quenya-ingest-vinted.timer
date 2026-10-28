@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Quenya Vinted ingestion every three hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=3h
+RandomizedDelaySec=10min
+Persistent=true
+Unit=quenya-ingest-vinted.service
+
+[Install]
+WantedBy=timers.target

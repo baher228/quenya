@@ -32,6 +32,32 @@ Display images continue to use Supabase by default. To use R2, create the `queny
 
 Rollback: point the `/api/:path*` and `/img/:path*` rewrites back to `https://quenya-api.vercel.app`.
 
+## Background catalogue ingestion
+
+Ingestion runs in a separate, resource-limited container so tagging and embedding
+cannot consume the API container's memory or CPU. The wrapper only uses public
+seed queries and the Vinted proxy configured in `/etc/quenya/quenya.env`.
+
+Install the wrapper and timer units on the VPS:
+
+```sh
+sudo install -m 755 deploy/vps/ingest.sh /usr/local/sbin/quenya-ingest
+sudo install -m 644 deploy/vps/quenya-ingest-vinted.service /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-ingest-vinted.timer /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-ingest-retail.service /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-ingest-retail.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.timer
+```
+
+Vinted runs every three hours with a 40-query sample and a ten-minute
+randomized delay. Retail runs daily at 04:00 UTC. Both jobs use `Nice=10` and
+the wrapper's 1500 MiB / 0.75 CPU Docker limits. Run one job manually with:
+
+```sh
+sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed
+```
+
 ## Update, logs and rollback
 
 Sync the approved branch/revision to the host, then rebuild and replace the service:
