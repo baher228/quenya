@@ -10,16 +10,53 @@ final class StubURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private static var storedResponse = StubResponse(status: 200, headers: [:], body: Data())
     private static var storedFailure: URLError?
+    private static var heldPaths = Set<String>()
+    private static var pending: [String: [StubURLProtocol]] = [:]
     private(set) static var lastRequest: URLRequest?
     private(set) static var lastBody: Data?
+    private var stopped = false
 
     static func setResponse(status: Int = 200, json: String, headers: [String: String] = ["Content-Type": "application/json"]) {
         lock.lock()
         storedResponse = StubResponse(status: status, headers: headers, body: Data(json.utf8))
         storedFailure = nil
+        heldPaths = []
+        pending = [:]
         lastRequest = nil
         lastBody = nil
         lock.unlock()
+    }
+
+    static func holdRequests(path: String) {
+        lock.lock()
+        heldPaths.insert(path)
+        lock.unlock()
+    }
+
+    static func pendingCount(path: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return pending[path]?.count ?? 0
+    }
+
+    static func completeNext(path: String, status: Int, json: String) {
+        lock.lock()
+        let protocolInstance = pending[path]?.isEmpty == false ? pending[path]?.removeFirst() : nil
+        if pending[path]?.isEmpty == true { pending[path] = nil }
+        lock.unlock()
+        protocolInstance?.complete(
+            StubResponse(status: status, headers: ["Content-Type": "application/json"], body: Data(json.utf8))
+        )
+    }
+
+    static func completeLast(path: String, status: Int, json: String) {
+        lock.lock()
+        let protocolInstance = pending[path]?.popLast()
+        if pending[path]?.isEmpty == true { pending[path] = nil }
+        lock.unlock()
+        protocolInstance?.complete(
+            StubResponse(status: status, headers: ["Content-Type": "application/json"], body: Data(json.utf8))
+        )
     }
 
     static func setFailure(_ error: URLError) {
@@ -49,6 +86,14 @@ final class StubURLProtocol: URLProtocol {
         return storedFailure
     }
 
+    private static func hold(_ protocolInstance: StubURLProtocol, path: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard heldPaths.contains(path) else { return false }
+        pending[path, default: []].append(protocolInstance)
+        return true
+    }
+
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
@@ -59,9 +104,15 @@ final class StubURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: error)
             return
         }
+        if Self.hold(self, path: request.url?.path ?? "") { return }
         let response = Self.response()
+        complete(response)
+    }
+
+    private func complete(_ response: StubResponse) {
+        guard !stopped, let url = request.url else { return }
         let http = HTTPURLResponse(
-            url: request.url!,
+            url: url,
             statusCode: response.status,
             httpVersion: "HTTP/1.1",
             headerFields: response.headers
@@ -71,7 +122,7 @@ final class StubURLProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() { stopped = true }
 
     private static func readBody(from request: URLRequest) -> Data? {
         if let body = request.httpBody { return body }

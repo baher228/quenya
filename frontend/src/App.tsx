@@ -11,9 +11,9 @@ import type { Board, Brief, Checkout, Item, Outfit, Route, TasteState, TasteVers
 
 type Tab = "brief" | "swipe" | "outfits" | "find" | "taste";
 type Sheet =
-  | { kind: "reject"; outfit: Outfit }
+  | { kind: "reject"; outfit: Outfit; boardId: string }
   | { kind: "item"; item: Item }
-  | { kind: "checkout"; outfit: Outfit; result?: Checkout; error?: unknown }
+  | { kind: "checkout"; outfit: Outfit; boardId: string; result?: Checkout; error?: unknown }
   | { kind: "move"; route: Route; board: Board }
   | { kind: "photo"; up: UploadResult };
 
@@ -52,6 +52,8 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
   const activeBoard = boards.find(b => b.active) ?? null;
+  const activeBoardIdRef = useRef<string | null>(null);
+  activeBoardIdRef.current = activeBoard?.id ?? null;
   const activeOutfitsCacheKey = user && activeBoard
     ? cacheKey(user.id, activeBoard.id, "outfits")
     : null;
@@ -248,36 +250,67 @@ export default function App() {
     }
   };
 
-  const build = useCallback(async () => {
+  const build = useCallback(async (boardId: string | null = activeBoard?.id ?? null) => {
+    if (!boardId) return;
     setTab("outfits"); setOutLoading(true); setOutErr(null);
     try {
-      const next = (await api.outfits(3)).outfits;
+      const next = (await api.outfits(3, [], [], boardId)).outfits;
+      if (activeBoardIdRef.current !== boardId) return;
       setOutfits(next);
       setOutfitLocks({});
-      if (user && activeBoard) setCache(user.id, activeBoard.id, "outfits", { outfits: next, locked: {} });
-    } catch (e) { setOutErr(e); } finally { setOutLoading(false); }
+      if (user) setCache(user.id, boardId, "outfits", { outfits: next, locked: {} });
+    } catch (e) {
+      if (activeBoardIdRef.current === boardId) setOutErr(e);
+    } finally {
+      if (activeBoardIdRef.current === boardId) setOutLoading(false);
+    }
   }, [activeBoard, user]);
 
-  const deckDone = async () => { await runUpdate("from your swipes"); void build(); };
-
-  const replace = (old: Outfit, next: Outfit) => setOutfits(os => os.map(o => (o.id === old.id ? next : o)));
-
-  const like = async (o: Outfit) => {
-    try { const r = await api.verdict(o.id, "like"); replace(o, { ...o, ...r.outfit, pieces: r.outfit.pieces ?? o.pieces, verdict: "like" }); announce(r.taste, "you loved an outfit"); }
-    catch (e) { setToast({ id: Date.now(), title: "Couldn't save that", lines: [errText(e)] }); }
+  const deckDone = async () => {
+    const boardId = activeBoard?.id ?? null;
+    await runUpdate("from your swipes");
+    void build(boardId);
   };
 
-  const reject = async (o: Outfit, reason: string) => {
+  const replace = (old: Outfit, next: Outfit, boardId: string) => {
+    if (activeBoardIdRef.current !== boardId) return;
+    setOutfits(os => os.map(o => (o.id === old.id ? next : o)));
+  };
+
+  const like = async (o: Outfit, boardId: string) => {
+    try {
+      const r = await api.verdict(o.id, "like", undefined, boardId);
+      if (activeBoardIdRef.current !== boardId) return;
+      replace(o, { ...o, ...r.outfit, pieces: r.outfit.pieces ?? o.pieces, verdict: "like" }, boardId);
+      announce(r.taste, "you loved an outfit");
+    } catch (e) {
+      if (activeBoardIdRef.current === boardId) setToast({ id: Date.now(), title: "Couldn't save that", lines: [errText(e)] });
+    }
+  };
+
+  const reject = async (o: Outfit, reason: string, boardId: string) => {
     setSheet(null);
-    replace(o, { ...o, verdict: "reject", reason });
-    try { const r = await api.verdict(o.id, "reject", reason); announce(r.taste, "correction applied"); }
-    catch (e) { replace(o, o); setToast({ id: Date.now(), title: "Correction not saved", lines: [errText(e)] }); }
+    replace(o, { ...o, verdict: "reject", reason }, boardId);
+    try {
+      const r = await api.verdict(o.id, "reject", reason, boardId);
+      if (activeBoardIdRef.current !== boardId) return;
+      announce(r.taste, "correction applied");
+    } catch (e) {
+      if (activeBoardIdRef.current === boardId) {
+        replace(o, o, boardId);
+        setToast({ id: Date.now(), title: "Correction not saved", lines: [errText(e)] });
+      }
+    }
   };
 
-  const checkout = async (o: Outfit) => {
-    setSheet({ kind: "checkout", outfit: o });
-    try { const r = await api.checkout(o.id); setSheet({ kind: "checkout", outfit: o, result: r }); }
-    catch (e) { setSheet({ kind: "checkout", outfit: o, error: e }); }
+  const checkout = async (o: Outfit, boardId: string) => {
+    setSheet({ kind: "checkout", outfit: o, boardId });
+    try {
+      const r = await api.checkout(o.id, boardId);
+      if (activeBoardIdRef.current === boardId) setSheet({ kind: "checkout", outfit: o, boardId, result: r });
+    } catch (e) {
+      if (activeBoardIdRef.current === boardId) setSheet({ kind: "checkout", outfit: o, boardId, error: e });
+    }
   };
 
   const reset = async () => {
@@ -356,8 +389,8 @@ export default function App() {
                 }} />
               : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "outfits" && (hasProfile
-            ? <OutfitsScreen outfits={outfits} locked={outfitLocks} setLocked={setOutfitLocks} loading={outLoading} error={outErr} version={version} onBuild={build}
-                onReplace={replace} onReject={o => setSheet({ kind: "reject", outfit: o })} onLike={like}
+            ? <OutfitsScreen boardId={activeBoard?.id ?? null} outfits={outfits} locked={outfitLocks} setLocked={setOutfitLocks} loading={outLoading} error={outErr} version={version} onBuild={build}
+                onReplace={replace} onReject={(o, boardId) => setSheet({ kind: "reject", outfit: o, boardId })} onLike={like}
                 onCheckout={checkout} onOpenItem={item => setSheet({ kind: "item", item })} />
             : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "find" && <FindScreen onOpenItem={item => setSheet({ kind: "item", item })} />}
@@ -390,7 +423,7 @@ export default function App() {
 
         <div className={"sheet" + (sheet ? " open" : "")} onClick={e => { if (e.target === e.currentTarget) setSheet(null); }}>
           <div className="sheet-in">
-            {sheet?.kind === "reject" && <RejectSheet onPick={r => reject(sheet.outfit, r)} onClose={() => setSheet(null)} />}
+            {sheet?.kind === "reject" && <RejectSheet onPick={r => reject(sheet.outfit, r, sheet.boardId)} onClose={() => setSheet(null)} />}
             {sheet?.kind === "item" && <ItemSheet item={sheet.item} onClose={() => setSheet(null)} onCorrected={t => announce(t, "tag correction")} />}
             {sheet?.kind === "checkout" && <CheckoutSheet s={sheet} onClose={() => setSheet(null)} />}
             {sheet?.kind === "move" && <MoveSheet route={sheet.route} current={sheet.board} boards={boards} onPick={id => moveRoute(sheet.route, id)} onClose={() => setSheet(null)} />}

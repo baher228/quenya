@@ -4,6 +4,7 @@ struct DebugSettingsView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     @State private var value = ""
+    @FocusState private var urlFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -11,6 +12,9 @@ struct DebugSettingsView: View {
                 Section("API base URL") {
                     TextField("https://app.quenya.co.uk", text: $value)
                         .font(.system(size: 16))
+                        .focused($urlFocused)
+                        .submitLabel(.done)
+                        .onSubmit { urlFocused = false }
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -21,22 +25,31 @@ struct DebugSettingsView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(QuenyaTheme.muted)
                     Button("Use local (http://localhost:8000)") {
-                        state.changeBaseURL("http://localhost:8000")
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL("http://localhost:8000")
+                            dismiss()
+                        }
                     }
                     Button("Apply URL") {
-                        state.changeBaseURL(value)
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL(value)
+                            dismiss()
+                        }
                     }
                     Button("Reset to default") {
-                        state.changeBaseURL(nil)
-                        dismiss()
+                        Task {
+                            await state.changeBaseURL(nil)
+                            dismiss()
+                        }
                     }
                 }
                 .listRowBackground(QuenyaTheme.webSurface)
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(QuenyaTheme.webPhone)
+            .quenyaPage()
+            .dismissKeyboardOnTap()
             .foregroundStyle(QuenyaTheme.webText)
             .navigationTitle("Debug settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -46,6 +59,8 @@ struct DebugSettingsView: View {
                 }
             }
         }
+        .quenyaSheet()
+        .keyboardDoneToolbar()
         .onAppear { value = state.currentBaseURLText() }
     }
 }

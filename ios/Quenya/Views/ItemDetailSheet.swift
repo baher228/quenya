@@ -5,11 +5,11 @@ struct ItemDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     let item: Item
     @State private var note = ""
-    @State private var busy = false
-    @State private var error: String?
+    @State private var busy = BusyTracker()
     @State private var requestId: String?
     @State private var safari: SafariTarget?
     @State private var tags: ItemTags?
+    @FocusState private var noteFocused: Bool
 
     private var provenance: String {
         let source = item.source == "vinted" ? "Vinted" : item.source == "retail" ? "Retail" : item.source
@@ -47,12 +47,15 @@ struct ItemDetailSheet: View {
                         HStack(spacing: 8) {
                             TextField("“this is 90s, not y2k”", text: $note)
                                 .font(.system(size: 16))
+                                .focused($noteFocused)
+                                .submitLabel(.done)
+                                .onSubmit { noteFocused = false }
                                 .textInputAutocapitalization(.sentences)
                                 .padding(12)
                                 .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                                 .onChange(of: note) { _, value in if value.count > 300 { note = String(value.prefix(300)) } }
-                            PillButton(title: busy ? "…" : "Fix", primary: true, disabled: busy || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                            PillButton(title: "Fix", primary: true, disabled: note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, busy: busy.isBusy("item.tags")) {
                                 Task { await correct() }
                             }
                         }
@@ -60,7 +63,9 @@ struct ItemDetailSheet: View {
                             Text("Re-tagged with your correction · \(requestId)")
                                 .font(.system(size: 11, design: .monospaced)).foregroundStyle(QuenyaTheme.muted)
                         }
-                        if let error { ErrorPanel(message: error) }
+                        if let error = busy.error("item.tags") {
+                            ErrorPanel(message: error) { Task { await correct() } }
+                        }
                     }
 
                     PillButton(title: listingTitle, primary: true) {
@@ -68,9 +73,12 @@ struct ItemDetailSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .quenyaPage()
                 .padding(18)
             }
             .background(QuenyaTheme.webPhone)
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTap()
             .navigationTitle("Listing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(QuenyaTheme.webPhone, for: .navigationBar)
@@ -81,6 +89,8 @@ struct ItemDetailSheet: View {
                 }
             }
         }
+        .quenyaSheet()
+        .keyboardDoneToolbar()
         .onAppear { tags = item.tags }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }
@@ -99,14 +109,11 @@ struct ItemDetailSheet: View {
     }
 
     private func correct() async {
-        busy = true
-        error = nil
-        defer { busy = false }
-        do {
+        await busy.run("item.tags") {
             let result = try await state.correctTags(item: item, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-            tags = result.tags
-            requestId = result.requestId
-            note = ""
-        } catch let caught { error = caught.localizedDescription }
+            self.tags = result.tags
+            self.requestId = result.requestId
+            self.note = ""
+        }
     }
 }

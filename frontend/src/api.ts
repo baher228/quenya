@@ -99,12 +99,12 @@ export const api = {
     post<{ swipes_since_update: number; update_due: boolean }>("/api/swipe", { item_id, liked }),
   updateTaste: () => post<TasteVersion>("/api/taste/update"),
   taste: () => req<TasteState>("/api/taste"),
-  outfits: (count: number, locked_ids: string[] = [], exclude_ids: string[] = []) =>
-    post<OutfitsResponse>("/api/outfits", { count, locked_ids, exclude_ids }),
-  swap: (outfitId: string, item_id: string, exclude_ids: string[] = []) =>
-    post<Outfit | { outfit: Outfit }>(`/api/outfits/${outfitId}/swap`, { item_id, exclude_ids }).then(r => ("outfit" in r ? r.outfit : r)),
-  verdict: (outfitId: string, verdict: "like" | "reject", reason?: string) =>
-    post<{ outfit: Outfit; taste?: TasteVersion | null }>(`/api/outfits/${outfitId}/verdict`, { verdict, reason }),
+  outfits: (count: number, locked_ids: string[] = [], exclude_ids: string[] = [], board_id?: string) =>
+    post<OutfitsResponse>("/api/outfits", { count, locked_ids, exclude_ids, board_id }),
+  swap: (outfitId: string, item_id: string, exclude_ids: string[] = [], board_id?: string) =>
+    post<Outfit | { outfit: Outfit }>(`/api/outfits/${outfitId}/swap`, { item_id, exclude_ids, board_id }).then(r => ("outfit" in r ? r.outfit : r)),
+  verdict: (outfitId: string, verdict: "like" | "reject", reason?: string, board_id?: string) =>
+    post<{ outfit: Outfit; taste?: TasteVersion | null }>(`/api/outfits/${outfitId}/verdict`, { verdict, reason, board_id }),
   correctTags: (itemId: string, note: string) =>
     post<{ tags: Item["tags"]; request_id: string | null; taste?: TasteVersion | null }>(`/api/items/${itemId}/correct-tags`, { note }),
   upload: (file: File) => {
@@ -125,7 +125,7 @@ export const api = {
     req<Item[] | { items: Item[] }>(`/api/search?q=${encodeURIComponent(q)}&limit=20`).then(r => (Array.isArray(r) ? r : r.items)),
   searchLive: (q: string) =>
     post<Item[] | { items: Item[] }>("/api/search/live", { q }).then(r => (Array.isArray(r) ? r : r.items)),
-  checkout: (outfit_id: string) => post<Checkout>("/api/checkout", { outfit_id }),
+  checkout: (outfit_id: string, board_id?: string) => post<Checkout>("/api/checkout", { outfit_id, board_id }),
   reset: () => post<unknown>("/api/reset"),
   stats: () => req<TaskStats[]>("/api/model/stats"),
 };

@@ -4,6 +4,7 @@ struct InviteView: View {
     @Environment(AppState.self) private var state
     @State private var input = ""
     @State private var showingDebug = false
+    @FocusState private var inviteFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -17,6 +18,12 @@ struct InviteView: View {
                     .foregroundStyle(QuenyaTheme.softInk)
                 TextField("Invite link or token", text: $input, axis: .vertical)
                     .font(.system(size: 16))
+                    .focused($inviteFocused)
+                    .submitLabel(.go)
+                    .onSubmit {
+                        inviteFocused = false
+                        Task { await state.redeemInvite(input) }
+                    }
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -24,11 +31,16 @@ struct InviteView: View {
                     .background(QuenyaTheme.webSurface2, in: RoundedRectangle(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(QuenyaTheme.webLine2, lineWidth: 1))
                     .lineLimit(1...3)
-                PillButton(title: "Continue", primary: true, disabled: input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                PillButton(
+                    title: "Continue",
+                    primary: true,
+                    disabled: input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    busy: state.busy.isBusy("auth.invite")
+                ) {
                     Task { await state.redeemInvite(input) }
                 }
                 if case .signedOut(let message) = state.authPhase, let message {
-                    ErrorPanel(message: message)
+                    ErrorPanel(message: message) { Task { await state.redeemInvite(input) } }
                 }
                 if state.isDebug {
                     Button("Debug") { showingDebug = true }
@@ -38,9 +50,14 @@ struct InviteView: View {
                 }
                 Spacer(minLength: 40)
             }
+            .quenyaPage()
             .padding(24)
         }
         .background(QuenyaTheme.webPhone.ignoresSafeArea())
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTap()
+        .keyboardDoneToolbar()
         .sheet(isPresented: $showingDebug) { DebugSettingsView() }
+        .quenyaSheet()
     }
 }

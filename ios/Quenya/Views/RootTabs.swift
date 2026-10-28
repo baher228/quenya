@@ -58,11 +58,8 @@ struct RootTabs: View {
             switch sheet {
             case .item(let item):
                 ItemDetailSheet(item: item)
-            case .reject(let outfit):
-                RejectSheet { reason in
-                    state.presentedSheet = nil
-                    Task { await state.verdict(outfit, like: false, reason: reason) }
-                }
+            case .reject(let outfit, let boardId):
+                RejectSheet(boardId: boardId, outfit: outfit)
             case .photo(let upload):
                 PhotoRouteSheet(upload: upload)
             }
@@ -79,7 +76,7 @@ struct RootTabs: View {
                     )
                         .font(.system(size: 19, weight: .semibold))
                     Spacer()
-                    Text(state.updating ? "Updating taste…" : state.fetchNote ?? "")
+                    Text(state.fetchNote ?? "")
                         .font(.system(size: 11))
                         .foregroundStyle(QuenyaTheme.webMuted)
                         .lineLimit(1)

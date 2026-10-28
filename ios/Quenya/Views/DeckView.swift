@@ -52,6 +52,20 @@ struct DeckView: View {
             .frame(height: 3)
             .padding(.bottom, 10)
 
+            if state.updating {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(QuenyaTheme.sage)
+                    Text("Updating your taste…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(QuenyaTheme.webMuted)
+                }
+                .padding(.bottom, 8)
+            }
+            if let error = state.tasteUpdateError {
+                ErrorPanel(message: error) { Task { await state.runUpdate() } }
+                    .padding(.bottom, 8)
+            }
+
             GeometryReader { geometry in
                 ZStack {
                     if state.deck.isEmpty && state.deckLoading {

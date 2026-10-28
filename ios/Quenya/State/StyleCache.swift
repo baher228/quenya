@@ -1,6 +1,98 @@
 import Foundation
 import Observation
 
+private struct EncodableSnapshot: @unchecked Sendable {
+    let encode: () throws -> Data
+
+    init<T: Encodable>(_ value: T) {
+        encode = {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            return try encoder.encode(value)
+        }
+    }
+}
+
+private struct PendingSnapshotWrite {
+    let value: EncodableSnapshot
+    let generation: UInt64
+    let sequence: UInt64
+}
+
+final class StyleCachePersistence: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "uk.co.quenya.style-cache-persistence", qos: .utility)
+    private var generation: UInt64 = 0
+    private var sequence: UInt64 = 0
+    private var pending: [URL: PendingSnapshotWrite] = [:]
+    private var writeCounts: [URL: Int] = [:]
+
+    func schedule<T: Encodable>(_ value: T, to file: URL) {
+        let snapshot = EncodableSnapshot(value)
+        queue.async {
+            self.sequence &+= 1
+            let write = PendingSnapshotWrite(
+                value: snapshot,
+                generation: self.generation,
+                sequence: self.sequence
+            )
+            self.pending[file] = write
+            self.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                guard self.pending[file]?.sequence == write.sequence else { return }
+                self.writePending(at: file)
+            }
+        }
+    }
+
+    func flush() async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.writePending()
+                continuation.resume()
+            }
+        }
+    }
+
+    func remove(directory: URL) {
+        queue.sync {
+            self.generation &+= 1
+            self.pending.removeAll()
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    func writeCount(at file: URL) async -> Int {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: self.writeCounts[file, default: 0])
+            }
+        }
+    }
+
+    private func writePending(at file: URL? = nil) {
+        let writes: [(URL, PendingSnapshotWrite)]
+        if let file {
+            guard let write = pending.removeValue(forKey: file) else { return }
+            writes = [(file, write)]
+        } else {
+            writes = pending.map { ($0.key, $0.value) }
+            pending.removeAll()
+        }
+
+        for (file, write) in writes where write.generation == generation {
+            do {
+                try FileManager.default.createDirectory(
+                    at: file.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try write.value.encode().write(to: file, options: .atomic)
+                writeCounts[file, default: 0] += 1
+            } catch {
+                continue
+            }
+        }
+    }
+}
+
 struct StyleSnapshot: Codable, Equatable {
     var userId: String
     var styleId: String
@@ -33,13 +125,11 @@ final class StyleCache {
     private(set) var userId: String?
     private(set) var styles: [String: StyleSnapshot] = [:]
 
-    @ObservationIgnored private let encoder: JSONEncoder
     @ObservationIgnored private let decoder: JSONDecoder
+    @ObservationIgnored private let persistence = StyleCachePersistence()
 
     init(directory: URL = StyleCache.defaultDirectory) {
         self.directory = directory
-        encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
     }
@@ -77,7 +167,7 @@ final class StyleCache {
         snapshot.userId = userId
         snapshot.styleId = styleId
         styles[styleId] = snapshot
-        write(snapshot, to: directory.appendingPathComponent(fileComponent(userId), isDirectory: true)
+        persistence.schedule(snapshot, to: directory.appendingPathComponent(fileComponent(userId), isDirectory: true)
             .appendingPathComponent("\(fileComponent(styleId)).json"))
     }
 
@@ -101,25 +191,24 @@ final class StyleCache {
         if userId != snapshot.userId {
             activate(userId: snapshot.userId)
         }
-        write(snapshot, to: directory.appendingPathComponent("session.json"))
+        persistence.schedule(snapshot, to: directory.appendingPathComponent("session.json"))
+    }
+
+    func flush() async {
+        await persistence.flush()
+    }
+
+    func writeCount(forStyleId styleId: String) async -> Int {
+        guard let userId else { return 0 }
+        let file = directory.appendingPathComponent(fileComponent(userId), isDirectory: true)
+            .appendingPathComponent("\(fileComponent(styleId)).json")
+        return await persistence.writeCount(at: file)
     }
 
     func clear() {
-        try? FileManager.default.removeItem(at: directory)
         userId = nil
         styles = [:]
-    }
-
-    private func write<T: Encodable>(_ value: T, to file: URL) {
-        do {
-            try FileManager.default.createDirectory(
-                at: file.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try encoder.encode(value).write(to: file, options: .atomic)
-        } catch {
-            return
-        }
+        persistence.remove(directory: directory)
     }
 
     private func fileComponent(_ value: String) -> String {

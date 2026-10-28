@@ -16,8 +16,15 @@ struct QuenyaApp: App {
                     completedInitialLaunch = true
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    guard completedInitialLaunch, phase == .active else { return }
-                    Task { await appState.sceneBecameActive() }
+                    guard completedInitialLaunch else { return }
+                    switch phase {
+                    case .active:
+                        Task { await appState.sceneBecameActive() }
+                    case .background:
+                        Task { await appState.flushCache() }
+                    default:
+                        break
+                    }
                 }
                 .onOpenURL { url in
                     guard ["quenya", "https"].contains(url.scheme?.lowercased() ?? "") else { return }

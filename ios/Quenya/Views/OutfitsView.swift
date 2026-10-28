@@ -2,11 +2,10 @@ import SwiftUI
 
 struct OutfitsView: View {
     @Environment(AppState.self) private var state
-    @State private var busy: String?
-    @State private var rowErrors: [String: String] = [:]
     @State private var selectedItem: Item?
     @State private var safari: SafariTarget?
-    @State private var checkoutOutfit: Outfit?
+    @State private var checkoutSelection: CheckoutSelection?
+    @State private var tapCount = 0
 
     private let minorSlots: Set<String> = ["shoes", "bag", "accessory"]
 
@@ -25,8 +24,17 @@ struct OutfitsView: View {
                 }
                 if state.outfitLoading {
                     LoadingLabel(title: "Styling outfits from your pool", dark: true)
+                    SlowHint()
                     OutfitSkeletonCard()
                     OutfitSkeletonCard()
+                    PillButton(
+                        title: state.outfits.isEmpty ? "Build outfits" : "New set from taste v\(state.currentVersion.map(String.init) ?? "–")",
+                        primary: state.outfits.isEmpty,
+                        dark: true,
+                        busy: state.busy.isBusy("outfits.build"),
+                        action: {}
+                    )
+                    .frame(maxWidth: .infinity)
                 } else if let error = state.outfitError {
                     ErrorPanel(message: error) { Task { await state.buildOutfits() } }
                 } else if state.outfits.isEmpty {
@@ -34,9 +42,9 @@ struct OutfitsView: View {
                         Text("No outfits yet. Swipe a few cards first, then build.")
                             .font(.system(size: 14))
                             .foregroundStyle(QuenyaTheme.webMuted)
-                        PillButton(title: "Build outfits", primary: true, dark: true) {
-                            Task { await state.buildOutfits() }
-                        }
+                    PillButton(title: "Build outfits", primary: true, dark: true, busy: state.busy.isBusy("outfits.build")) {
+                        Task { await state.buildOutfits() }
+                    }
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -48,20 +56,21 @@ struct OutfitsView: View {
                 }
 
                 if !state.outfits.isEmpty && !state.outfitLoading {
-                    PillButton(title: "New set from taste v\(state.currentVersion.map(String.init) ?? "–")", dark: true) {
+                    PillButton(title: "New set from taste v\(state.currentVersion.map(String.init) ?? "–")", dark: true, busy: state.busy.isBusy("outfits.build")) {
                         Task { await state.buildOutfits() }
                     }
                     .frame(maxWidth: .infinity)
+                    if state.busy.isBusy("outfits.build") { SlowHint() }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .quenyaPage()
             .padding(18)
             .padding(.bottom, 24)
         }
         .background(QuenyaTheme.webPhone)
         .sheet(item: $selectedItem) { ItemDetailSheet(item: $0) }
-        .sheet(item: $checkoutOutfit) { outfit in
-            CheckoutSheetView(outfit: outfit)
+        .sheet(item: $checkoutSelection) { selection in
+            CheckoutSheetView(outfit: selection.outfit, boardId: selection.boardId)
         }
         .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
     }
@@ -87,11 +96,39 @@ struct OutfitsView: View {
                 }
             }
             if !major.isEmpty {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    ForEach(major) { item in
-                        pieceCard(item, outfit: outfit, isLocked: keep.contains(item.id))
+                if state.busy.isBusy(rebuildKey(outfit)) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                        ForEach(major.indices, id: \.self) { _ in
+                            SkeletonBlock(cornerRadius: 15)
+                                .aspectRatio(4.0 / 5.0, contentMode: .fit)
+                        }
+                    }
+                    .skeletonPulse()
+                    .accessibilityHidden(true)
+                    SlowHint()
+                } else {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                        ForEach(major) { item in
+                            pieceCard(item, outfit: outfit, isLocked: keep.contains(item.id))
+                        }
                     }
                 }
+            }
+            if let message = state.busy.error(rebuildKey(outfit)) {
+                ErrorPanel(message: message) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.rebuildOutfit(outfit, styleId: styleId) }
+                }
+            } else if let failedItem = outfit.pieces.first(where: { state.busy.error(swapKey(outfit, $0)) != nil }),
+                      let message = state.busy.error(swapKey(outfit, failedItem)) {
+                ErrorPanel(message: message) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.swapOutfit(outfit, item: failedItem, styleId: styleId) }
+                }
+            }
+            if let message = state.busy.error("verdict.\(outfit.id)"),
+               !rejectSheetIsPresented(for: outfit) {
+                ErrorPanel(message: message) { Task { await state.retryVerdict(outfit) } }
             }
             if !minor.isEmpty {
                 VStack(spacing: 8) {
@@ -121,31 +158,35 @@ struct OutfitsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            if let error = rowErrors[outfit.id] {
-                ErrorPanel(message: error)
-            }
             HStack(spacing: 7) {
                 if outfit.verdict == "reject" {
                     verdictLabel("Not for me · \(outfit.reason ?? "Rejected")", color: QuenyaTheme.webMuted)
                 } else {
-                    compactButton("Not for me", disabled: busy != nil) {
-                        state.presentedSheet = .reject(outfit)
+                    compactButton("Not for me", disabled: outfitActionBusy(outfit)) {
+                        guard let boardId = state.activeBoard?.id else { return }
+                        state.presentedSheet = .reject(outfit, boardId: boardId)
                     }
                 }
                 compactButton(
-                    busy == outfit.id + "rebuild" ? "Rebuilding…" : (keep.isEmpty ? "Rebuild" : "Rebuild around locks"),
-                    disabled: busy != nil
-                ) { Task { await rebuild(outfit) } }
+                    keep.isEmpty ? "Rebuild" : "Rebuild around locks",
+                    disabled: outfitActionBusy(outfit),
+                    busy: state.busy.isBusy(rebuildKey(outfit))
+                ) {
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.rebuildOutfit(outfit, styleId: styleId) }
+                }
                 if outfit.verdict == "like" {
                     verdictLabel("Saved", color: QuenyaTheme.webText, outlined: true)
                 } else {
-                    compactButton("Love it", primary: true, disabled: busy != nil) {
-                        Task { await state.verdict(outfit, like: true) }
+                    compactButton("Love it", primary: true, disabled: outfitActionBusy(outfit), busy: state.busy.isBusy("verdict.\(outfit.id)")) {
+                        guard let styleId = state.activeBoard?.id else { return }
+                        Task { await state.verdict(outfit, like: true, styleId: styleId) }
                     }
                 }
             }
             Button {
-                checkoutOutfit = outfit
+                guard let boardId = state.activeBoard?.id else { return }
+                checkoutSelection = CheckoutSelection(outfit: outfit, boardId: boardId)
             } label: {
                 Text("Buy the bundle · \(gbp(outfit.totalGbp))")
                     .font(.system(size: 13, weight: .medium))
@@ -174,7 +215,8 @@ struct OutfitsView: View {
     }
 
     private func pieceCard(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let swapping = state.busy.isBusy(swapKey(outfit, item))
+        return VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
                 Button { selectedItem = item } label: {
                     RemoteImage(path: item.imagePath)
@@ -188,10 +230,12 @@ struct OutfitsView: View {
                         }
                         Spacer()
                         pieceActionButton(
-                            busy == outfit.id + "swap" + item.id ? "…" : "Swap",
-                            disabled: busy != nil
+                            "Swap",
+                            disabled: outfitActionBusy(outfit),
+                            busy: swapping
                         ) {
-                            Task { await swap(outfit, item: item) }
+                            guard let styleId = state.activeBoard?.id else { return }
+                            Task { await state.swapOutfit(outfit, item: item, styleId: styleId) }
                         }
                     }
                     .padding(7)
@@ -219,10 +263,13 @@ struct OutfitsView: View {
                     .layoutPriority(1)
             }
         }
+        .opacity(swapping ? 0.45 : 1)
+        .skeletonPulse(enabled: swapping)
     }
 
     private func minorRow(_ item: Item, outfit: Outfit, isLocked: Bool) -> some View {
-        HStack(spacing: 9) {
+        let swapping = state.busy.isBusy(swapKey(outfit, item))
+        return HStack(spacing: 9) {
             Button { selectedItem = item } label: {
                 RemoteImage(path: item.imagePath).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
             }
@@ -248,11 +295,13 @@ struct OutfitsView: View {
                     toggleLock(outfit, item.id)
                 }
                 pieceActionButton(
-                    busy == outfit.id + "swap" + item.id ? "…" : "Swap",
-                    disabled: busy != nil,
+                    "Swap",
+                    disabled: outfitActionBusy(outfit),
+                    busy: swapping,
                     onPhotoTile: false
                 ) {
-                    Task { await swap(outfit, item: item) }
+                    guard let styleId = state.activeBoard?.id else { return }
+                    Task { await state.swapOutfit(outfit, item: item, styleId: styleId) }
                 }
             }
         }
@@ -271,12 +320,15 @@ struct OutfitsView: View {
                 .stroke(isLocked ? QuenyaTheme.sage.opacity(0.35) : .clear, lineWidth: 1)
                 .allowsHitTesting(false)
         }
+        .opacity(swapping ? 0.45 : 1)
+        .skeletonPulse(enabled: swapping)
     }
 
     private func pieceActionButton(
         _ title: String,
         locked: Bool = false,
         disabled: Bool = false,
+        busy: Bool = false,
         onPhotoTile: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
@@ -288,43 +340,65 @@ struct OutfitsView: View {
             : (onPhotoTile ? QuenyaTheme.cream : QuenyaTheme.webText)
         let border = locked ? QuenyaTheme.sage : (onPhotoTile ? Color.clear : QuenyaTheme.webLine)
 
-        return Button(action: action) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .medium))
-                .tracking(0.6)
-                .foregroundStyle(foreground)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(background, in: Capsule())
-                .overlay(Capsule().stroke(border, lineWidth: 1))
+        return Button {
+            tapCount += 1
+            action()
+        } label: {
+            ZStack {
+                Text(title.uppercased())
+                    .font(.system(size: 10, weight: .medium))
+                    .tracking(0.6)
+                    .foregroundStyle(foreground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .opacity(busy ? 0 : 1)
+                if busy { ProgressView().controlSize(.mini).tint(foreground) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(background, in: Capsule())
+            .overlay(Capsule().stroke(border, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
+        .disabled(disabled || busy)
+        .opacity(disabled && !busy ? 0.5 : 1)
+        .accessibilityLabel(busy ? "Loading" : title)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
     }
 
     private func compactButton(
         _ title: String,
         primary: Bool = false,
         disabled: Bool = false,
+        busy: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, minHeight: 34)
-                .padding(.horizontal, 6)
-                .background(primary ? QuenyaTheme.webText : QuenyaTheme.webSurface2, in: Capsule())
-                .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.webLine, lineWidth: 1))
+        Button {
+            tapCount += 1
+            action()
+        } label: {
+            ZStack {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .opacity(busy ? 0 : 1)
+                if busy {
+                    ProgressView().controlSize(.mini)
+                        .tint(primary ? QuenyaTheme.webPhone : QuenyaTheme.webText)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .padding(.horizontal, 6)
+            .background(primary ? QuenyaTheme.webText : QuenyaTheme.webSurface2, in: Capsule())
+            .overlay(Capsule().stroke(primary ? Color.clear : QuenyaTheme.webLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
+        .disabled(disabled || busy)
+        .opacity(disabled && !busy ? 0.5 : 1)
+        .accessibilityLabel(busy ? "Loading" : title)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
     }
 
     private func verdictLabel(_ title: String, color: Color, outlined: Bool = false) -> some View {
@@ -345,41 +419,24 @@ struct OutfitsView: View {
         state.locked[outfit.id] = ids
     }
 
-    private func swap(_ outfit: Outfit, item: Item) async {
-        await run(outfit, key: "swap\(item.id)") {
-            let next = try await state.api.swap(
-                outfitId: outfit.id,
-                itemId: item.id,
-                excludeIds: Array((state.swapSeen[outfit.id] ?? []).suffix(300))
-            )
-            var locks = state.locked[outfit.id] ?? []
-            if locks.contains(item.id) { locks.removeAll { $0 == item.id } }
-            state.locked[next.id] = locks
-            state.swapSeen[next.id] = uniqueOrdered((state.swapSeen[outfit.id] ?? []) + outfit.pieces.map(\.id))
-            state.replace(outfit, with: next)
-        }
+    private func outfitActionBusy(_ outfit: Outfit) -> Bool {
+        state.busy.isBusy("outfits.build")
+            || state.busy.isBusy("verdict.\(outfit.id)")
+            || state.busy.isBusy(rebuildKey(outfit))
+            || outfit.pieces.contains { state.busy.isBusy(swapKey(outfit, $0)) }
     }
 
-    private func rebuild(_ outfit: Outfit) async {
-        await run(outfit, key: "rebuild") {
-            let keep = state.locked[outfit.id] ?? []
-            let otherPieces = state.outfits.filter { $0.id != outfit.id }.flatMap { $0.pieces.map(\.id) }
-            let excluded = outfit.pieces.map(\.id).filter { !keep.contains($0) } + otherPieces
-            let response = try await state.api.outfits(count: 1, lockedIds: keep, excludeIds: excluded)
-            guard let next = response.outfits.first else {
-                throw APIError(status: 409, message: "No outfit fits those locks and your budget. Unlock a piece and retry.", requestIds: [])
-            }
-            state.locked[next.id] = keep
-            state.replace(outfit, with: next)
-        }
+    private func rejectSheetIsPresented(for outfit: Outfit) -> Bool {
+        guard case let .some(.reject(rejectedOutfit, boardId: _)) = state.presentedSheet else { return false }
+        return rejectedOutfit.id == outfit.id
     }
 
-    private func run(_ outfit: Outfit, key: String, action: () async throws -> Void) async {
-        busy = outfit.id + key
-        rowErrors[outfit.id] = nil
-        defer { busy = nil }
-        do { try await action() }
-        catch { rowErrors[outfit.id] = error.localizedDescription }
+    private func rebuildKey(_ outfit: Outfit) -> String {
+        "outfit.\(outfit.id).rebuild"
+    }
+
+    private func swapKey(_ outfit: Outfit, _ item: Item) -> String {
+        "outfit.\(outfit.id).swap.\(item.id)"
     }
 
     private func shareText(_ outfit: Outfit) -> String {
@@ -393,8 +450,11 @@ private struct CheckoutSheetView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     let outfit: Outfit
+    let boardId: String
     @State private var result: Checkout?
     @State private var error: String?
+    @State private var loading = false
+    @State private var safari: SafariTarget?
 
     var body: some View {
         NavigationStack {
@@ -411,24 +471,17 @@ private struct CheckoutSheetView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(QuenyaTheme.webMuted)
                         ForEach(result.lines) { line in
-                            if let url = URL(string: line.sourceUrl) {
-                                Link(destination: url) {
-                                    HStack(alignment: .top) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(line.title)
-                                                .font(.system(size: 13))
-                                                .foregroundStyle(QuenyaTheme.webText)
-                                            Text(line.source)
-                                                .font(.system(size: 11))
-                                                .foregroundStyle(QuenyaTheme.webMuted)
-                                        }
-                                        Spacer(minLength: 12)
-                                        Text(gbp(line.priceGbp))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(QuenyaTheme.webSoft)
+                            CheckoutLineRow(
+                                line: line,
+                                imagePath: outfit.pieces.first { $0.sourceUrl == line.sourceUrl }?.imagePath,
+                                open: {
+                                    if let url = URL(string: line.sourceUrl) {
+                                        safari = SafariTarget(url: url)
                                     }
-                                    .contentShape(Rectangle())
                                 }
+                            )
+                            if line.id != result.lines.last?.id {
+                                Rectangle().fill(QuenyaTheme.webLine).frame(height: 1)
                             }
                         }
                         HStack {
@@ -439,11 +492,22 @@ private struct CheckoutSheetView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(QuenyaTheme.webText)
                     } else if let error {
-                        ErrorPanel(message: error)
+                        ErrorPanel(message: error) { Task { await loadCheckout() } }
                     } else {
                         LoadingLabel(title: "Preparing your bundle", dark: true)
+                        SlowHint()
+                        ForEach(outfit.pieces) { _ in CheckoutSkeletonRow() }
+                        Rectangle().fill(QuenyaTheme.webLine).frame(height: 1)
+                        HStack {
+                            SkeletonBlock(cornerRadius: 6).frame(width: 42, height: 13)
+                            Spacer()
+                            SkeletonBlock(cornerRadius: 6).frame(width: 72, height: 15)
+                        }
+                        .skeletonPulse()
+                        .accessibilityHidden(true)
                     }
                 }
+                .quenyaPage()
                 .padding(20)
             }
             .background(QuenyaTheme.webPhone)
@@ -456,19 +520,104 @@ private struct CheckoutSheetView: View {
             .toolbarBackground(QuenyaTheme.webPhone, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
-        .preferredColorScheme(.dark)
+        .quenyaSheet()
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .fullScreenCover(item: $safari) { target in SafariView(url: target.url) }
         .task {
-            do {
-                let response = try await state.api.checkout(outfitId: outfit.id)
-                guard !Task.isCancelled else { return }
-                result = response
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                self.error = error.localizedDescription
+            if result == nil { await loadCheckout() }
+        }
+    }
+
+    private func loadCheckout() async {
+        guard !loading else { return }
+        loading = true
+        error = nil
+        defer { loading = false }
+        do {
+            let response = try await state.api.checkout(outfitId: outfit.id, boardId: boardId)
+            guard !Task.isCancelled else { return }
+            result = response
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct CheckoutSelection: Identifiable {
+    let outfit: Outfit
+    let boardId: String
+
+    var id: String { outfit.id }
+}
+
+private struct CheckoutSkeletonRow: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            SkeletonBlock(cornerRadius: 8)
+                .frame(width: 48, height: 48)
+            GeometryReader { geometry in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        SkeletonBlock(cornerRadius: 5)
+                            .frame(width: geometry.size.width * 0.62, height: 12)
+                        SkeletonBlock(cornerRadius: 5)
+                            .frame(width: geometry.size.width * 0.27, height: 10)
+                    }
+                    Spacer(minLength: 0)
+                    SkeletonBlock(cornerRadius: 14)
+                        .frame(width: 70, height: 27)
+                }
+            }
+            .frame(height: 48)
+        }
+        .skeletonPulse()
+        .accessibilityHidden(true)
+    }
+}
+
+private struct CheckoutLineRow: View {
+    let line: CheckoutLine
+    let imagePath: String?
+    let open: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Group {
+                if let imagePath {
+                    RemoteImage(path: imagePath)
+                } else {
+                    RoundedRectangle(cornerRadius: 8).fill(QuenyaTheme.webLine)
+                }
+            }
+            .frame(width: 48, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(line.title)
+                    .font(.system(size: 13))
+                    .foregroundStyle(QuenyaTheme.webText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button(action: open) {
+                        Text("Shop · \(line.source) ↗")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(QuenyaTheme.webSoft)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(QuenyaTheme.webSurface2, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
+                    Text(gbp(line.priceGbp))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(QuenyaTheme.webSoft)
+                        .fixedSize()
+                }
             }
         }
     }
@@ -480,28 +629,21 @@ struct SafariTarget: Identifiable {
 }
 
 private struct OutfitSkeletonCard: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dimmed = false
-
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
     ]
-
-    private var pulseOpacity: Double {
-        reduceMotion ? 1 : (dimmed ? 0.55 : 1)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             GeometryReader { geometry in
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 4) {
-                        bar(width: geometry.size.width * 0.55, height: 18)
-                        bar(width: geometry.size.width * 0.35, height: 12)
+                        block(width: geometry.size.width * 0.55, height: 18)
+                        block(width: geometry.size.width * 0.35, height: 12)
                     }
                     Spacer(minLength: 0)
-                    bar(width: 48, height: 14)
+                    block(width: 48, height: 14)
                 }
             }
             .frame(height: 34)
@@ -509,11 +651,10 @@ private struct OutfitSkeletonCard: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(0..<4, id: \.self) { _ in
                     VStack(alignment: .leading, spacing: 6) {
-                        RoundedRectangle(cornerRadius: 15)
-                            .fill(QuenyaTheme.webLine)
+                        SkeletonBlock(cornerRadius: 15)
                             .aspectRatio(4.0 / 5.0, contentMode: .fit)
-                            .opacity(pulseOpacity)
-                        bar(width: 72, height: 6)
+                        SkeletonBlock(cornerRadius: 3)
+                            .frame(width: 72, height: 6)
                     }
                 }
             }
@@ -521,20 +662,13 @@ private struct OutfitSkeletonCard: View {
         .padding(15)
         .background(QuenyaTheme.webSurface, in: RoundedRectangle(cornerRadius: 22))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(QuenyaTheme.webLine, lineWidth: 1))
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                dimmed = true
-            }
-        }
+        .skeletonPulse()
         .accessibilityHidden(true)
     }
 
-    private func bar(width: CGFloat, height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: height / 2)
-            .fill(QuenyaTheme.webLine)
+    private func block(width: CGFloat, height: CGFloat) -> some View {
+        SkeletonBlock(cornerRadius: height / 2)
             .frame(width: width, height: height)
-            .opacity(pulseOpacity)
     }
 }
 
