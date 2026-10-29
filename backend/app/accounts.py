@@ -196,6 +196,18 @@ def redeem_invite(token: str) -> str:
     return _new_session(user_id)
 
 
+def _client_ip(request: Request) -> str:
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    forwarded_ip = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+    if forwarded_ip:
+        return forwarded_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
 def user_for_session(token: str) -> dict[str, Any] | None:
     if not token:
         return None
@@ -289,10 +301,7 @@ def admin_login(body: dict[str, str], request: Request) -> dict[str, Any]:
     name = body.get("name", "").strip()
     password = body.get("password", "")
     normalized_name = name.casefold()
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    ip = forwarded_for.split(",", 1)[0].strip()
-    if not ip:
-        ip = request.client.host if request.client else "unknown"
+    ip = _client_ip(request)
     if _login_is_limited(ip, normalized_name):
         raise HTTPException(
             status_code=429,
@@ -388,6 +397,7 @@ def admin_users(_user: AdminUser) -> list[dict[str, Any]]:
 def admin_change_password(
     body: dict[str, str],
     user: AdminUser,
+    authorization: str | None = Header(default=None),
 ) -> dict[str, bool]:
     if user.get("password_hash") and not verify_password(
         user["password_hash"],
@@ -401,6 +411,13 @@ def admin_change_password(
             detail="New password must be at least 12 characters",
         )
     set_password(user["id"], new_password)
+    token = authorization.removeprefix("Bearer ").strip() if authorization else ""
+    with db.db_connection() as connection:
+        connection.execute(
+            """UPDATE auth_sessions SET revoked_at=?
+               WHERE user_id=? AND token_hash<>?""",
+            (db.now_iso(), user["id"], _hash(token)),
+        )
     return {"ok": True}
 
 

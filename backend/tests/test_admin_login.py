@@ -23,11 +23,26 @@ def _admin(name="Admin Owner", password="correct horse battery"):
     return user, invite
 
 
-def _login(client, name, password, ip="192.0.2.10"):
+def _login(
+    client,
+    name,
+    password,
+    ip="192.0.2.10",
+    *,
+    real_ip=None,
+    forwarded_for=None,
+):
+    headers = {
+        "X-Forwarded-For": (
+            forwarded_for if forwarded_for is not None else f"203.0.113.250, {ip}"
+        ),
+    }
+    if real_ip:
+        headers["X-Real-IP"] = real_ip
     return client.post(
         "/api/auth/admin-login",
         json={"name": name, "password": password},
-        headers={"X-Forwarded-For": f"{ip}, 10.0.0.1"},
+        headers=headers,
     )
 
 
@@ -83,18 +98,79 @@ def test_admin_login_limits_failures_per_ip(isolated_admin_login_db):
     assert limited.json() == {"detail": "Too many attempts, try again later"}
 
 
-def test_admin_login_uses_first_forwarded_for_hop(isolated_admin_login_db):
+def test_admin_login_ignores_spoofed_forwarded_for_when_real_ip_is_set(
+    isolated_admin_login_db,
+):
+    with TestClient(main.app) as client:
+        for index in range(5):
+            response = _login(
+                client,
+                f"unknown-{index}",
+                "wrong",
+                real_ip="198.51.100.4",
+                forwarded_for=(
+                    f"203.0.113.{index + 1}, 192.0.2.{index + 1}"
+                ),
+            )
+            assert response.status_code == 401
+        limited = _login(
+            client,
+            "another-name",
+            "wrong",
+            real_ip="198.51.100.4",
+            forwarded_for="203.0.113.99, 192.0.2.99",
+        )
+    assert limited.status_code == 429
+    assert limited.json() == {"detail": "Too many attempts, try again later"}
+
+
+def test_admin_login_tracks_different_real_ips_separately(isolated_admin_login_db):
+    with TestClient(main.app) as client:
+        for index in range(5):
+            response = _login(
+                client,
+                f"first-ip-{index}",
+                "wrong",
+                real_ip="198.51.100.4",
+                forwarded_for=f"203.0.113.{index + 1}, 192.0.2.99",
+            )
+            assert response.status_code == 401
+        second_ip_attempts = [
+            _login(
+                client,
+                f"second-ip-{index}",
+                "wrong",
+                real_ip="198.51.100.5",
+                forwarded_for=f"203.0.113.{index + 10}, 192.0.2.99",
+            )
+            for index in range(5)
+        ]
+        limited = _login(
+            client,
+            "second-ip-extra",
+            "wrong",
+            real_ip="198.51.100.5",
+            forwarded_for="203.0.113.20, 192.0.2.99",
+        )
+    assert [response.status_code for response in second_ip_attempts] == [401] * 5
+    assert limited.status_code == 429
+    assert limited.json() == {"detail": "Too many attempts, try again later"}
+
+
+def test_admin_login_falls_back_to_request_client_when_forwarded_headers_are_empty(
+    isolated_admin_login_db,
+):
     with TestClient(main.app) as client:
         responses = [
             _login(
                 client,
                 f"unknown-{index}",
                 "wrong",
-                f"198.51.100.{index + 1}",
+                forwarded_for=" , ",
             )
             for index in range(6)
         ]
-    assert [response.status_code for response in responses] == [401] * 6
+    assert [response.status_code for response in responses] == [401] * 5 + [429]
 
 
 def test_admin_login_limits_failures_per_normalized_name(isolated_admin_login_db):
@@ -174,6 +250,32 @@ def test_admin_password_change_requires_current_and_long_new_password(
         ).fetchone()["password_hash"]
     assert accounts.verify_password(stored, "a newer password")
     assert not accounts.verify_password(stored, "correct horse battery")
+
+
+def test_admin_password_change_revokes_other_sessions_but_keeps_current(
+    isolated_admin_login_db,
+):
+    _user, invite = _admin()
+    current_token = accounts.redeem_invite(invite)
+    other_token = accounts.redeem_invite(invite)
+    current_headers = {"Authorization": f"Bearer {current_token}"}
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+
+    with TestClient(main.app) as client:
+        changed = client.post(
+            "/api/admin/password",
+            json={
+                "current_password": "correct horse battery",
+                "new_password": "a newer password",
+            },
+            headers=current_headers,
+        )
+        current_session = client.get("/api/me", headers=current_headers)
+        other_session = client.get("/api/me", headers=other_headers)
+
+    assert changed.status_code == 200
+    assert current_session.status_code == 200
+    assert other_session.status_code == 401
 
 
 def test_set_password_rejects_short_password(isolated_admin_login_db):
