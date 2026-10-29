@@ -345,10 +345,11 @@ export default function App() {
   return (
     <div className="stage">
       <div className="phone">
-        <header className="top">
-          <span className="logo">quenya<i>.</i></span>
-          <span className="top-r">{updating ? "Updating taste…" : fetchNote ?? ""}</span>
-        </header>
+        {(updating || fetchNote) && (
+          <header className="top">
+            <span className="top-r">{updating ? "Updating taste…" : fetchNote}</span>
+          </header>
+        )}
         {boards.length > 0 && tab !== "swipe" && (
           <div className="boards" role="tablist" aria-label="Boards">
             {canCreateStyle && <button role="tab" aria-selected={writingNew} className={"board add" + (writingNew ? " on" : "")} onClick={newBoard}>+ New</button>}
