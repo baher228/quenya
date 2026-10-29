@@ -384,6 +384,13 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
     brief = _brief()
     profile = _taste_profile(changes=["Recent swipe: statement shoes"])
     items = [_item("top", "top"), _item("bottom", "bottom"), _item("shoes", "shoes")]
+    replacement_shoes = {
+        **items[2],
+        "id": "replacement-shoes",
+        "title": "replacement boots",
+        "source_url": "https://www.vinted.co.uk/items/replacement-shoes",
+        "image_url": "https://images.example/replacement-shoes.jpg",
+    }
     other_board_item = _item("other-board-item", "outerwear")
     items[0]["tags"].update(
         category="shirt", aesthetics=["workwear", "heritage"], colours=["olive"]
@@ -422,7 +429,9 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
         "latest_taste",
         lambda _profile_id: {"version": 1, "profile": profile},
     )
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: items)
+    monkeypatch.setattr(
+        phase2_api.db, "live_catalogue", lambda: [items[0], items[1], replacement_shoes]
+    )
     monkeypatch.setattr(phase2_api.db, "save_outfit", lambda *_args, **_kwargs: "outfit-1")
     calls = []
 
@@ -434,7 +443,9 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
                 Outfit(
                     title="Workwear",
                     mood="Relaxed",
-                    piece_ids=["outside-pool"] if invalid else ["top", "bottom", "shoes"],
+                    piece_ids=["outside-pool"]
+                    if invalid
+                    else ["top", "bottom", "replacement-shoes"],
                     why="Balanced casual pieces.",
                 )
             ]
@@ -461,7 +472,7 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
     assert [piece["id"] for piece in response["outfits"][0]["pieces"]] == [
         "top",
         "bottom",
-        "shoes",
+        "replacement-shoes",
     ]
     assert response["dropped"] == 0
 
@@ -638,6 +649,7 @@ def test_outfits_board_id_uses_owned_non_active_profile(monkeypatch):
         ),
     )
     monkeypatch.setattr(db, "live_catalogue", lambda: pool)
+    monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
     monkeypatch.setattr(db, "swipe_history", lambda _profile_id: {})
     monkeypatch.setattr(
         phase2_api,
@@ -797,6 +809,92 @@ def test_deck_board_id_filters_swipes_and_records_events_for_target(
     assert db.recent_deck_item_ids("board-a") == ["item-a"]
 
 
+def test_deck_hides_disliked_product_only_from_its_own_profile(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "lookalikes.sqlite")
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-a")
+    profile = TasteProfile.model_validate(_taste_profile()).model_dump()
+    db.create_profile("board-a", _brief(), active=True, owner_id="owner-a")
+    db.save_taste_version("board-a", 1, profile, {}, "taste-a")
+    db.create_profile("board-b", _brief(), active=True, owner_id="owner-b")
+    db.save_taste_version("board-b", 1, profile, {}, "taste-b")
+
+    swiped = _item("swiped", "outerwear")
+    swiped["title"] = "Dickies Cargo Trousers - Navy"
+    swiped["source_url"] = "https://www.vinted.co.uk/items/swiped"
+    lookalike = _item("lookalike", "outerwear")
+    lookalike["title"] = "Dickies Cargo Trousers - Green"
+    lookalike["source_url"] = "https://www.vinted.co.uk/items/lookalike"
+    other = _item("other", "outerwear")
+    other["title"] = "Different Workwear Jacket"
+    _insert_tagged_items(swiped, lookalike, other)
+    db.insert_swipe("board-a", "swiped", False)
+    db.insert_swipe("board-a", "swiped", True)
+    db.insert_swipe("board-a", "swiped", False)
+    monkeypatch.setenv("QUENYA_RANKER", "tags")
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
+    monkeypatch.setattr(db, "live_catalogue", lambda: [lookalike, other])
+    monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
+
+    board_a = phase2_api.deck(n=10, board_id="board-a")
+    assert "lookalike" not in {item["id"] for item in board_a}
+    assert db.profile_swipe_items("board-a")[-1][1] is False
+
+    monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-b")
+    board_b = phase2_api.deck(n=10, board_id="board-b")
+    assert "lookalike" in {item["id"] for item in board_b}
+
+
+def test_outfits_exclude_disliked_items_and_lookalikes_but_keep_likes(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    liked = _item("liked", "outerwear")
+    liked["title"] = "Liked Leather Jacket"
+    disliked = _item("disliked", "outerwear")
+    disliked["title"] = "Disliked Cargo Trousers - Navy"
+    product_lookalike = _item("product-lookalike", "outerwear")
+    product_lookalike["title"] = "Disliked Cargo Trousers - Green"
+    image_lookalike = _item(
+        "image-lookalike",
+        "outerwear",
+        price=30,
+    )
+    image_lookalike["title"] = "Different Product"
+    image_lookalike["image_url"] = disliked["image_url"] + "?variant=large"
+    other = _item("other", "outerwear")
+    other["title"] = "Other Jacket"
+    _insert_tagged_items(
+        liked, disliked, product_lookalike, image_lookalike, other
+    )
+    db.insert_swipe("board-a", "liked", True)
+    db.insert_swipe("board-a", "disliked", False)
+    seen = {}
+
+    def capture_pool(items, _brief_arg, _profile, _locked, exclude_ids, **_kwargs):
+        seen["ids"] = {item["id"] for item in items}
+        seen["exclude_ids"] = set(exclude_ids)
+        return []
+
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
+    monkeypatch.setattr(db, "live_catalogue", lambda: [
+        liked, disliked, product_lookalike, image_lookalike, other
+    ])
+    monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
+
+    with pytest.raises(HTTPException) as exc:
+        phase2_api.outfits(
+            OutfitRequest(board_id="board-a", locked_ids=["disliked"])
+        )
+
+    assert exc.value.status_code == 409
+    assert seen["ids"] == {"liked", "other"}
+    assert "disliked" in seen["exclude_ids"]
+
+
 def test_taste_update_board_id_consumes_only_target_signals(
     monkeypatch, tmp_path
 ):
@@ -930,6 +1028,7 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
     )
     monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: outfit)
     monkeypatch.setattr(db, "live_catalogue", lambda: [old, replacement])
+    monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
     monkeypatch.setattr(
         db,
         "get_item_with_tags",

@@ -37,9 +37,13 @@ from app.outfits import (
 )
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import (
+    LOOKALIKE_VECTOR_WINDOW,
     _is_secondhand,
     add_exploration,
+    drop_lookalikes,
+    image_key,
     make_deck,
+    product_key,
     rank_items,
     score_item,
     secondhand_share,
@@ -1009,6 +1013,27 @@ def _ensure_live_vinted_items(
     return deck
 
 
+def _without_disliked_lookalikes(
+    items: list[dict[str, Any]],
+    swiped_items: list[tuple[dict[str, Any], bool]],
+) -> list[dict[str, Any]]:
+    disliked_items = [
+        item for item, liked in swiped_items if not liked
+    ]
+    disliked_ids = {item["id"] for item in disliked_items}
+    disliked_products = {product_key(item) for item in disliked_items}
+    disliked_images = {
+        key for item in disliked_items if (key := image_key(item)) is not None
+    }
+    return [
+        item
+        for item in items
+        if item["id"] not in disliked_ids
+        and product_key(item) not in disliked_products
+        and image_key(item) not in disliked_images
+    ]
+
+
 @router.get("/api/deck")
 def deck(
     n: int = 10,
@@ -1054,21 +1079,43 @@ def deck(
         core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
     )
     swipes = db.profile_swipes(active["id"])
+    swiped_items = db.profile_swipe_items(active["id"])
     recent_item_ids = db.recent_deck_item_ids(active["id"]) if arm == "embed" else []
-    if arm == "embed":
-        vector_ids = [
-            *[swipe["item_id"] for swipe in swipes],
-            *[item["id"] for item in tag_ranked[:100]],
-            *recent_item_ids,
-        ]
-        embeddings = db.item_mix_vectors(vector_ids)
-    else:
-        embeddings = {}
+    vector_ids = list(dict.fromkeys([
+        *[item["id"] for item in tag_ranked[:LOOKALIKE_VECTOR_WINDOW]],
+        *recent_item_ids,
+        *[item["id"] for item, _liked in swiped_items],
+    ]))
+    embeddings = db.item_mix_vectors(vector_ids)
+    tag_ranked = drop_lookalikes(
+        tag_ranked,
+        swiped_items,
+        {
+            item_id: vectors["mix"]
+            for item_id, vectors in embeddings.items()
+            if vectors.get("mix") is not None
+        },
+        vector_window=LOOKALIKE_VECTOR_WINDOW,
+    )
     brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
     history = history_query(swipes, embeddings) if arm == "embed" else None
     query = history if history is not None else brief_vector
+    ranked_ids = [item["id"] for item in tag_ranked]
+    nearest_vectors = (
+        embeddings
+        if all(
+            (embeddings.get(item_id) or {}).get("mix") is not None
+            for item_id in ranked_ids
+        )
+        else None
+    )
     nearest_rows = (
-        db.nearest_item_mix(query, [item["id"] for item in tag_ranked], k=400)
+        db.nearest_item_mix(
+            query,
+            ranked_ids,
+            k=400,
+            vectors=nearest_vectors,
+        )
         if arm == "embed" and query is not None
         else []
     )
@@ -1197,6 +1244,9 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
     current = db.latest_taste(active["id"])
     profile = current["profile"]
     items = db.live_catalogue()
+    swiped_items = db.profile_swipe_items(active["id"])
+    disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
+    items = _without_disliked_lookalikes(items, swiped_items)
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     pool = build_pool(
@@ -1204,7 +1254,7 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
         active["brief"],
         profile,
         body.locked_ids,
-        body.exclude_ids,
+        list(dict.fromkeys([*body.exclude_ids, *disliked_ids])),
         core_profile=core_profile,
     )
     if not pool:
@@ -1339,6 +1389,9 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
     items = db.live_catalogue()
+    swiped_items = db.profile_swipe_items(active["id"])
+    disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
+    items = _without_disliked_lookalikes(items, swiped_items)
     existing = [db.get_item_with_tags(item_id) for item_id in outfit["piece_ids"]]
     replaced = next((item for item in existing if item and item["id"] == body.item_id), None)
     if not replaced:
@@ -1346,7 +1399,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     slot = tags_for(replaced).get("slot")
     current = _taste(active["id"])
     core = _core()
-    excluded_ids = set(body.exclude_ids)
+    excluded_ids = {*body.exclude_ids, *disliked_ids}
     include_shoes = active["brief"].get("include_shoes", True)
     before = set(
         outfit_errors([piece for piece in existing if piece], include_shoes)

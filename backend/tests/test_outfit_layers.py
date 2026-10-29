@@ -396,6 +396,9 @@ def test_swap_keeps_the_replaced_layer_role(monkeypatch):
         phase2_api.db, "live_catalogue", lambda: [wrong_role, same_role]
     )
     monkeypatch.setattr(
+        phase2_api.db, "profile_swipe_items", lambda _profile_id: []
+    )
+    monkeypatch.setattr(
         phase2_api, "rank_items", lambda *_args, **_kwargs: [wrong_role, same_role]
     )
     monkeypatch.setattr(

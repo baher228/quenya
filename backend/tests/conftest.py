@@ -28,6 +28,15 @@ def clear_live_catalogue_cache():
     db.invalidate_live_catalogue()
 
 
+@pytest.fixture(autouse=True)
+def clear_item_mix_vector_cache():
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        db._ITEM_MIX_VECTOR_CACHE.clear()
+    yield
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        db._ITEM_MIX_VECTOR_CACHE.clear()
+
+
 @pytest.fixture
 def auth_headers():
     user, invite = accounts.create_user("Test user")

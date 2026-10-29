@@ -243,6 +243,9 @@ def _run_swap(
         phase2_api.db, "live_catalogue", lambda: candidates
     )
     monkeypatch.setattr(
+        phase2_api.db, "profile_swipe_items", lambda _profile_id: []
+    )
+    monkeypatch.setattr(
         phase2_api,
         "rank_items",
         lambda *_args, **_kwargs: candidates,
@@ -485,6 +488,9 @@ def test_outfits_saves_and_returns_piece_ids_in_canonical_order(monkeypatch):
         },
     )
     monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: pieces)
+    monkeypatch.setattr(
+        phase2_api.db, "profile_swipe_items", lambda _profile_id: []
+    )
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
     monkeypatch.setattr(
