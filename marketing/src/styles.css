@@ -1510,7 +1510,7 @@ img {
     font-size: 0.82rem;
   }
 
-  .top-nav a:nth-child(3) {
+  .top-nav a:not(.top-cta) {
     display: none;
   }
 

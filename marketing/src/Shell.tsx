@@ -12,8 +12,6 @@ export function Header({ home = true }: { home?: boolean }) {
           <span className="brand-name">quenya.</span>
         </a>
         <nav className="top-nav" aria-label="Primary">
-          <a href={home ? "#method" : "/#method"}>How it works</a>
-          <a href={home ? "#outfits" : "/#outfits"}>Outfits</a>
           <a href={home ? "#faq" : "/#faq"}>Questions</a>
           <a className="top-cta" href={home ? "#waitlist" : "/#waitlist"}>Join the waitlist</a>
         </nav>
