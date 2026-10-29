@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'tester', invite_hash TEXT UNIQUE,
-    created_at TEXT NOT NULL, revoked_at TEXT
+    created_at TEXT NOT NULL, revoked_at TEXT, password_hash TEXT
 );
 CREATE TABLE IF NOT EXISTS auth_sessions (
     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL,
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'tester', invite_hash TEXT UNIQUE,
-    created_at TEXT NOT NULL, revoked_at TEXT
+    created_at TEXT NOT NULL, revoked_at TEXT, password_hash TEXT
 );
 CREATE TABLE IF NOT EXISTS auth_sessions (
     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL,
@@ -562,6 +562,9 @@ def init_db() -> None:
                 for statement in POSTGRES_SCHEMA.split(";"):
                     if statement.strip():
                         connection.execute(statement)
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
+                )
                 for column, definition in {
                     "owner_id": "TEXT",
                     "ranker_arm": "TEXT",
@@ -590,6 +593,7 @@ def init_db() -> None:
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.executescript(SCHEMA)
             migrations = {
+                "users": {"password_hash": "TEXT"},
                 "profiles": {
                     "kind": "TEXT NOT NULL DEFAULT 'user'",
                     "active": "INTEGER NOT NULL DEFAULT 1",

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type AdminUser, type AdminWaitlistEntry, type User } from "./api";
 
 type Filter = "pending" | "approved" | "rejected" | "all";
 type Action = "approve" | "reject" | "rotate" | "revoke";
+type AdminIdentity = Pick<User, "id" | "name" | "role">;
 
 const FILTERS: Filter[] = ["pending", "approved", "rejected", "all"];
 
@@ -20,8 +21,12 @@ function emailInvite(email: string, inviteUrl: string) {
 }
 
 export default function AdminApp() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AdminIdentity | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
+  const [loginName, setLoginName] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginPending, setLoginPending] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
   const [entries, setEntries] = useState<AdminWaitlistEntry[]>([]);
   const [testers, setTesters] = useState<AdminUser[]>([]);
@@ -32,6 +37,14 @@ export default function AdminApp() {
   const [busy, setBusy] = useState<Record<string, Action>>({});
   const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordPending, setPasswordPending] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [signOutPending, setSignOutPending] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -46,6 +59,62 @@ export default function AdminApp() {
   }, []);
 
   const authorized = authResolved && user?.role === "admin";
+
+  const signIn = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoginPending(true);
+    setLoginError(null);
+    try {
+      const result = await api.adminLogin(loginName, loginPassword);
+      window.localStorage.setItem("quenya.token", result.token);
+      setUser(result.user);
+      setLoginPassword("");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Unable to sign in.");
+    } finally {
+      setLoginPending(false);
+    }
+  };
+
+  const changePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    if (newPassword.length < 12) {
+      setPasswordError("New password must be at least 12 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    setPasswordPending(true);
+    try {
+      await api.changeAdminPassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess("Password changed.");
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : "Unable to change password.");
+    } finally {
+      setPasswordPending(false);
+    }
+  };
+
+  const signOut = async () => {
+    setSignOutPending(true);
+    try {
+      await api.logout();
+    } catch {
+      // Clear the local session even if the server cannot be reached.
+    } finally {
+      window.localStorage.removeItem("quenya.token");
+      setUser(null);
+      setPasswordPanelOpen(false);
+      setSignOutPending(false);
+    }
+  };
 
   const loadWaitlist = useCallback(() => {
     if (!authorized) return;
@@ -176,7 +245,44 @@ export default function AdminApp() {
 
   if (!authResolved) return null;
   if (!user || user.role !== "admin") {
-    return <main className="admin-unavailable">Not available</main>;
+    return (
+      <main className="admin-sign-in-stage">
+        <section className="admin-sign-in-card">
+          <p className="eyebrow">Quenya · Admin</p>
+          <h1 className="h1">Admin sign in</h1>
+          <p className="admin-sign-in-copy">Sign in to manage tester access.</p>
+          <form className="admin-form" onSubmit={event => void signIn(event)}>
+            <label className="field">
+              <span className="lbl">Name</span>
+              <input
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={loginName}
+                onChange={event => setLoginName(event.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              <span className="lbl">Password</span>
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={event => setLoginPassword(event.target.value)}
+                required
+              />
+            </label>
+            {loginError && <p className="admin-error" role="alert">{loginError}</p>}
+            <button className="btn primary wide admin-sign-in-submit" type="submit" disabled={loginPending}>
+              {loginPending && <span className="admin-spinner" aria-hidden="true" />}
+              {loginPending ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -188,8 +294,68 @@ export default function AdminApp() {
               <p className="eyebrow">Quenya · Admin</p>
               <h1 className="h1">Tester access</h1>
             </div>
-            <a className="btn ghost sm" href="/">Back to app</a>
+            <div className="admin-header-actions">
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  setPasswordPanelOpen(open => !open);
+                  setPasswordError(null);
+                  setPasswordSuccess(null);
+                }}
+              >
+                Change password
+              </button>
+              <button className="btn ghost sm" onClick={() => void signOut()} disabled={signOutPending}>
+                {signOutPending ? "Signing out…" : "Sign out"}
+              </button>
+              <a className="btn ghost sm" href="/">Back to app</a>
+            </div>
           </header>
+
+          {passwordPanelOpen && (
+            <section className="admin-password-panel" aria-labelledby="admin-password-title">
+              <div>
+                <h2 id="admin-password-title" className="h3">Change password</h2>
+                <p className="small muted">Use at least 12 characters.</p>
+              </div>
+              <form className="admin-form" onSubmit={event => void changePassword(event)}>
+                <label className="field">
+                  <span className="lbl">Current password</span>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={event => setCurrentPassword(event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span className="lbl">New password</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={event => setNewPassword(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span className="lbl">Confirm new password</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={event => setConfirmPassword(event.target.value)}
+                    required
+                  />
+                </label>
+                {passwordError && <p className="admin-error" role="alert">{passwordError}</p>}
+                {passwordSuccess && <p className="admin-success" role="status">{passwordSuccess}</p>}
+                <button className="btn primary sm" type="submit" disabled={passwordPending}>
+                  {passwordPending ? "Saving…" : "Save password"}
+                </button>
+              </form>
+            </section>
+          )}
 
           <section className="admin-section">
             <div className="admin-section-head">

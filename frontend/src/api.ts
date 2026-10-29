@@ -75,8 +75,18 @@ const post = <T>(path: string, data?: unknown) =>
 
 export const api = {
   invite: (token: string) => post<{ token: string; user: User }>("/api/auth/invite", { token }),
+  adminLogin: (name: string, password: string) =>
+    post<{ token: string; user: Pick<User, "id" | "name" | "role"> }>(
+      "/api/auth/admin-login",
+      { name, password },
+    ),
   me: () => req<User>("/api/me"),
   logout: () => post<{ ok: boolean }>("/api/auth/logout"),
+  changeAdminPassword: (currentPassword: string, newPassword: string) =>
+    post<{ ok: boolean }>("/api/admin/password", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
   health: () => req<{
     items_total: number;
     items_tagged: number;
