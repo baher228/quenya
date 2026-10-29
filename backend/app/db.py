@@ -982,6 +982,28 @@ def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def items_missing_embeddings(limit: int) -> list[dict[str, Any]]:
+    init_db()
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+    image_field = "e.img::text AS _emb_img" if postgres else "e.img AS _emb_img"
+    text_field = "e.txt::text AS _emb_txt" if postgres else "e.txt AS _emb_txt"
+    with db_connection() as connection:
+        rows = connection.execute(
+            f"""SELECT i.*, {image_field}, {text_field}
+                FROM items AS i
+                LEFT JOIN item_embeddings AS e
+                  ON e.item_id=i.id AND e.model='clip32'
+                WHERE e.item_id IS NULL OR e.img IS NULL OR e.txt IS NULL
+                ORDER BY i.fetched_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    items = [dict(row) for row in rows]
+    for item in items:
+        item["_emb_img"] = _vector_value(item["_emb_img"])
+        item["_emb_txt"] = _vector_value(item["_emb_txt"])
+    return items
+
+
 def model_stats() -> list[dict[str, Any]]:
     init_db()
     with db_connection() as connection:

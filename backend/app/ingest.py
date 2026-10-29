@@ -51,6 +51,7 @@ def ingest(
     run_embed: bool = False,
     tag_concurrency: int = 2,
     embed_batch_size: int = 32,
+    embed_limit: int = 2000,
 ) -> dict[str, Any]:
     db.init_db()
     all_records = []
@@ -103,7 +104,7 @@ def ingest(
         }
     if run_embed:
         summary["embed"] = _run_with_logs_on_stderr(
-            embed.backfill, embed_batch_size
+            embed.backfill, embed_batch_size, limit=embed_limit
         )
     if source == "retail":
         summary["retail_domains"] = retail.get_domain_report()
@@ -119,6 +120,7 @@ def main() -> None:
     parser.add_argument("--embed", action="store_true")
     parser.add_argument("--tag-concurrency", type=int, default=2)
     parser.add_argument("--embed-batch-size", type=int, default=32)
+    parser.add_argument("--embed-limit", type=int, default=2000)
     args = parser.parse_args()
     if args.per_query < 1:
         parser.error("--per-query must be positive")
@@ -128,6 +130,8 @@ def main() -> None:
         parser.error("--tag-concurrency must be between 1 and 4")
     if args.embed_batch_size < 1:
         parser.error("--embed-batch-size must be positive")
+    if args.embed_limit < 1:
+        parser.error("--embed-limit must be positive")
     print(json.dumps(
         ingest(
             args.source,
@@ -137,6 +141,7 @@ def main() -> None:
             run_embed=args.embed,
             tag_concurrency=args.tag_concurrency,
             embed_batch_size=args.embed_batch_size,
+            embed_limit=args.embed_limit,
         ),
         ensure_ascii=False,
         separators=(",", ":"),

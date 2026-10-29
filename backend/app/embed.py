@@ -68,12 +68,19 @@ def _image_source(item: dict) -> str | None:
     return item.get("image_url")
 
 
-def backfill(batch_size: int) -> None:
+def backfill(batch_size: int, limit: int = 100000) -> None:
     import httpx
     from PIL import Image
 
-    items = db.items_for_embedding(limit=100000)
-    current = db.item_embedding_map()
+    items = db.items_missing_embeddings(limit)
+    current = {
+        item["id"]: {
+            "img": item["_emb_img"],
+            "txt": item["_emb_txt"],
+            "mix": None,
+        }
+        for item in items
+    }
     started = time.monotonic()
     missing_text = [
         item for item in items

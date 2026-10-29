@@ -65,7 +65,9 @@ def test_ingest_tags_new_items_embeds_and_continues_after_query_error(monkeypatc
     monkeypatch.setattr(
         ingest.embed,
         "backfill",
-        lambda batch_size: calls.__setitem__("embed", batch_size),
+        lambda batch_size, *, limit: calls.__setitem__(
+            "embed", (batch_size, limit)
+        ),
     )
 
     summary = ingest.ingest(
@@ -74,6 +76,7 @@ def test_ingest_tags_new_items_embeds_and_continues_after_query_error(monkeypatc
         run_tag=True,
         run_embed=True,
         embed_batch_size=8,
+        embed_limit=37,
     )
 
     assert summary["queries"] == 2
@@ -85,14 +88,21 @@ def test_ingest_tags_new_items_embeds_and_continues_after_query_error(monkeypatc
         "source": "vinted",
         "item_ids": ["new-item"],
     }
-    assert calls["embed"] == 8
+    assert calls["embed"] == (8, 37)
 
 
 def test_main_prints_one_compact_json_summary_line(monkeypatch, capsys):
+    calls = {}
+
+    def ingest_stub(*args, **kwargs):
+        calls["args"] = args
+        calls["kwargs"] = kwargs
+        return {"source": args[0], "queries": 2}
+
     monkeypatch.setattr(
         ingest,
         "ingest",
-        lambda *args, **kwargs: {"source": args[0], "queries": 2},
+        ingest_stub,
     )
     monkeypatch.setattr(
         ingest.sys,
@@ -106,3 +116,4 @@ def test_main_prints_one_compact_json_summary_line(monkeypatch, capsys):
     assert output.err == ""
     assert output.out.count("\n") == 1
     assert json.loads(output.out) == {"source": "retail", "queries": 2}
+    assert calls["kwargs"]["embed_limit"] == 2000

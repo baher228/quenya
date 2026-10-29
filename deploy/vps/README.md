@@ -54,10 +54,12 @@ Vinted runs every three hours with a 40-query sample and a ten-minute
 randomized delay. Retail runs daily at 04:00 UTC. Both jobs use `Nice=10` and
 the wrapper's 2560 MiB memory limit, equal memory-plus-swap limit (no extra
 swap), and 0.75 CPU Docker limit. Tagging uses concurrency 1 and embeddings use
-batches of 8 to keep peak memory lower. Run one job manually with:
+batches of 8. Each scheduled run embeds up to 2,000 newest items with missing
+vectors, ensuring fresh listings are covered while bounding backlog work. Run
+one job manually with:
 
 ```sh
-sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed
+sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed --tag-concurrency 1 --embed-batch-size 8 --embed-limit 2000
 ```
 
 ## Update, logs and rollback
