@@ -195,29 +195,29 @@ struct DeckView: View {
 private struct TasteDots: View {
     let filled: Int
     let updating: Bool
-    @State private var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<10, id: \.self) { index in
-                Circle()
-                    .fill(index < filled ? QuenyaTheme.sage : QuenyaTheme.webLine)
-                    .frame(width: 5, height: 5)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: filled)
+        TimelineView(.animation(paused: !updating || reduceMotion)) { context in
+            HStack(spacing: 4) {
+                ForEach(0..<10, id: \.self) { index in
+                    Circle()
+                        .fill(index < filled ? QuenyaTheme.sage : QuenyaTheme.webLine)
+                        .frame(width: 5, height: 5)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: filled)
+                }
             }
+            .opacity(opacity(at: context.date))
         }
-        .opacity(updating && !pulsing ? 0.35 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(min(max(filled, 0), 10)) of 10 swipes until your next taste update")
-        .task(id: updating) {
-            if updating {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    pulsing = true
-                }
-            } else {
-                pulsing = false
-            }
-        }
+    }
+
+    private func opacity(at date: Date) -> Double {
+        guard updating else { return 1 }
+        guard !reduceMotion else { return 0.6 }
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+        return 0.35 + 0.65 * (0.5 + 0.5 * cos(phase * 2 * .pi))
     }
 }
 
