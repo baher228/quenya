@@ -12,14 +12,16 @@ function appendUnique(existing: Item[], incoming: Item[], excluded: Set<string>)
   return [...existing, ...incoming.filter(item => !ids.has(item.id) && !!ids.add(item.id))];
 }
 
-export function DeckScreen({ profile, version, board, userId, boardId, onChange, onSignal, onDone, onOpenItem }: {
+export function DeckScreen({ profile, version, board, userId, boardId, swipesSinceUpdate, updating, onChange, onSignal, onDone, onOpenItem }: {
   profile: TasteProfile | null;
   version: number | null;
   board: string;
   userId: string;
   boardId: string;
+  swipesSinceUpdate: number;
+  updating: boolean;
   onChange: () => void;
-  onSignal: (updateDue: boolean, boardId: string) => void;
+  onSignal: (updateDue: boolean, boardId: string, swipesSinceUpdate: number) => void;
   onDone: (boardId: string) => void;
   onOpenItem: (it: Item) => void;
 }) {
@@ -88,7 +90,7 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
     setSeen(n => n + 1);
     const requestBoardId = boardId;
     api.swipe(top.id, liked, requestBoardId)
-      .then(r => onSignal(r.update_due, requestBoardId))
+      .then(r => onSignal(r.update_due, requestBoardId, r.swipes_since_update))
       .catch(setError);
   }, [boardId, items, onSignal, userId]);
 
@@ -126,9 +128,11 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
       <div className="swipe-main">
       <div className="deck-head">
         <button className="deck-ctx" onClick={onChange}><span>{board}</span>{version ? <em>v{version}</em> : null}<i>Change</i></button>
-        <span className="deck-count">{seen} swiped</span>
+        <span className="deck-count">
+          <TasteDots filled={swipesSinceUpdate} updating={updating} />
+          <span>{seen}</span>
+        </span>
       </div>
-      <div className="deck-bar"><i style={{ width: `${Math.min(100, (seen % 10) * 10)}%` }} /></div>
 
       <div className="deck">
         {loading && <Loading>Picking pieces for you</Loading>}
@@ -158,12 +162,27 @@ export function DeckScreen({ profile, version, board, userId, boardId, onChange,
       <div className="learned-wrap">
         <span className="lbl">Learned so far {version ? <em>taste v{version}</em> : null}</span>
         <div className="learned">
-          {likes.length + avoids.length === 0 && <span className="muted small">Every swipe is a label. Your taste updates every 8 swipes.</span>}
+          {likes.length + avoids.length === 0 && <span className="muted small">Every swipe is a label. Your taste updates every 10 swipes.</span>}
           {likes.map(([k]) => <span key={"l" + k} className="sig pos">+ {pretty(k)}</span>)}
           {avoids.map(([k]) => <span key={"a" + k} className="sig neg">− {pretty(k)}</span>)}
         </div>
       </div>
     </section>
+  );
+}
+
+function TasteDots({ filled, updating }: { filled: number; updating: boolean }) {
+  const progress = Math.max(0, Math.min(10, filled));
+  return (
+    <span
+      className={`taste-dots${updating ? " updating" : ""}`}
+      role="img"
+      aria-label={`${progress} of 10 swipes until your next taste update`}
+    >
+      {Array.from({ length: 10 }, (_, index) => (
+        <span key={index} aria-hidden="true" className={index < progress ? "filled" : ""} />
+      ))}
+    </span>
   );
 }
 

@@ -1162,7 +1162,7 @@ def swipe(body: SwipeRequest) -> dict[str, Any]:
     signals = db.unconsumed_signals(active["id"])
     return {
         "swipes_since_update": len(signals["swipes"]),
-        "update_due": len(signals["swipes"]) >= 8,
+        "update_due": len(signals["swipes"]) >= 10,
     }
 
 
@@ -1182,6 +1182,7 @@ def taste_history(board_id: str | None = None) -> dict[str, Any]:
     counts = db.signal_counts(active["id"])
     signals = db.unconsumed_signals(active["id"])
     counts["unconsumed"] = sum(len(rows) for rows in signals.values())
+    counts["swipes_since_update"] = len(signals["swipes"])
     return {
         "profile_id": active["id"],
         "current": {"version": current["version"], "profile": current["profile"]},
