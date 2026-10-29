@@ -380,8 +380,17 @@ export default function App() {
           )}
           {tab === "swipe" && (hasProfile && !picking
             ? activeBoard ? <DeckScreen key={`${deckKey}:${user.id}:${activeBoard.id}`} userId={user.id} boardId={activeBoard.id} profile={taste?.current?.profile ?? null} version={version}
+                swipesSinceUpdate={taste?.counts.swipes_since_update ?? 0} updating={updating}
                 board={activeBoard?.label ?? ""} onChange={() => setPicking(true)}
-                onSignal={(due, boardId) => { if (due && !updating) void runUpdate("from your swipes", boardId); }}
+                onSignal={(due, boardId, count) => {
+                  if (activeBoardIdRef.current === boardId) {
+                    setTaste(current => current ? {
+                      ...current,
+                      counts: { ...current.counts, swipes_since_update: count },
+                    } : current);
+                  }
+                  if (due && !updating) void runUpdate("from your swipes", boardId);
+                }}
                 onDone={deckDone} onOpenItem={item => setSheet({ kind: "item", item })} />
               : <Loading>Loading your style…</Loading>
             : boards.length > 0

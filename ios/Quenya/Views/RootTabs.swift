@@ -83,10 +83,6 @@ struct RootTabs: View {
                 if state.selectedTab != .swipe {
                     BoardStrip()
                 }
-
-                Rectangle()
-                    .fill(QuenyaTheme.webLine)
-                    .frame(height: 1)
             }
             .background(chromeBackground)
 

@@ -120,6 +120,9 @@ final class AppState {
         guard let styleId = activeBoard?.id else { return 0 }
         return cache.snapshot(for: styleId).swiped
     }
+    var swipesSinceUpdate: Int {
+        taste?.counts["swipes_since_update"] ?? 0
+    }
     var toast: ToastMessage?
     var fetchNote: String?
     var updating = false
@@ -571,6 +574,10 @@ final class AppState {
                 liked: liked,
                 boardId: styleId
             )
+            if activeBoard?.id == styleId, var updatedTaste = taste {
+                updatedTaste.counts["swipes_since_update"] = result.swipesSinceUpdate
+                taste = updatedTaste
+            }
             if result.updateDue && !updating { await runUpdate(styleId: styleId) }
         } catch {
             showToast("Swipe not saved", lines: [error.localizedDescription])

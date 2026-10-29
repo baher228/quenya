@@ -36,20 +36,13 @@ struct DeckView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("\(state.swipedCount) swiped")
-                    .font(.system(size: 12))
-                    .foregroundStyle(QuenyaTheme.webMuted)
-            }
-            .padding(.bottom, 10)
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(QuenyaTheme.webLine)
-                    Capsule().fill(QuenyaTheme.sage)
-                        .frame(width: geometry.size.width * CGFloat(min(10, state.swipedCount % 10)) / 10)
+                HStack(spacing: 8) {
+                    TasteDots(filled: state.swipesSinceUpdate, updating: state.updating)
+                    Text("\(state.swipedCount)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(QuenyaTheme.webMuted)
                 }
             }
-            .frame(height: 3)
             .padding(.bottom, 10)
 
             if state.updating {
@@ -150,7 +143,7 @@ struct DeckView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             if liked.isEmpty && avoided.isEmpty {
-                                Text("Every swipe is a label. Your taste updates every 8 swipes.")
+                                Text("Every swipe is a label. Your taste updates every 10 swipes.")
                                     .font(.system(size: 12))
                                     .foregroundStyle(QuenyaTheme.webMuted)
                                     .lineLimit(1)
@@ -196,6 +189,35 @@ struct DeckView: View {
             state.recordSwipe(item)
             Task { await state.swipe(item, liked: liked) }
         }
+    }
+}
+
+private struct TasteDots: View {
+    let filled: Int
+    let updating: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(paused: !updating || reduceMotion)) { context in
+            HStack(spacing: 4) {
+                ForEach(0..<10, id: \.self) { index in
+                    Circle()
+                        .fill(index < filled ? QuenyaTheme.sage : QuenyaTheme.webLine)
+                        .frame(width: 5, height: 5)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: filled)
+                }
+            }
+            .opacity(opacity(at: context.date))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(min(max(filled, 0), 10)) of 10 swipes until your next taste update")
+    }
+
+    private func opacity(at date: Date) -> Double {
+        guard updating else { return 1 }
+        guard !reduceMotion else { return 0.6 }
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+        return 0.35 + 0.65 * (0.5 + 0.5 * cos(phase * 2 * .pi))
     }
 }
 

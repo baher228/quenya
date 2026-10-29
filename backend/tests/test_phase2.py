@@ -759,17 +759,18 @@ def _insert_tagged_items(*items):
 
 def test_swipe_board_id_uses_owned_non_active_profile(monkeypatch, tmp_path):
     _create_board_pair(monkeypatch, tmp_path)
-    _insert_tagged_items(_item("target-item", "outerwear"))
+    items = [_item(f"target-item-{index}", "outerwear") for index in range(10)]
+    _insert_tagged_items(*items)
 
-    result = phase2_api.swipe(
-        SwipeRequest(item_id="target-item", liked=True, board_id="board-b")
-    )
+    for index, item in enumerate(items, start=1):
+        result = phase2_api.swipe(
+            SwipeRequest(item_id=item["id"], liked=True, board_id="board-b")
+        )
+        assert result["swipes_since_update"] == index
+        assert result["update_due"] is (index == 10)
 
-    assert result["swipes_since_update"] == 1
     assert db.profile_swipes("board-a") == []
-    assert db.profile_swipes("board-b") == [
-        {"item_id": "target-item", "liked": True}
-    ]
+    assert len(db.profile_swipes("board-b")) == 10
     assert db.active_profile("user", owner_id="owner-1")["id"] == "board-a"
 
 
@@ -926,11 +927,16 @@ def test_taste_update_board_id_consumes_only_target_signals(
 
 def test_taste_history_board_id_reads_target_profile(monkeypatch, tmp_path):
     _create_board_pair(monkeypatch, tmp_path)
+    items = [_item(f"signal-{index}", "outerwear") for index in range(3)]
+    _insert_tagged_items(*items)
+    for item in items:
+        db.insert_swipe("board-b", item["id"], liked=True)
 
     result = phase2_api.taste_history(board_id="board-b")
 
     assert result["profile_id"] == "board-b"
     assert result["current"]["version"] == 1
+    assert result["counts"]["swipes_since_update"] == 3
 
 
 def test_taste_update_without_body_uses_active_profile(monkeypatch, tmp_path):
