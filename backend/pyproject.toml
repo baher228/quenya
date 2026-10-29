@@ -25,6 +25,7 @@ dependencies = [
     "onnxruntime>=1.18",
     "ftfy>=6.2",
     "regex>=2024.0",
+    "curl-cffi==0.7.4",
 ]
 
 [project.optional-dependencies]

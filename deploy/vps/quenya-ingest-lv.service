@@ -1,0 +1,9 @@
+[Unit]
+Description=Trickle-ingest public Louis Vuitton UK clothing into Quenya
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/local/sbin/quenya-ingest lv --limit 25 --tag --embed --tag-concurrency 1 --embed-batch-size 8 --embed-limit 2000

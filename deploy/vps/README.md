@@ -35,8 +35,9 @@ Rollback: point the `/api/:path*` and `/img/:path*` rewrites back to `https://qu
 ## Background catalogue ingestion
 
 Ingestion runs in a separate, resource-limited container so tagging and embedding
-cannot consume the API container's memory or CPU. The wrapper only uses public
-seed queries and the Vinted proxy configured in `/etc/quenya/quenya.env`.
+cannot consume the API container's memory or CPU. Vinted uses the proxy configured
+in `/etc/quenya/quenya.env`; Louis Vuitton uses only its public UK sitemap and
+product pages.
 
 Install the wrapper and timer units on the VPS:
 
@@ -46,8 +47,10 @@ sudo install -m 644 deploy/vps/quenya-ingest-vinted.service /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-vinted.timer /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-retail.service /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-retail.timer /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-ingest-lv.service /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-ingest-lv.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.timer
+sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.timer quenya-ingest-lv.timer
 ```
 
 Vinted runs every three hours with a 40-query sample and a ten-minute
@@ -61,6 +64,10 @@ one job manually with:
 ```sh
 sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed --tag-concurrency 1 --embed-batch-size 8 --embed-limit 2000
 ```
+
+Louis Vuitton runs every two hours, with at most 25 public product pages per
+run (about 300 per day maximum). Product-page requests are separated by
+20–60 seconds; ingestion stops after three consecutive blocked responses.
 
 ## Update, logs and rollback
 
