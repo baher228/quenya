@@ -4,7 +4,7 @@ Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-26.2"
+PROMPT_VERSION = "2026-10-26.3"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -59,7 +59,7 @@ Build complete outfits from the pool only.
 
 Rules:
 - Use only ids that appear in the pool. Never invent items.
-- Each outfit has one bottom plus exactly one base layer worn against the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, cardigan, quarter-zip or overshirt) and/or one outer layer (coat, jacket, blazer or gilet). At most one piece may come from the outerwear slot: never put a coat and a jacket, or two jackets, in the same outfit. Never use two pieces with the same layer role. Use at most 4 clothing pieces, then shoes unless the request says no shoes.
+- Each outfit has one bottom plus exactly one base layer worn against the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, cardigan, quarter-zip or overshirt) and outerwear (coat, jacket, blazer, gilet, fleece or shell). Outerwear is at most two pieces, and two only as real layering: a shell (rain shell, hard shell, windbreaker, anorak) over an insulating layer (fleece, puffer, down or padded jacket, gilet) or over a coat, or an insulating layer under a coat. Never put two coats, two jackets of the same kind (for example denim and leather jackets) or two insulating layers together. Never use two base layers or two mid layers. Use at most 4 clothing pieces, then shoes unless the request says no shoes.
 - Bag and accessories are optional; add them only when they clearly strengthen the outfit's idea; at most 2 of them combined; vary across the set — in a set of 3 or more outfits, at least one outfit has none and most have at most one.
 - Keep each outfit to one season — never pair shorts, tank tops or sandals with a heavy coat, parka, puffer, scarf, gloves or beanie; shorts work with a light jacket, overshirt or hoodie.
 - If the request lists locked piece ids, every outfit must include all of them.

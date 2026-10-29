@@ -6,6 +6,7 @@ from app.outfits import (
     base_layer_subtype,
     build_pool,
     layer_role,
+    outerwear_kind,
     stylist_user_content,
     validate_outfits,
     warmth,
@@ -174,6 +175,21 @@ def test_mountain_hardware_soft_shell_in_top_slot_is_outer():
     assert layer_role(item) == "outer"
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("hard shell", "shell"),
+        ("Gore-Tex shell", "shell"),
+        ("fleece jacket", "insulation"),
+        ("soft shell", "insulation"),
+        ("down gilet", "insulation"),
+        ("wool overcoat", "coat"),
+    ],
+)
+def test_outerwear_kind_classifies_text(text, expected):
+    assert outerwear_kind(_piece("outer", "outerwear", text)) == expected
+
+
 def test_outfit_errors_reject_overcoat_and_outerwear_overshirt():
     pieces = [
         _piece("overcoat", "outerwear", "overcoat"),
@@ -184,6 +200,78 @@ def test_outfit_errors_reject_overcoat_and_outerwear_overshirt():
     ]
 
     assert "two jackets or coats" in outfits.outfit_errors(pieces, True)
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "base"),
+    [
+        ("hard shell", "fleece jacket", "t-shirt"),
+        ("Gore-Tex shell", "wool overcoat", "t-shirt"),
+        ("fleece jacket", "wool overcoat", "t-shirt"),
+        ("down gilet", "chore jacket", "shirt"),
+    ],
+)
+def test_outfit_errors_allow_compatible_outerwear_layers(first, second, base):
+    pieces = [
+        _piece("outer-1", "outerwear", first),
+        _piece("outer-2", "outerwear", second),
+        _piece("base", "top", base),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    assert outfits.outfit_errors(pieces, True) == []
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("denim jacket", "leather jacket"),
+        ("wool overcoat", "wool overcoat"),
+        ("fleece jacket", "puffer jacket"),
+        ("wool overcoat", "waffle overshirt"),
+    ],
+)
+def test_outfit_errors_reject_incompatible_outerwear_layers(first, second):
+    pieces = [
+        _piece("outer-1", "outerwear", first),
+        _piece("outer-2", "outerwear", second),
+        _piece("tee", "top", "t-shirt"),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    assert "two jackets or coats" in outfits.outfit_errors(pieces, True)
+
+
+def test_outfit_errors_reject_more_than_two_outerwear_pieces():
+    pieces = [
+        _piece("shell", "outerwear", "hard shell"),
+        _piece("fleece", "outerwear", "fleece jacket"),
+        _piece("coat", "outerwear", "wool overcoat"),
+        _piece("tee", "top", "t-shirt"),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    errors = outfits.outfit_errors(pieces, True)
+
+    assert "more than two jackets or coats" in errors
+    assert "two jackets or coats" not in errors
+
+
+def test_outfit_errors_still_require_a_base_with_two_outerwear_layers():
+    pieces = [
+        _piece("shell", "outerwear", "hard shell"),
+        _piece("fleece", "outerwear", "fleece jacket"),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    errors = outfits.outfit_errors(pieces, True)
+
+    assert "needs exactly one base layer" in errors
+    assert "two jackets or coats" not in errors
 
 
 def test_outfit_errors_allow_jacket_hoodie_tee_and_bottom():
@@ -261,10 +349,6 @@ def test_validate_outfits_accepts_layered_compositions(
     [
         (["hoodie", "jeans", "shoes"], "needs exactly one base layer"),
         (["tee", "tee-2", "jeans", "shoes"], "needs exactly one base layer"),
-        (
-            ["tee", "puffer", "trench", "jeans", "shoes"],
-            "two outer layers",
-        ),
         (
             ["tee", "hoodie", "zip-hoodie", "jeans", "shoes"],
             "two mid layers",
@@ -398,19 +482,23 @@ def test_stylist_pool_lines_include_layer_roles_and_system_rules():
 
     assert "tee | top | base | - | £30 | graphic t-shirt" in content
     assert "bag | bag | - | - | £30 | tote bag" in content
-    assert PROMPT_VERSION == "2026-10-26.2"
+    assert PROMPT_VERSION == "2026-10-26.3"
     assert "one bottom plus exactly one base layer" in STYLIST_SYSTEM
     assert (
         "- Each outfit has one bottom plus exactly one base layer worn against "
         "the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead "
         "of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, "
-        "cardigan, quarter-zip or overshirt) and/or one outer layer (coat, "
-        "jacket, blazer or gilet). At most one piece may come from the outerwear "
-        "slot: never put a coat and a jacket, or two jackets, in the same "
-        "outfit. Never use two pieces with the same layer role. Use at most 4 "
+        "cardigan, quarter-zip or overshirt) and outerwear (coat, jacket, "
+        "blazer, gilet, fleece or shell). Outerwear is at most two pieces, and "
+        "two only as real layering: a shell (rain shell, hard shell, windbreaker, "
+        "anorak) over an insulating layer (fleece, puffer, down or padded jacket, "
+        "gilet) or over a coat, or an insulating layer under a coat. Never put "
+        "two coats, two jackets of the same kind (for example denim and leather "
+        "jackets) or two insulating layers together. Never use two base layers "
+        "or two mid layers. Use at most 4 "
         "clothing pieces, then shoes unless the request says no shoes."
     ) in STYLIST_SYSTEM
-    assert "Never use two pieces with the same layer role" in STYLIST_SYSTEM
+    assert "Never use two base layers or two mid layers" in STYLIST_SYSTEM
     assert "at most 2 of them combined" in STYLIST_SYSTEM
     assert "shorts work with a light jacket, overshirt or hoodie" in STYLIST_SYSTEM
     assert "warmth (warm/cold or -)" in STYLIST_SYSTEM
@@ -521,6 +609,61 @@ def test_swap_rejects_coat_and_outerwear_slot_overshirt(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         phase2_api.swap("outfit", SwapRequest(item_id="old-overshirt"))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "No eligible same-slot replacement"
+
+
+def test_swap_rejects_shell_replacement_that_makes_two_shells(monkeypatch):
+    shell = _piece("shell", "outerwear", "hard shell")
+    replaced = _piece("fleece", "outerwear", "fleece jacket")
+    replacement = _piece("second-shell", "outerwear", "rain shell")
+    tee = _piece("tee", "top", "t-shirt")
+    jeans = _piece("jeans", "bottom", "jeans")
+    shoes = _piece("shoes", "shoes", "trainers")
+    outfit = {
+        "id": "outfit",
+        "profile_id": "profile",
+        "piece_ids": ["shell", "fleece", "tee", "jeans", "shoes"],
+        "total_gbp": 150,
+    }
+    items_by_id = {
+        item["id"]: item
+        for item in [shell, replaced, replacement, tee, jeans, shoes]
+    }
+    monkeypatch.setattr(
+        phase2_api,
+        "_user_profile",
+        lambda: {"id": "profile", "brief": {}},
+    )
+    monkeypatch.setattr(
+        phase2_api, "_taste", lambda _profile_id: {"price_ceiling_gbp": 500}
+    )
+    monkeypatch.setattr(phase2_api, "_core", lambda: {})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api.db, "get_outfit", lambda _outfit_id: outfit)
+    monkeypatch.setattr(
+        phase2_api.db,
+        "get_item_with_tags",
+        lambda item_id: items_by_id.get(item_id),
+    )
+    monkeypatch.setattr(
+        phase2_api.db, "live_catalogue", lambda: [replacement]
+    )
+    monkeypatch.setattr(
+        phase2_api.db, "profile_swipe_items", lambda _profile_id: []
+    )
+    monkeypatch.setattr(
+        phase2_api, "rank_items", lambda *_args, **_kwargs: [replacement]
+    )
+    monkeypatch.setattr(
+        phase2_api.db,
+        "update_outfit_pieces",
+        lambda *_args, **_kwargs: pytest.fail("invalid swap was saved"),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        phase2_api.swap("outfit", SwapRequest(item_id="fleece"))
 
     assert exc.value.status_code == 409
     assert exc.value.detail == "No eligible same-slot replacement"

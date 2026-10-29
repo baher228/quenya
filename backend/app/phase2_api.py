@@ -1456,6 +1456,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         )
         if (
             "two jackets or coats" in candidate_errors
+            or "more than two jackets or coats" in candidate_errors
             or candidate_errors - before
         ):
             continue
