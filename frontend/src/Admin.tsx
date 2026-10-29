@@ -36,6 +36,8 @@ export default function AdminApp() {
   const [testersError, setTestersError] = useState<unknown>(null);
   const [busy, setBusy] = useState<Record<string, Action>>({});
   const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
+  const [emailInviteState, setEmailInviteState] = useState<Record<string, "sending" | "sent">>({});
+  const [emailInviteErrors, setEmailInviteErrors] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
   const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -150,6 +152,33 @@ export default function AdminApp() {
       window.setTimeout(() => setCopied(current => current === key ? null : current), 1600);
     } catch {
       setCopied(null);
+    }
+  };
+
+  const sendInviteEmail = async (entry: AdminWaitlistEntry, inviteUrl: string) => {
+    setEmailInviteState(current => ({ ...current, [entry.id]: "sending" }));
+    setEmailInviteErrors(current => {
+      const next = { ...current };
+      delete next[entry.id];
+      return next;
+    });
+    try {
+      await api.emailInvite(entry.id, inviteUrl);
+      setEmailInviteState(current => ({ ...current, [entry.id]: "sent" }));
+    } catch (error) {
+      setEmailInviteState(current => {
+        const next = { ...current };
+        delete next[entry.id];
+        return next;
+      });
+      if (error instanceof ApiError && error.status === 503) {
+        window.location.href = emailInvite(entry.email, inviteUrl);
+        return;
+      }
+      setEmailInviteErrors(current => ({
+        ...current,
+        [entry.id]: error instanceof Error ? error.message : "Couldn't send the email.",
+      }));
     }
   };
 
@@ -413,7 +442,24 @@ export default function AdminApp() {
                       <button className="btn ghost sm" onClick={() => void copyInvite(entry.id, inviteUrl)}>
                         {copied === entry.id ? "Copied" : "Copy"}
                       </button>
-                      <a className="btn ghost sm" href={emailInvite(entry.email, inviteUrl)}>Email invite</a>
+                      <div className="admin-email-action">
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          disabled={emailInviteState[entry.id] === "sending" || emailInviteState[entry.id] === "sent"}
+                          onClick={() => void sendInviteEmail(entry, inviteUrl)}
+                        >
+                          {emailInviteState[entry.id] === "sending"
+                            ? "Sending…"
+                            : emailInviteState[entry.id] === "sent" ? "Sent" : "Email invite"}
+                        </button>
+                        {emailInviteState[entry.id] === "sent" && (
+                          <span className="small muted" role="status">Sent to {entry.email}</span>
+                        )}
+                        {emailInviteErrors[entry.id] && (
+                          <span className="admin-error" role="alert">{emailInviteErrors[entry.id]}</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </article>

@@ -28,6 +28,11 @@ QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )
 QUENYA_APP_URL = os.getenv("QUENYA_APP_URL", "https://app.quenya.co.uk").rstrip("/")
+QUENYA_SMTP_HOST = os.getenv("QUENYA_SMTP_HOST") or "smtp.gmail.com"
+QUENYA_SMTP_PORT = int(os.getenv("QUENYA_SMTP_PORT") or "587")
+QUENYA_SMTP_USER = os.getenv("QUENYA_SMTP_USER") or "hello@quenya.co.uk"
+QUENYA_SMTP_PASSWORD = os.getenv("QUENYA_SMTP_PASSWORD", "")
+QUENYA_MAIL_FROM = os.getenv("QUENYA_MAIL_FROM") or "Quenya <hello@quenya.co.uk>"
 QUENYA_CATALOGUE_TTL_S = int(os.getenv("QUENYA_CATALOGUE_TTL_S", "300"))
 QUENYA_WARM_CACHES = os.getenv("QUENYA_WARM_CACHES", "1").strip().lower() not in {
     "0",

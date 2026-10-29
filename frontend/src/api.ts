@@ -149,6 +149,11 @@ export const api = {
     post<{ invite_url: string; user: Pick<User, "id" | "name" | "role"> }>(
       `/api/admin/waitlist/${encodeURIComponent(id)}/approve`,
     ),
+  emailInvite: (waitlistId: string, inviteUrl: string) =>
+    post<{ ok: boolean; sent_to: string }>(
+      `/api/admin/waitlist/${encodeURIComponent(waitlistId)}/email-invite`,
+      { invite_url: inviteUrl },
+    ),
   rejectWaitlist: (id: string) =>
     post<{ ok: boolean }>(`/api/admin/waitlist/${encodeURIComponent(id)}/reject`),
   adminUsers: () => req<AdminUser[]>("/api/admin/users"),
