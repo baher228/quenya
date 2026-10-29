@@ -30,6 +30,10 @@ type SwipeDirection = "keep" | "pass";
 const pieceSets = pieceData as Record<SetKey, PieceSet>;
 const allPieces = Object.values(pieceSets).flatMap(set => set.items);
 const people = pieceSets.people.items;
+
+function srcSetFor(src: string) {
+  return `${src.replace(/\.webp$/, "-600.webp")} 600w, ${src} 1200w`;
+}
 const shopPieces = [...new Map(allPieces.map(item => [item.shop, item])).values()];
 
 function formatPrice(price: number) {
@@ -424,6 +428,8 @@ function Hero() {
                   <img
                     className="deck-photo"
                     src={item.src}
+                    srcSet={srcSetFor(item.src)}
+                    sizes="(max-width: 720px) 80vw, 400px"
                     alt={isTop ? `${displayBrand(item.brand)} ${displayTitle(item.title)}` : ""}
                     width={item.w}
                     height={item.h}
@@ -593,6 +599,8 @@ function OutfitPanel() {
               <img
                 className="outfit-image-current"
                 src={item.src}
+                srcSet={srcSetFor(item.src)}
+                sizes="(max-width: 720px) 45vw, 560px"
                 alt={`${displayBrand(item.brand)} ${displayTitle(item.title)}`}
                 width={item.w}
                 height={item.h}
@@ -661,6 +669,8 @@ function ShopChips({ items, decorative = false }: { items: Piece[]; decorative?:
         <div className="shop-chip" role={decorative ? undefined : "listitem"} key={`${item.shop}-${index}`}>
           <img
             src={item.src}
+            srcSet={srcSetFor(item.src)}
+            sizes="(max-width: 720px) 45vw, 560px"
             alt={decorative ? "" : displayTitle(item.title)}
             width={item.w}
             height={item.h}
@@ -711,6 +721,8 @@ function FoundSection() {
           <figure className="found-card" key={item.src} style={{ "--card-tilt": `${index % 2 === 0 ? -2.4 : 1.8}deg` } as CSSProperties}>
             <img
               src={item.src}
+              srcSet={srcSetFor(item.src)}
+              sizes="(max-width: 720px) 76vw, 270px"
               alt={`${displayBrand(item.brand)} ${displayTitle(item.title)}`}
               width={item.w}
               height={item.h}
