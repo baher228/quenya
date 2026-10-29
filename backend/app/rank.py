@@ -3,16 +3,17 @@ import random
 import re
 from functools import lru_cache
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 import numpy as np
 
 from app.accessories import accessory_cap, is_accessory_slot
 from app.gender_rules import text_gender
-from app.images import normalize_image_url
+from app.images import ASOS_IMAGE_HOST, normalize_image_url
 
 DISLIKE_LOOKALIKE_COS = 0.90
 LIKE_LOOKALIKE_COS = 0.95
+COMMON_IMAGE_PRODUCT_THRESHOLD = 5
 
 _KEY_PREFIX = re.compile(
     r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
@@ -24,10 +25,19 @@ _KEY_PREFIX = re.compile(
 
 def product_key(item: dict[str, Any]) -> str:
     source_url = str(item.get("source_url") or "")
-    try:
-        shop = urlsplit(source_url).netloc.lower()
-    except ValueError:
-        shop = ""
+    if "://" in source_url:
+        shop = (
+            source_url.partition("://")[2]
+            .partition("/")[0]
+            .split("?", maxsplit=1)[0]
+            .split("#", maxsplit=1)[0]
+            .lower()
+        )
+    else:
+        try:
+            shop = urlsplit(source_url).netloc.lower()
+        except ValueError:
+            shop = ""
     if not shop:
         shop = str(item.get("source") or "").lower()
     shop = shop.removeprefix("www.")
@@ -46,11 +56,11 @@ def image_key(item: dict[str, Any]) -> str | None:
         return None
     image_url = image_url.strip()
     try:
-        image_url = normalize_image_url(image_url)
-        parts = urlsplit(image_url)
+        if ASOS_IMAGE_HOST in image_url.lower():
+            image_url = normalize_image_url(image_url)
     except ValueError:
         return image_url.split("?", maxsplit=1)[0].split("#", maxsplit=1)[0]
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    return image_url.split("?", maxsplit=1)[0].split("#", maxsplit=1)[0]
 
 
 def _unit_vector(value: Any) -> np.ndarray | None:
@@ -73,30 +83,48 @@ def drop_lookalikes(
     like_cos: float = LIKE_LOOKALIKE_COS,
     vector_window: int = 800,
 ) -> list[dict[str, Any]]:
+    keyed_items = []
+    image_products: dict[str, set[str]] = {}
+    for item in ranked:
+        product = product_key(item)
+        image = image_key(item)
+        keyed_items.append((item, product, image))
+        if image:
+            image_products.setdefault(image, set()).add(product)
+    common_images = {
+        image
+        for image, products in image_products.items()
+        if len(products) >= COMMON_IMAGE_PRODUCT_THRESHOLD
+    }
     blocked_products = {product_key(item) for item, _liked in swiped_items}
     blocked_images = {
         key
         for item, _liked in swiped_items
-        if (key := image_key(item)) is not None
+        if (key := image_key(item)) is not None and key not in common_images
     }
     survivors = []
     seen_products = set()
     seen_images = set()
-    for item in ranked:
-        product = product_key(item)
-        image = image_key(item)
-        if product in blocked_products or (image and image in blocked_images):
+    for item, product, image in keyed_items:
+        if product in blocked_products or (
+            image and image not in common_images and image in blocked_images
+        ):
             continue
-        if product in seen_products or (image and image in seen_images):
+        if product in seen_products or (
+            image and image not in common_images and image in seen_images
+        ):
             continue
         seen_products.add(product)
-        if image:
+        if image and image not in common_images:
             seen_images.add(image)
         survivors.append(item)
 
     swiped_vectors: dict[tuple[bool, int], list[np.ndarray]] = {}
     for item, liked in swiped_items:
-        vector = _unit_vector(vectors.get(item.get("id")))
+        value = vectors.get(item.get("id"))
+        if value is None:
+            continue
+        vector = _unit_vector(value)
         if vector is not None:
             swiped_vectors.setdefault((liked, vector.size), []).append(vector)
 
@@ -105,7 +133,10 @@ def drop_lookalikes(
     for index, item in enumerate(survivors):
         if vector_count >= max(0, vector_window):
             break
-        vector = _unit_vector(vectors.get(item.get("id")))
+        value = vectors.get(item.get("id"))
+        if value is None:
+            continue
+        vector = _unit_vector(value)
         if vector is None:
             continue
         vector_count += 1

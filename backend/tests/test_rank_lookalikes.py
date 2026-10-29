@@ -128,6 +128,26 @@ def test_drop_lookalikes_keeps_different_products_with_the_same_colour():
     assert [item["id"] for item in result] == ["different"]
 
 
+def test_drop_lookalikes_ignores_image_keys_shared_by_five_products():
+    image = "https://images.example/placeholder.jpg"
+    swiped = _item("swiped", "Disliked Product", image=image)
+    candidates = [
+        _item(
+            f"candidate-{index}",
+            f"Different Product {index}",
+            shop=f"shop-{index}.example",
+            image=image,
+        )
+        for index in range(5)
+    ]
+
+    result = drop_lookalikes(candidates, [(swiped, False)], {})
+
+    assert [item["id"] for item in result] == [
+        f"candidate-{index}" for index in range(5)
+    ]
+
+
 def test_drop_lookalikes_does_not_filter_candidates_without_vectors():
     swiped = _item("swiped", "Reference Item")
     candidate = _item("candidate", "Similar Item", shop="another.example")

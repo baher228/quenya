@@ -1080,10 +1080,11 @@ def deck(
     swipes = db.profile_swipes(active["id"])
     swiped_items = db.profile_swipe_items(active["id"])
     recent_item_ids = db.recent_deck_item_ids(active["id"]) if arm == "embed" else []
-    vector_ids = [
+    vector_ids = list(dict.fromkeys([
         *[item["id"] for item in tag_ranked[:800]],
+        *recent_item_ids,
         *[item["id"] for item, _liked in swiped_items],
-    ]
+    ]))
     embeddings = db.item_mix_vectors(vector_ids)
     tag_ranked = drop_lookalikes(
         tag_ranked,
@@ -1097,12 +1098,21 @@ def deck(
     brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
     history = history_query(swipes, embeddings) if arm == "embed" else None
     query = history if history is not None else brief_vector
+    ranked_ids = [item["id"] for item in tag_ranked]
+    nearest_vectors = (
+        embeddings
+        if all(
+            (embeddings.get(item_id) or {}).get("mix") is not None
+            for item_id in ranked_ids
+        )
+        else None
+    )
     nearest_rows = (
         db.nearest_item_mix(
             query,
-            [item["id"] for item in tag_ranked],
+            ranked_ids,
             k=400,
-            vectors=embeddings,
+            vectors=nearest_vectors,
         )
         if arm == "embed" and query is not None
         else []

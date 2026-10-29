@@ -1293,6 +1293,67 @@ def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
     assert vector_queries == [["embedded-item"]]
 
 
+def test_embed_deck_searches_past_the_initial_vector_window(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    brief = _brief(budget_gbp=100)
+    db.create_profile("board", brief, active=True, ranker_arm="embed")
+    profile = _profile(price_ceiling_gbp=100)
+    items = []
+    for index in range(901):
+        item = _item(f"embedded-{index:03d}", "top")
+        item.update(
+            title=f"Unique product {index}",
+            source_url=f"https://shop.example/items/{index}",
+            image_url=f"https://images.example/{index}.jpg",
+        )
+        items.append(item)
+    target = items[900]
+    vector = np.zeros(512, dtype=np.float32)
+    vector[0] = 1
+    vector_queries = []
+
+    def item_mix_vectors(item_ids):
+        item_ids = list(item_ids)
+        vector_queries.append(item_ids)
+        if target["id"] in item_ids:
+            return {target["id"]: {"mix": vector}}
+        return {}
+
+    def rank_candidates(
+        ranked, _profile_id, _taste, _brief_vector, _swipes, _embeddings,
+        _sample, *, nearest_ids,
+    ):
+        assert nearest_ids == [target["id"]]
+        return [target], {target["id"]: 1.0}, None
+
+    monkeypatch.setenv("QUENYA_RANKER", "embed")
+    monkeypatch.setattr(
+        phase2_api, "_user_profile", lambda: {"id": "board", "brief": brief}
+    )
+    monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
+    monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "rank_items", lambda *_args, **_kwargs: items)
+    monkeypatch.setattr(phase2_api, "rank_candidates", rank_candidates)
+    monkeypatch.setattr(phase2_api, "make_deck", lambda ranked, n, *_a, **_kw: ranked[:n])
+    monkeypatch.setattr(phase2_api, "history_query", lambda *_args: None)
+    monkeypatch.setattr(phase2_api, "catalogue_sample", lambda: np.asarray([vector]))
+    monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
+    monkeypatch.setattr(db, "live_catalogue", lambda: items)
+    monkeypatch.setattr(db, "profile_embedding", lambda _profile_id: vector)
+    monkeypatch.setattr(db, "recent_deck_item_ids", lambda _profile_id: ["recent-item"])
+    monkeypatch.setattr(db, "item_mix_vectors", item_mix_vectors)
+
+    result = phase2_api.deck(1)
+
+    assert [item["id"] for item in result] == [target["id"]]
+    assert "recent-item" in vector_queries[0]
+    assert target["id"] not in vector_queries[0]
+    assert target["id"] in vector_queries[1]
+
+
 @pytest.mark.parametrize(
     ("fixture", "status", "reason"),
     [
