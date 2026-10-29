@@ -87,9 +87,8 @@ function learningLabel(item: Piece, direction: SwipeDirection) {
 
 function Hero() {
   const reducedMotion = useReducedMotion();
-  const [activeSet, setActiveSet] = useState<StyleKey>("gorp");
-  const [manualPick, setManualPick] = useState(false);
-  const [visibleBrief, setVisibleBrief] = useState("gorpcore");
+  const [activeSet, setActiveSet] = useState<StyleKey>("graphic");
+  const [visibleBrief, setVisibleBrief] = useState("90s skate, loud graphics");
   const [dealIn, setDealIn] = useState(true);
   const [cardIndex, setCardIndex] = useState(0);
   const [dragDistance, setDragDistance] = useState(0);
@@ -112,7 +111,7 @@ function Hero() {
   const timerRef = useRef<number | null>(null);
   const flyingRef = useRef(false);
   const learnedIdRef = useRef(0);
-  const brief = styleOptions.find(option => option.key === activeSet)?.brief ?? "gorpcore";
+  const brief = styleOptions.find(option => option.key === activeSet)?.brief ?? "90s skate, loud graphics";
   const deckItems = pieceSets[activeSet].items;
   const current = deckItems[cardIndex % deckItems.length];
 
@@ -136,21 +135,6 @@ function Hero() {
       window.clearTimeout(dealTimer);
     };
   }, [brief, reducedMotion]);
-
-  useEffect(() => {
-    if (manualPick || reducedMotion) return;
-    const timer = window.setInterval(() => {
-      setActiveSet(value => {
-        const keys = styleOptions.map(option => option.key);
-        return keys[(keys.indexOf(value) + 1) % keys.length] ?? keys[0];
-      });
-      setCardIndex(0);
-      setLearned([]);
-      setKept(0);
-      setPassed(0);
-    }, 5400);
-    return () => window.clearInterval(timer);
-  }, [manualPick, reducedMotion]);
 
   useEffect(() => () => {
     if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
@@ -203,7 +187,6 @@ function Hero() {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
-    setManualPick(true);
     setDealIn(false);
     pointer.current = null;
     setDragging(false);
@@ -248,7 +231,6 @@ function Hero() {
     if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
     setSpringing(false);
-    setManualPick(true);
     setDealIn(false);
     setDragDistance(0);
     pointer.current = {
@@ -318,7 +300,6 @@ function Hero() {
     timerRef.current = null;
     flyingRef.current = false;
     pointer.current = null;
-    setManualPick(true);
     setDealIn(false);
     setActiveSet(key);
     setCardIndex(0);
@@ -775,10 +756,7 @@ function WaitlistSection() {
       <div className="waitlist-panel page-width">
         <div className="waitlist-copy">
           <h2 id="waitlist-title">Come find your next look.</h2>
-          <p>
-            Quenya is in invite-only testing. Leave your email and we&apos;ll let you know when there&apos;s a place.
-            An iPhone app is in development, so tell us what you&apos;d test on.
-          </p>
+          <p>Quenya is in invite-only testing. Leave your email and we&apos;ll tell you when there&apos;s a place.</p>
         </div>
         <WaitlistForm />
       </div>
