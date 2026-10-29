@@ -315,6 +315,8 @@ def _run_deck(
     monkeypatch.setattr(db, "now_iso", lambda: "2026-01-01T00:00:00+00:00")
     monkeypatch.setattr(db, "next_deck_request", lambda _profile_id: 1)
     monkeypatch.setattr(db, "profile_swipes", lambda _profile_id: [])
+    monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
+    monkeypatch.setattr(db, "item_mix_vectors", lambda _item_ids: {})
     monkeypatch.setattr(db, "recent_deck_item_ids", lambda _profile_id: [])
     monkeypatch.setattr(db, "record_deck_events", lambda rows: events.extend(rows))
 

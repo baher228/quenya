@@ -1211,10 +1211,20 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
     items = []
     for index in range(40):
         item = _item(f"deck-item-{index:02}", slots[index % len(slots)])
+        item.update(
+            title=f"Test product {index}",
+            source_url=f"https://shop.example/items/{index}",
+            image_url=f"https://images.example/{index}.jpg",
+        )
         item["price_gbp"] = 20
         item["tags"]["niche"] = 0.4
         items.append(item)
     over_budget = _item("budget-excluded", "top")
+    over_budget.update(
+        title="Over budget product",
+        source_url="https://shop.example/items/over-budget",
+        image_url="https://images.example/over-budget.jpg",
+    )
     over_budget["price_gbp"] = 61
     over_budget["tags"]["niche"] = 0.4
     items.append(over_budget)
@@ -1268,10 +1278,19 @@ def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
         "item_embedding_map",
         lambda: (_ for _ in ()).throw(AssertionError("full embedding load used")),
     )
+    vector_queries = []
+    item_mix_vectors = db.item_mix_vectors
+
+    def capture_vectors(item_ids):
+        vector_queries.append(list(item_ids))
+        return item_mix_vectors(item_ids)
+
+    monkeypatch.setattr(phase2_api.db, "item_mix_vectors", capture_vectors)
 
     result = phase2_api.deck(1)
 
     assert [entry["id"] for entry in result] == ["embedded-item"]
+    assert vector_queries == [["embedded-item"]]
 
 
 @pytest.mark.parametrize(

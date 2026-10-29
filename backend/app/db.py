@@ -1248,7 +1248,8 @@ def item_mix_vectors(item_ids: list[str]) -> dict[str, dict[str, Any]]:
 
 
 def nearest_item_mix(
-    query, eligible_ids: list[str], k: int = 400
+    query, eligible_ids: list[str], k: int = 400, *,
+    vectors: dict[str, dict[str, Any]] | None = None,
 ) -> list[tuple[str, Any]]:
     init_db()
     eligible_ids = list(dict.fromkeys(eligible_ids))
@@ -1266,11 +1267,19 @@ def nearest_item_mix(
 
     import numpy as np
 
-    vectors = item_mix_vectors(eligible_ids)
+    vectors = vectors if vectors is not None else item_mix_vectors(eligible_ids)
     if not vectors:
         return []
-    ids = list(vectors)
-    matrix = np.asarray([vectors[item_id]["mix"] for item_id in ids], dtype=np.float32)
+    ids = [
+        item_id
+        for item_id in eligible_ids
+        if (vectors.get(item_id) or {}).get("mix") is not None
+    ]
+    if not ids:
+        return []
+    matrix = np.asarray(
+        [vectors[item_id]["mix"] for item_id in ids], dtype=np.float32
+    )
     similarities = matrix @ np.asarray(query, dtype=np.float32)
     indexes = np.argsort(-similarities, kind="stable")[:k]
     return [(ids[index], matrix[index]) for index in indexes]
@@ -1358,6 +1367,25 @@ def profile_swipes(profile_id: str) -> list[dict[str, Any]]:
             (profile_id,),
         ).fetchall()
     return [{"item_id": row["item_id"], "liked": bool(row["liked"])} for row in rows]
+
+
+def profile_swipe_items(
+    profile_id: str,
+) -> list[tuple[dict[str, Any], bool]]:
+    init_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """SELECT i.*, s.liked FROM swipes AS s
+               JOIN items AS i ON i.id=s.item_id
+               WHERE s.profile_id=? ORDER BY s.created_at, s.id""",
+            (profile_id,),
+        ).fetchall()
+    latest = {}
+    for row in rows:
+        item = dict(row)
+        liked = bool(item.pop("liked"))
+        latest[item["id"]] = (item, liked)
+    return list(latest.values())
 
 
 def recent_deck_item_ids(profile_id: str, limit: int = 5) -> list[str]:

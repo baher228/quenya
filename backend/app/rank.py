@@ -3,9 +3,16 @@ import random
 import re
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+import numpy as np
 
 from app.accessories import accessory_cap, is_accessory_slot
 from app.gender_rules import text_gender
+from app.images import normalize_image_url
+
+DISLIKE_LOOKALIKE_COS = 0.90
+LIKE_LOOKALIKE_COS = 0.95
 
 _KEY_PREFIX = re.compile(
     r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
@@ -13,6 +20,111 @@ _KEY_PREFIX = re.compile(
     r"pattern|patterns|condition|gender)"
     r"(?=[:_\-\s])[:_\-\s]+"
 )
+
+
+def product_key(item: dict[str, Any]) -> str:
+    source_url = str(item.get("source_url") or "")
+    try:
+        shop = urlsplit(source_url).netloc.lower()
+    except ValueError:
+        shop = ""
+    if not shop:
+        shop = str(item.get("source") or "").lower()
+    shop = shop.removeprefix("www.")
+
+    title = str(item.get("title") or "").strip().lower()
+    before_variant, separator, _variant = title.rpartition(" - ")
+    if separator and len(before_variant.split()) >= 2:
+        title = before_variant
+    title = re.sub(r"[^\w\s]|_", " ", title)
+    return f"{shop}|{' '.join(title.split())}"
+
+
+def image_key(item: dict[str, Any]) -> str | None:
+    image_url = item.get("image_url")
+    if not isinstance(image_url, str) or not image_url.strip():
+        return None
+    image_url = image_url.strip()
+    try:
+        image_url = normalize_image_url(image_url)
+        parts = urlsplit(image_url)
+    except ValueError:
+        return image_url.split("?", maxsplit=1)[0].split("#", maxsplit=1)[0]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def _unit_vector(value: Any) -> np.ndarray | None:
+    try:
+        vector = np.asarray(value, dtype=np.float32).reshape(-1)
+    except (TypeError, ValueError):
+        return None
+    if not vector.size or not np.isfinite(vector).all():
+        return None
+    norm = float(np.linalg.norm(vector))
+    return vector / norm if norm > 0 else None
+
+
+def drop_lookalikes(
+    ranked: list[dict[str, Any]],
+    swiped_items: list[tuple[dict[str, Any], bool]],
+    vectors: dict[str, Any],
+    *,
+    dislike_cos: float = DISLIKE_LOOKALIKE_COS,
+    like_cos: float = LIKE_LOOKALIKE_COS,
+    vector_window: int = 800,
+) -> list[dict[str, Any]]:
+    blocked_products = {product_key(item) for item, _liked in swiped_items}
+    blocked_images = {
+        key
+        for item, _liked in swiped_items
+        if (key := image_key(item)) is not None
+    }
+    survivors = []
+    seen_products = set()
+    seen_images = set()
+    for item in ranked:
+        product = product_key(item)
+        image = image_key(item)
+        if product in blocked_products or (image and image in blocked_images):
+            continue
+        if product in seen_products or (image and image in seen_images):
+            continue
+        seen_products.add(product)
+        if image:
+            seen_images.add(image)
+        survivors.append(item)
+
+    swiped_vectors: dict[tuple[bool, int], list[np.ndarray]] = {}
+    for item, liked in swiped_items:
+        vector = _unit_vector(vectors.get(item.get("id")))
+        if vector is not None:
+            swiped_vectors.setdefault((liked, vector.size), []).append(vector)
+
+    candidate_vectors: dict[int, list[tuple[int, np.ndarray]]] = {}
+    vector_count = 0
+    for index, item in enumerate(survivors):
+        if vector_count >= max(0, vector_window):
+            break
+        vector = _unit_vector(vectors.get(item.get("id")))
+        if vector is None:
+            continue
+        vector_count += 1
+        candidate_vectors.setdefault(vector.size, []).append((index, vector))
+
+    removed = set()
+    for (liked, size), swiped_group in swiped_vectors.items():
+        candidates = candidate_vectors.get(size)
+        if not candidates:
+            continue
+        candidate_matrix = np.stack([vector for _, vector in candidates])
+        swiped_matrix = np.stack(swiped_group)
+        similarities = candidate_matrix @ swiped_matrix.T
+        thresholds = like_cos if liked else dislike_cos
+        removed.update(
+            candidates[index][0]
+            for index in np.flatnonzero(similarities.max(axis=1) >= thresholds)
+        )
+    return [item for index, item in enumerate(survivors) if index not in removed]
 
 
 @lru_cache(maxsize=65536)
