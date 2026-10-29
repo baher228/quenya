@@ -12,7 +12,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.requests import Request
 
-from app import db
+from app import accounts, db
+from app.accounts import AdminUser
 
 RATE_LIMIT_REQUESTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
@@ -32,6 +33,9 @@ _COLUMNS = (
     "created_at",
     "updated_at",
     "consent_at",
+    "status",
+    "user_id",
+    "reviewed_at",
 )
 
 router = APIRouter()
@@ -149,6 +153,67 @@ def signup_waitlist(payload: WaitlistSignup, request: Request) -> dict[str, bool
                 timestamp,
             ),
         )
+    return {"ok": True}
+
+
+@router.get("/api/admin/waitlist")
+def admin_waitlist(
+    _user: AdminUser,
+    status: Literal["pending", "approved", "rejected", "all"] = "pending",
+) -> list[dict]:
+    db.init_db()
+    columns = (
+        "id", "email", "name", "handle", "style_text", "wants_testing",
+        "devices", "source", "created_at", "status", "reviewed_at", "user_id",
+    )
+    query = f"SELECT {', '.join(columns)} FROM waitlist"
+    values: tuple[str, ...] = ()
+    if status != "all":
+        query += " WHERE status=?"
+        values = (status,)
+    query += " ORDER BY created_at DESC, id DESC"
+    with db.db_connection() as connection:
+        rows = connection.execute(query, values).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.post("/api/admin/waitlist/{waitlist_id}/approve")
+def approve_waitlist(waitlist_id: str, _user: AdminUser) -> dict:
+    db.init_db()
+    with db.db_connection() as connection:
+        row = connection.execute(
+            "SELECT id, email, name, status FROM waitlist WHERE id=?",
+            (waitlist_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Waitlist entry not found")
+    if row["status"] == "approved":
+        raise HTTPException(status_code=409, detail="Waitlist entry already approved")
+
+    user, token = accounts.create_user(row["name"] or row["email"], "tester")
+    with db.db_connection() as connection:
+        connection.execute(
+            """UPDATE waitlist SET status='approved', user_id=?, reviewed_at=?
+               WHERE id=?""",
+            (user["id"], db.now_iso(), waitlist_id),
+        )
+    return {
+        "invite_url": accounts.invite_url(token),
+        "user": {key: user[key] for key in ("id", "name", "role")},
+    }
+
+
+@router.post("/api/admin/waitlist/{waitlist_id}/reject")
+def reject_waitlist(waitlist_id: str, _user: AdminUser) -> dict[str, bool]:
+    db.init_db()
+    with db.db_connection() as connection:
+        cursor = connection.execute(
+            """UPDATE waitlist SET status='rejected', reviewed_at=?
+               WHERE id=?""",
+            (db.now_iso(), waitlist_id),
+        )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Waitlist entry not found")
     return {"ok": True}
 
 

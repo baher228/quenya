@@ -128,7 +128,10 @@ CREATE TABLE IF NOT EXISTS waitlist (
     user_agent TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    consent_at TEXT NOT NULL
+    consent_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    user_id TEXT,
+    reviewed_at TEXT
 );
 """
 POSTGRES_SCHEMA = """
@@ -247,7 +250,10 @@ CREATE TABLE IF NOT EXISTS waitlist (
     user_agent TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    consent_at TEXT NOT NULL
+    consent_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    user_id TEXT,
+    reviewed_at TEXT
 );
 """
 _INIT_LOCK = Lock()
@@ -563,6 +569,16 @@ def init_db() -> None:
                 connection.execute(
                     "ALTER TABLE uploads ADD COLUMN IF NOT EXISTS owner_id TEXT"
                 )
+                connection.execute(
+                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS "
+                    "status TEXT NOT NULL DEFAULT 'pending'"
+                )
+                connection.execute(
+                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS user_id TEXT"
+                )
+                connection.execute(
+                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS reviewed_at TEXT"
+                )
             else:
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.executescript(SCHEMA)
@@ -582,6 +598,11 @@ def init_db() -> None:
                 "corrections": {"consumed_version": "INTEGER"},
                 "routes": {"owner_id": "TEXT"},
                 "uploads": {"consumed_version": "INTEGER", "owner_id": "TEXT"},
+                "waitlist": {
+                    "status": "TEXT NOT NULL DEFAULT 'pending'",
+                    "user_id": "TEXT",
+                    "reviewed_at": "TEXT",
+                },
             }
             if not database_url:
                 for table, columns in migrations.items():
