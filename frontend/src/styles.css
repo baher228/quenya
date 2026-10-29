@@ -302,6 +302,8 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 .admin-invite{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-top:12px}
 .admin-invite input{min-width:0;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--surf2);font:11px ui-monospace,monospace}
 .admin-invite .btn{display:flex;align-items:center;justify-content:center;white-space:nowrap}
+.admin-email-action{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.admin-email-action .small{overflow-wrap:anywhere}
 .admin-empty{padding:16px 0;color:var(--mute);font-size:13px}
 .admin-error{padding:10px 12px;border-radius:12px;background:#2A1D1A;color:var(--blush);font-size:12px}
 .admin-tester{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:14px 0;border-top:1px solid var(--line)}

@@ -1,6 +1,8 @@
 import argparse
 import csv
+import logging
 import re
+import smtplib
 import sys
 import uuid
 from collections import deque
@@ -12,14 +14,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.requests import Request
 
-from app import accounts, db
+from app import accounts, db, mailer
 from app.accounts import AdminUser
+from app.config import QUENYA_APP_URL
 
 RATE_LIMIT_REQUESTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
 _RATE_LIMITS: dict[str, deque[float]] = {}
 _RATE_LIMIT_LOCK = Lock()
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_INVITE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,}$")
 _COLUMNS = (
     "id",
     "email",
@@ -39,6 +43,7 @@ _COLUMNS = (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class WaitlistSignup(BaseModel):
@@ -84,6 +89,10 @@ class WaitlistSignup(BaseModel):
         if not value:
             raise ValueError("Consent is required")
         return value
+
+
+class InviteEmailRequest(BaseModel):
+    invite_url: str
 
 
 def reset_rate_limit() -> None:
@@ -239,6 +248,70 @@ def reject_waitlist(waitlist_id: str, _user: AdminUser) -> dict[str, bool]:
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Waitlist entry not found")
     return {"ok": True}
+
+
+@router.post("/api/admin/waitlist/{waitlist_id}/email-invite")
+def email_waitlist_invite(
+    waitlist_id: str,
+    payload: InviteEmailRequest,
+    _user: AdminUser,
+) -> dict[str, str | bool]:
+    db.init_db()
+    with db.db_connection() as connection:
+        entry = connection.execute(
+            "SELECT email, name, status, user_id FROM waitlist WHERE id=?",
+            (waitlist_id,),
+        ).fetchone()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Waitlist entry not found")
+    if entry["status"] != "approved" or not entry["user_id"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Waitlist entry is not approved",
+        )
+
+    prefix = f"{QUENYA_APP_URL}/?invite="
+    if not payload.invite_url.startswith(prefix):
+        raise HTTPException(status_code=400, detail="Invalid invite link")
+    token = payload.invite_url[len(prefix):]
+    if not _INVITE_TOKEN_RE.fullmatch(token):
+        raise HTTPException(status_code=400, detail="Invalid invite link")
+
+    with db.db_connection() as connection:
+        user = connection.execute(
+            "SELECT invite_hash, revoked_at FROM users WHERE id=?",
+            (entry["user_id"],),
+        ).fetchone()
+    if (
+        not user
+        or user["revoked_at"] is not None
+        or user["invite_hash"] != accounts._hash(token)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invite link doesn't belong to this tester",
+        )
+
+    try:
+        mailer.send_email(
+            entry["email"],
+            *mailer.invite_email(entry["name"], payload.invite_url),
+        )
+    except mailer.MailNotConfigured as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Email isn't set up on the server",
+        ) from exc
+    except (smtplib.SMTPException, OSError) as exc:
+        logger.exception(
+            "Failed to send invite email for waitlist entry %s",
+            waitlist_id,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Couldn't send the email",
+        ) from exc
+    return {"ok": True, "sent_to": entry["email"]}
 
 
 def export_waitlist(output: TextIO | None = None) -> None:

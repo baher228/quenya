@@ -73,13 +73,23 @@ async def request_context(request: Request, call_next):
 async def http_error_handler(_request: Request, exc: HTTPException) -> JSONResponse:
     detail = exc.detail
     if (
-        exc.status_code in {401, 429}
+        exc.status_code in {400, 401, 429, 502, 503}
         and isinstance(detail, str)
         and detail in {
             "Sign in with your invite link",
             "Wrong name or password",
             "Too many attempts, try again later",
+            "Invalid invite link",
+            "Invite link doesn't belong to this tester",
+            "Couldn't send the email",
+            "Email isn't set up on the server",
         }
+    ) or (
+        exc.status_code == 404
+        and detail == "Waitlist entry not found"
+    ) or (
+        exc.status_code == 409
+        and detail == "Waitlist entry is not approved"
     ) or (
         exc.status_code == 403
         and detail == "Tester accounts have one style"
