@@ -31,7 +31,6 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.9"]
 scrape = ["scrapling[fetchers]>=0.2"]
 embed = ["open_clip_torch==3.3.0", "torch==2.14.1", "pillow==12.3.0"]
-lv = ["curl-cffi==0.7.4"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
