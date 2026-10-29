@@ -15,9 +15,21 @@ _NON_OUTFIT_BASE = re.compile(
 )
 _OUTER_LAYER = re.compile(
     r"\b(?:(?:insulated|puffer|padded|down|quilted|fleece|synthetic)\s+vests?|"
-    r"coats?|jackets?|parkas?|puffers?|anoraks?|blazers?|gilets?|"
+    r"overcoats?|topcoats?|peacoats?|coats?|jackets?|parkas?|puffers?|"
+    r"bombers?|harringtons?|windcheaters?|(?:soft|hard)[\s-]?shells?|"
+    r"anoraks?|blazers?|gilets?|"
     r"windbreakers?|raincoats?|shackets?|trenches|trench|cagoules?|"
     r"ponchos?|mac|suits?)\b",
+    re.I,
+)
+_OUTERWEAR_INSULATION = re.compile(
+    r"\b(?:fleeces?|puffers?|down|padded|quilted|insulated|primaloft|"
+    r"gilets?|vests?|body\s?warmers?|liners?|soft[\s-]?shells?)\b",
+    re.I,
+)
+_OUTERWEAR_SHELL = re.compile(
+    r"\b(?:hard[\s-]?shells?|shells?|rain\w*|waterproof|gore[\s-]?tex|"
+    r"windbreakers?|windcheaters?|anoraks?|cagoules?|ponchos?)\b",
     re.I,
 )
 _MID_LAYER = re.compile(
@@ -97,9 +109,9 @@ def _layer_role_for_text(
     category_base = category if slot == "top" else _VEST_WORD.sub("", category)
     title_base = title if slot == "top" else _VEST_WORD.sub("", title)
     if _BASE_LAYER.search(category_base):
-        return "base"
+        return "outer" if slot == "outerwear" else "base"
     if _BASE_LAYER.search(title_base):
-        return "base"
+        return "outer" if slot == "outerwear" else "base"
     return {"outerwear": "outer", "knitwear": "mid", "top": "base"}[slot]
 
 
@@ -109,6 +121,25 @@ def layer_role(item: dict[str, Any]) -> Literal["base", "mid", "outer"] | None:
     category = str(tags.get("category") or "").strip().lower()
     title = str(item.get("title") or "").strip().lower()
     return _layer_role_for_text(slot, category, title)
+
+
+@lru_cache(maxsize=65536)
+def _outerwear_kind_for_text(
+    category: str, title: str
+) -> Literal["shell", "insulation", "coat"]:
+    text = f"{category} {title}"
+    if _OUTERWEAR_INSULATION.search(text):
+        return "insulation"
+    if _OUTERWEAR_SHELL.search(text):
+        return "shell"
+    return "coat"
+
+
+def outerwear_kind(item: dict[str, Any]) -> Literal["shell", "insulation", "coat"]:
+    tags = tags_for(item)
+    category = str(tags.get("category") or "").strip().lower()
+    title = str(item.get("title") or "").strip().lower()
+    return _outerwear_kind_for_text(category, title)
 
 
 def _item_texts(item: dict[str, Any]) -> list[str]:
@@ -321,8 +352,25 @@ def outfit_errors(
         errors.append("more than one dress")
     layer_counts = {
         role: sum(layer_role(piece) == role for piece in pieces)
-        for role in ("base", "mid", "outer")
+        for role in ("base", "mid")
     }
+    jacket_or_coat_pieces = [
+        piece
+        for piece in pieces
+        if str(tags_for(piece).get("slot") or "").strip().lower()
+        == "outerwear"
+        or layer_role(piece) == "outer"
+    ]
+    if len(jacket_or_coat_pieces) > 2:
+        errors.append("more than two jackets or coats")
+    elif len(jacket_or_coat_pieces) == 2 and frozenset(
+        outerwear_kind(piece) for piece in jacket_or_coat_pieces
+    ) not in {
+        frozenset(("shell", "insulation")),
+        frozenset(("shell", "coat")),
+        frozenset(("insulation", "coat")),
+    }:
+        errors.append("two jackets or coats")
     if dress_count:
         if layer_counts["base"]:
             errors.append("a dress outfit cannot include a base layer")
@@ -338,12 +386,6 @@ def outfit_errors(
             "two mid layers"
             if layer_counts["mid"] == 2
             else "more than two mid layers"
-        )
-    if layer_counts["outer"] > 1:
-        errors.append(
-            "two outer layers"
-            if layer_counts["outer"] == 2
-            else "more than two outer layers"
         )
     clothing_count = sum(
         slot not in {"shoes", "bag", "accessory"} for slot in slots

@@ -810,6 +810,33 @@ def test_deck_board_id_filters_swipes_and_records_events_for_target(
     assert db.recent_deck_item_ids("board-a") == ["item-a"]
 
 
+def test_deck_filters_wrong_size_vinted_but_keeps_retailer(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    db.update_profile_brief(
+        "board-a", _brief(sizes={"tops": "L"})
+    )
+    wrong_size = _item("wrong-size", "top")
+    wrong_size["size"] = "S"
+    retailer = _item("retailer", "top", condition="new")
+    retailer.update(
+        source="arket.com",
+        source_url="https://www.arket.com/items/retailer",
+        size="XS",
+    )
+    monkeypatch.setenv("QUENYA_RANKER", "tags")
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
+    monkeypatch.setattr(db, "live_catalogue", lambda: [wrong_size, retailer])
+    monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
+
+    items = phase2_api.deck(n=10, board_id="board-a")
+
+    assert "wrong-size" not in {item["id"] for item in items}
+    assert "retailer" in {item["id"] for item in items}
+
+
 def test_deck_hides_disliked_product_only_from_its_own_profile(
     monkeypatch, tmp_path
 ):
@@ -894,6 +921,38 @@ def test_outfits_exclude_disliked_items_and_lookalikes_but_keep_likes(
     assert exc.value.status_code == 409
     assert seen["ids"] == {"liked", "other"}
     assert "disliked" in seen["exclude_ids"]
+
+
+def test_outfits_keep_locked_piece_even_when_size_does_not_fit(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    db.update_profile_brief(
+        "board-a", _brief(sizes={"tops": "L"})
+    )
+    wrong_size = _item("locked-wrong-size", "top")
+    wrong_size["size"] = "S"
+    seen = {}
+
+    def capture_pool(items, _brief_arg, _profile, _locked, _exclude, **_kwargs):
+        seen["ids"] = {item["id"] for item in items}
+        return []
+
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
+    monkeypatch.setattr(db, "live_catalogue", lambda: [wrong_size])
+    monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
+
+    with pytest.raises(HTTPException) as exc:
+        phase2_api.outfits(
+            OutfitRequest(
+                board_id="board-a",
+                locked_ids=["locked-wrong-size"],
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert seen["ids"] == {"locked-wrong-size"}
 
 
 def test_taste_update_board_id_consumes_only_target_signals(

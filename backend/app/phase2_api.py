@@ -67,6 +67,7 @@ from app.schemas import (
     UploadAssignRequest,
     VerdictRequest,
 )
+from app.sizes import fits_brief
 from app.sources import catalog, retail, sport, vinted
 from app.styles import decode_brief, style_notes, style_queries
 from app.tagging import tag_item_with_vectors
@@ -1034,6 +1035,13 @@ def _without_disliked_lookalikes(
     ]
 
 
+def _fitting_sizes(
+    items: list[dict[str, Any]], brief: dict[str, Any]
+) -> list[dict[str, Any]]:
+    sizes = brief.get("sizes") or {}
+    return [item for item in items if fits_brief(item, sizes)]
+
+
 @router.get("/api/deck")
 def deck(
     n: int = 10,
@@ -1054,7 +1062,9 @@ def deck(
     swipe_count = len(swipe_rows)
     # Full catalogue makes the deck ~2x slower until ranking is optimised.
     candidates = _deck_candidates(db.live_catalogue())
-    profile_live_items = db.profile_live_items(active["id"])
+    profile_live_items = _fitting_sizes(
+        db.profile_live_items(active["id"]), active["brief"]
+    )
     candidate_by_id = {item["id"]: item for item in candidates}
     candidate_by_id.update({item["id"]: item for item in profile_live_items})
     candidates = list(candidate_by_id.values())
@@ -1097,6 +1107,7 @@ def deck(
         },
         vector_window=LOOKALIKE_VECTOR_WINDOW,
     )
+    tag_ranked = _fitting_sizes(tag_ranked, active["brief"])
     brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
     history = history_query(swipes, embeddings) if arm == "embed" else None
     query = history if history is not None else brief_vector
@@ -1248,6 +1259,16 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
     items = _without_disliked_lookalikes(items, swiped_items)
+    fitting_items = _fitting_sizes(items, active["brief"])
+    fitting_ids = {item["id"] for item in fitting_items}
+    items = [
+        *fitting_items,
+        *(
+            item
+            for item in items
+            if item["id"] in body.locked_ids and item["id"] not in fitting_ids
+        ),
+    ]
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     pool = build_pool(
@@ -1393,6 +1414,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
     items = _without_disliked_lookalikes(items, swiped_items)
+    items = _fitting_sizes(items, active["brief"])
     existing = [db.get_item_with_tags(item_id) for item_id in outfit["piece_ids"]]
     replaced = next((item for item in existing if item and item["id"] == body.item_id), None)
     if not replaced:
@@ -1429,7 +1451,14 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         )
         if total > float(current["price_ceiling_gbp"]):
             continue
-        if set(outfit_errors([*other_pieces, item], include_shoes)) - before:
+        candidate_errors = set(
+            outfit_errors([*other_pieces, item], include_shoes)
+        )
+        if (
+            "two jackets or coats" in candidate_errors
+            or "more than two jackets or coats" in candidate_errors
+            or candidate_errors - before
+        ):
             continue
         candidates.append(item)
     if layer_role(replaced) == "base":
@@ -1802,9 +1831,17 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
                 status_code=502,
                 detail={"error": "Live item tagging failed", "request_ids": request_ids},
             )
-    results = [db.get_item_with_tags(item_id) for item in items for item_id in [item["id"]]]
+    results = [
+        db.get_item_with_tags(item_id)
+        for item in items
+        for item_id in [item["id"]]
+    ]
+    results = _fitting_sizes(
+        [item for item in results if item and item.get("tags")],
+        active["brief"],
+    )
     return {
-        "items": [_public_item(item) for item in results if item and item.get("tags")],
+        "items": [_public_item(item) for item in results],
         "retail": "fetched" if retail_items else "skipped",
         "route": _route_response(
             route_id,

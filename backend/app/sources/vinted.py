@@ -9,6 +9,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 from vinted_scraper import VintedScraper
 
+from app.sizes import listing_size_from_label
+
 
 def _get(value: Any, *names: str) -> Any:
     if isinstance(value, dict):
@@ -82,6 +84,11 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
         match = re.search(r"/items/(\d+)", url)
         item_id = match.group(1) if match else hashlib.sha1(url.encode("utf-8")).hexdigest()
     raw = _raw_item(item)
+    size = _get(item, "size_title") or _get(item, "size")
+    if not size:
+        item_box = raw.get("item_box")
+        label = _get(item_box, "accessibility_label")
+        size = listing_size_from_label(str(label or ""))
     return {
         "id": f"vinted:{item_id}",
         "source": "vinted",
@@ -89,7 +96,7 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
         "title": str(title),
         "brand": str(brand) if brand else None,
         "price_gbp": price_gbp,
-        "size": _get(item, "size_title", "size"),
+        "size": size,
         "description": _get(item, "description"),
         "image_url": image_url,
         "gender_hint": gender,
