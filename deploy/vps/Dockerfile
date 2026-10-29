@@ -19,7 +19,7 @@ COPY backend/ /app/backend/
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir \
         --extra-index-url https://download.pytorch.org/whl/cpu \
-        "/app/backend[embed]"
+        "/app/backend[embed,lv]"
 
 USER quenya
 WORKDIR /app/backend
