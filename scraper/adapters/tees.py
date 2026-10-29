@@ -1,6 +1,7 @@
 import re
 
 TEE = re.compile(r"\b(?:t|tee)[\s\-‐‑–]?shirts?\b|\btshirts?\b|\btees?\b", re.I)
+POLO = re.compile(r"\bpolos?(?:\s+shirts?)?\b(?!\s+ralph)", re.IGNORECASE)
 NEGATIVE = re.compile(
     r"\b(?:sweat(?:shirt)?s?|hoodies?|hoody|hooded|polos?(?!\s+ralph)|shirts?|"
     r"overshirts?|shackets?|vests?|tanks?|tank\s?tops?|singlets?|sleeveless|"
@@ -51,6 +52,7 @@ TAG_CATEGORIES = {
     "short sleeve t-shirts",
     "long sleeve t-shirts",
 }
+POLO_TAG_CATEGORIES = {"polo", "polos", "polo shirt", "polo shirts"}
 REJECTED_TAGS = {"kids", "kid", "kidswear", "youth", "junior", "children", "boys", "girls"}
 WOMEN_TAG = re.compile(r"\b(?:women|womens|woman|female|ladies|womenswear)\b", re.I)
 MEN_TAG = re.compile(r"\b(?:men|mens|man|male|menswear)\b", re.I)
@@ -80,7 +82,7 @@ def tee_category(title, product_type="", tags=()) -> str | None:
     if tag_tokens.intersection(REJECTED_TAGS):
         return None
 
-    title_without_tee = TEE.sub(" TEE ", title)
+    title_without_tee = POLO.sub(" ", TEE.sub(" TEE ", title))
     if NEGATIVE.search(title_without_tee):
         return None
 
@@ -89,20 +91,27 @@ def tee_category(title, product_type="", tags=()) -> str | None:
         for tag in tags
     }
     title_has_tee = bool(TEE.search(title))
+    polo_evidence = bool(
+        POLO.search(title)
+        or POLO.search(product_type)
+        or tag_categories.intersection(POLO_TAG_CATEGORIES)
+    )
     has_tee_evidence = (
         title_has_tee
+        or polo_evidence
         or TEE.search(product_type)
         or tag_categories.intersection(TAG_CATEGORIES)
     )
     if not has_tee_evidence:
         return None
-    if not title_has_tee:
-        if (
-            NEGATIVE.search(TEE.sub(" TEE ", product_type))
-            or NON_TEE_PRODUCT_TYPE.search(product_type)
-            or NON_TEE_TITLE.search(title)
-        ):
-            return None
+    if not title_has_tee and (
+        NEGATIVE.search(POLO.sub(" ", TEE.sub(" TEE ", product_type)))
+        or NON_TEE_PRODUCT_TYPE.search(product_type)
+        or NON_TEE_TITLE.search(title)
+    ):
+        return None
+    if polo_evidence:
+        return "polo shirt"
     return "long sleeve t-shirt" if LONG_SLEEVE.search(title) else "t-shirt"
 
 

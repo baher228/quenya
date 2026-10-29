@@ -106,6 +106,70 @@ def test_shopify_requires_gbp_and_reads_available_minimum_with_pagination():
     assert_worker_row(row)
 
 
+def test_shopify_converts_eur_and_preserves_original_price_metadata():
+    fake = FakeSession(
+        [fixture("shopify-meta-eur.json"), fixture("shopify-products.json")]
+    )
+    config = shop(
+        "test",
+        "Test",
+        "shopify",
+        "example-shop.test",
+        currency="EUR",
+        _fx_rate=0.87,
+        max_pages=1,
+    )
+
+    rows = shopify.scrape(config, fake)
+
+    assert len(rows) == 1
+    assert rows[0]["price_gbp"] == 65
+    raw = rows[0]["record"]["raw_json"]
+    assert raw["original_price"] == 75.0
+    assert raw["original_currency"] == "EUR"
+    assert raw["fx_rate"] == 0.87
+    assert raw["price_source"] == "shopify_variant_eur_fx"
+
+
+def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatch):
+    eur_shops = [
+        shop("eur-a", adapter="shopify", currency="EUR"),
+        shop("eur-b", adapter="shopify", currency="EUR"),
+    ]
+    gbp_shop = shop("gbp", adapter="shopify")
+    calls = []
+    response = SimpleNamespace(
+        raise_for_status=lambda: None,
+        json=lambda: {"rates": {"GBP": 0.86}},
+    )
+
+    def fake_get(url, timeout):
+        calls.append((url, timeout))
+        return response
+
+    monkeypatch.setattr(scrape.httpx, "get", fake_get)
+    scrape._prepare_fx_rates([*eur_shops, gbp_shop])
+
+    assert calls == [("https://api.frankfurter.app/latest?from=EUR&to=GBP", 10)]
+    assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [0.86, 0.86]
+    assert "_fx_rate" not in gbp_shop
+
+
+def test_fx_fetch_failure_skips_eur_shop(monkeypatch):
+    config = shop("eur", adapter="shopify", currency="EUR")
+
+    def fail_get(_url, timeout):
+        raise ValueError("rate unavailable")
+
+    monkeypatch.setattr(scrape.httpx, "get", fail_get)
+    scrape._prepare_fx_rates([config])
+    fake = FakeSession([fixture("shopify-meta-eur.json")])
+
+    assert shopify.scrape(config, fake) == []
+    assert config["_status"] == "fx_unavailable"
+    assert fake.requests == []
+
+
 def test_shopify_accessory_mode_filters_exclusions_and_keeps_apparel_unchanged():
     product_page = fixture("shopify-accessories.json")
     accessories = shop(
@@ -190,7 +254,6 @@ def test_tee_category_accepts_tshirts(title, category):
         "Loopback Sweatshirt",
         "Logo Hoodie",
         "Oxford Shirt",
-        "Piqué Polo",
         "Ribbed Vest",
         "Tank Top",
         "T-Shirt Dress",
@@ -203,6 +266,13 @@ def test_tee_category_accepts_tshirts(title, category):
 )
 def test_tee_category_rejects_non_tshirts(title):
     assert tee_category(title) is None
+
+
+def test_tee_category_accepts_polos_and_keeps_polo_ralph_lauren_tees():
+    assert tee_category("Men's Piqué Polo Shirt") == "polo shirt"
+    assert tee_category("Classic Cotton", "Polo Shirts") == "polo shirt"
+    assert tee_category("Classic Cotton", tags=["category: polo shirts"]) == "polo shirt"
+    assert tee_category("Polo Ralph Lauren Jersey T-Shirt") == "t-shirt"
 
 
 def test_tee_category_supports_product_type_and_tag_evidence():

@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import sys
 import threading
@@ -17,6 +18,30 @@ sys.path.insert(0, str(ROOT.parent / "backend"))
 from adapters import REGISTRY  # noqa: E402
 from adapters.common import Blocked, ShopSession  # noqa: E402
 from store import _ensure_bucket, upload_rows  # noqa: E402
+
+
+def _prepare_fx_rates(shops):
+    eur_shops = [
+        shop
+        for shop in shops
+        if shop.get("adapter") == "shopify"
+        and str(shop.get("currency") or "GBP").upper() == "EUR"
+    ]
+    if not eur_shops:
+        return
+    rate = None
+    try:
+        response = httpx.get(
+            "https://api.frankfurter.app/latest?from=EUR&to=GBP", timeout=10
+        )
+        response.raise_for_status()
+        rate = float(response.json()["rates"]["GBP"])
+        if not math.isfinite(rate) or rate <= 0:
+            rate = None
+    except (httpx.HTTPError, KeyError, TypeError, ValueError, OverflowError):
+        rate = None
+    for shop in eur_shops:
+        shop["_fx_rate"] = rate
 
 
 def _load_env():
@@ -549,6 +574,7 @@ def main(argv=None):
         _list(shops)
         return
     selected = _shop_filter(shops, args, probe=args.probe)
+    _prepare_fx_rates(selected)
     if args.probe:
         _probe(selected, args)
     else:

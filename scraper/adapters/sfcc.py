@@ -187,7 +187,12 @@ def pagination_next(body, current_url):
 
 def scrape(shop: dict, session: ShopSession, probe: bool = False):
     rows = []
-    for page in shop.get("pages", [])[: 1 if probe else None]:
+    page_key = (
+        "tee_pages"
+        if shop.get("_category_set") == "tees" and shop.get("tee_pages")
+        else "pages"
+    )
+    for page in shop.get(page_key, [])[: 1 if probe else None]:
         gender, first_url = page["gender"], page["url"]
         current_url, visited = first_url, set()
         page_limit = 1 if probe else int(shop.get("max_pages", 4))

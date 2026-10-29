@@ -66,6 +66,7 @@ gender_rule = "sunspel"
 default_gender = "m"
 max_pages = 20
 max_requests = 30
+tee_collections = [{ handle = "mens-polo-shirts", gender = "m" }]
 
 [[shop]]
 key = "selfportrait"
@@ -466,6 +467,8 @@ gender_rule = "men"
 default_gender = "m"
 max_pages = 20
 max_requests = 30
+category_sets = ["apparel", "tees"]
+tee_collections = [{ handle = "knitted-polos", gender = "m" }]
 
 [[shop]]
 key = "privatewhite"
@@ -721,6 +724,7 @@ brand = "Lacoste"
 host = "www.lacoste.com"
 domain = "lacoste.com"
 adapter = "sfcc"
+category_sets = ["apparel", "tees"]
 enabled = true
 where = "uk"
 group = "highstreet"
@@ -734,6 +738,9 @@ url = "https://www.lacoste.com/gb/lacoste/men/clothing/"
 [[shop.pages]]
 gender = "w"
 url = "https://www.lacoste.com/gb/lacoste/women/clothing/"
+[[shop.tee_pages]]
+gender = "m"
+url = "https://www.lacoste.com/gb/lacoste/men/clothing/polo-shirts/"
 
 [[shop]]
 key = "burberry"
@@ -819,6 +826,7 @@ brand = "Ralph Lauren"
 host = "www.ralphlauren.co.uk"
 domain = "ralphlauren.co.uk"
 adapter = "tiles"
+category_sets = ["apparel", "tees"]
 enabled = false
 where = "uk"
 group = "premium"
@@ -834,6 +842,9 @@ url = "https://www.ralphlauren.co.uk/en/men/clothing/jumpers-cardigans/10206?sta
 gender = "m"
 url = "https://www.ralphlauren.co.uk/en/men/clothing/casual-shirts/10202?start=0&sz=30"
 [[shop.pages]]
+gender = "m"
+url = "https://www.ralphlauren.co.uk/en/men/clothing/polo-shirts/10201?start=0&sz=30"
+[[shop.tee_pages]]
 gender = "m"
 url = "https://www.ralphlauren.co.uk/en/men/clothing/polo-shirts/10201?start=0&sz=30"
 [[shop.pages]]
@@ -1358,6 +1369,7 @@ brand = "John Smedley"
 host = "www.johnsmedley.com"
 domain = "johnsmedley.com"
 adapter = "tiles"
+category_sets = ["apparel", "tees"]
 enabled = false
 where = "uk"
 group = "heritage"
@@ -1371,6 +1383,9 @@ url = "https://www.johnsmedley.com/uk/mens/knitwear"
 gender = "m"
 url = "https://www.johnsmedley.com/uk/mens/shop-by-style"
 [[shop.pages]]
+gender = "m"
+url = "https://www.johnsmedley.com/uk/mens/polo-shirts"
+[[shop.tee_pages]]
 gender = "m"
 url = "https://www.johnsmedley.com/uk/mens/polo-shirts"
 [[shop.pages]]
@@ -1710,6 +1725,218 @@ note = "Tee probe 2026-10-26"
 gender_rule = "default"
 tee_collections = [{ handle = "tees" }]
 max_requests = 40
+[[shop]]
+key = "browns"
+brand = "Browns"
+host = "www.brownsfashion.com"
+domain = "brownsfashion.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: GBP Shopify clothing collection returned trousers, overshirt and jacket."
+collections = [{ handle = "a-kind-of-guise-man", gender = "m" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "endclothing"
+brand = "END. Clothing"
+host = "www.endclothing.com"
+domain = "www.endclothing.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = false
+where = "any"
+group = "premium"
+status = "empty"
+note = "VPS probe: GBP Shopify feed returned no products in the sampled collection."
+
+[[shop]]
+key = "acoldwall"
+brand = "A-Cold-Wall"
+host = "www.acoldwall.com"
+domain = "www.a-cold-wall.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = false
+where = "any"
+group = "premium"
+status = "empty"
+note = "VPS probe: GBP Shopify feed returned no products in the sampled collections."
+
+[[shop]]
+key = "walesbonner"
+brand = "Wales Bonner"
+host = "www.walesbonner.com"
+domain = "walesbonner.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = false
+where = "any"
+group = "premium"
+status = "needs_clothing_probe"
+note = "VPS probe sample was footwear; no clothing collection enabled."
+
+[[shop]]
+key = "martinerose"
+brand = "Martine Rose"
+host = "www.martine-rose.com"
+domain = "www.martine-rose.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = false
+where = "any"
+group = "premium"
+status = "mixed_feed"
+note = "VPS probe mixed apparel with beanie and labels; no clothing-only collection verified."
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "orlebarbrown"
+brand = "Orlebar Brown"
+host = "www.orlebarbrown.com"
+domain = "orlebarbrown.com"
+adapter = "shopify"
+category_sets = ["apparel", "tees"]
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: GBP Shopify clothing feed returned swim shorts."
+collections = [{ handle = "mens-resortwear-beach-club-edit", gender = "m" }]
+tee_collections = [{ handle = "classic-polo-shirts", gender = "m" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "margarethowell"
+brand = "Margaret Howell"
+host = "www.margarethowell.co.uk"
+domain = "www.margarethowell.co.uk"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: GBP men's new arrivals returned jumpers and coats; gloves are filtered."
+collections = [{ handle = "new-arrivals-mens", gender = "m" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "studionicholson"
+brand = "Studio Nicholson"
+host = "www.studionicholson.com"
+domain = "www.studionicholson.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: GBP Shopify clothing feed returned trousers."
+collections = [{ handle = "caro-pant-womens-page", gender = "w" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "bodaskins"
+brand = "Bodaskins"
+host = "www.bodaskins.com"
+domain = "www.bodaskins.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: GBP Shopify men's clothing collection returned a jacket."
+collections = [{ handle = "clothing-man", gender = "m" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "antonioli"
+brand = "Antonioli"
+host = "www.antonioli.eu"
+domain = "antonioli.eu"
+adapter = "shopify"
+category_sets = ["apparel"]
+currency = "EUR"
+enabled = false
+where = "any"
+group = "premium"
+status = "needs_clothing_probe"
+note = "VPS probe sample was candles and sculpture; no clothing collection enabled."
+
+[[shop]]
+key = "casablanca"
+brand = "Casablanca"
+host = "www.casablancaparis.com"
+domain = "casablancaparis.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+currency = "EUR"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: EUR Shopify men's collection returned shirts and swim shorts."
+collections = [{ handle = "beach-club-mens", gender = "m" }]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "lemaire"
+brand = "Lemaire"
+host = "www.lemaire.fr"
+domain = "www.lemaire.fr"
+adapter = "shopify"
+category_sets = ["apparel"]
+currency = "EUR"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: EUR Shopify ready-to-wear returned coats and knitwear."
+collections = [
+  { handle = "men-ready-to-wear-all", gender = "m" },
+  { handle = "women-ready-to-wear-all", gender = "w" },
+]
+default_gender = "m"
+max_pages = 10
+max_requests = 30
+
+[[shop]]
+key = "isabelmarant"
+brand = "Isabel Marant"
+host = "www.isabelmarant.com"
+domain = "isabelmarant.com"
+adapter = "shopify"
+category_sets = ["apparel"]
+currency = "EUR"
+enabled = true
+where = "any"
+group = "premium"
+status = "ok"
+note = "VPS probe: EUR Shopify new-in feed returned a jacket and trousers."
+collections = [{ handle = "new-in-woman", gender = "w" }]
+default_gender = "w"
+max_pages = 10
+max_requests = 30
+
 
 [[shop]]
 key = "huf"

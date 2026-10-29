@@ -1,5 +1,6 @@
 import json
 import re
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from urllib.parse import urlencode, urljoin
 
 from .common import (
@@ -143,6 +144,21 @@ def _colour_rows(product):
 
 def scrape(shop: dict, session: ShopSession, probe: bool = False):
     host = shop["host"]
+    currency = str(shop.get("currency") or "GBP").upper()
+    if currency not in {"GBP", "EUR"}:
+        shop["_status"] = "non_gbp"
+        shop["_reason"] = f"unsupported configured currency {currency!r}"
+        return []
+    fx_rate = None
+    if currency == "EUR":
+        try:
+            fx_rate = Decimal(str(shop["_fx_rate"]))
+            if not fx_rate.is_finite() or fx_rate <= 0:
+                raise InvalidOperation
+        except (KeyError, InvalidOperation, TypeError, ValueError):
+            shop["_status"] = "fx_unavailable"
+            shop["_reason"] = "EUR-to-GBP rate unavailable; shop skipped"
+            return []
     meta_url = f"https://{host}/meta.json"
     fetched = session.get(meta_url)
     if fetched is None:
@@ -155,9 +171,10 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
         return []
     meta_text, _, _ = fetched
     meta = json.loads(meta_text)
-    if str(meta.get("currency", "")).upper() != "GBP":
+    meta_currency = str(meta.get("currency", "")).upper()
+    if meta_currency != currency:
         shop["_status"] = "non_gbp"
-        shop["_reason"] = f"meta.json currency={meta.get('currency')!r}"
+        shop["_reason"] = f"meta.json currency={meta_currency!r}"
         return []
     base_domain = str(meta.get("domain") or host).lower()
     product_base = shop.get("product_base") or f"https://{base_domain}"
@@ -260,6 +277,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                         )
                         if image.startswith("http://"):
                             image = "https://" + image[7:]
+                    original_price = price
                     row_url = (
                         product_url
                         + "?"
@@ -280,7 +298,11 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                         "availability": "InStock",
                         "product_id": product.get("id"),
                         "product_type": product_type,
-                        "price_source": "shopify_variant_gbp",
+                        "price_source": (
+                            "shopify_variant_gbp"
+                            if currency == "GBP"
+                            else "shopify_variant_eur_fx"
+                        ),
                         "shopify_product": product,
                     }
                     if colour_row:
@@ -290,10 +312,21 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                         )
                     compare = variant.get("compare_at_price")
                     try:
-                        if compare and float(compare) > price:
+                        if compare and float(compare) > original_price:
                             extra["compare_at_price"] = float(compare)
                     except (TypeError, ValueError):
                         pass
+                    if currency == "EUR":
+                        price = int(
+                            (Decimal(str(original_price)) * fx_rate).quantize(
+                                Decimal(1), rounding=ROUND_HALF_UP
+                            )
+                        )
+                        extra.update(
+                            original_price=original_price,
+                            original_currency=currency,
+                            fx_rate=float(fx_rate),
+                        )
                     row_gender = (
                         tee_gender(shop, product, row_url, gender)
                         if tees
