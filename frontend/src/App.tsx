@@ -403,7 +403,7 @@ export default function App() {
                 onCheckout={checkout} onOpenItem={item => setSheet({ kind: "item", item })} />
             : <NeedsBrief go={() => setTab("brief")} />)}
           {tab === "find" && <FindScreen onOpenItem={item => setSheet({ kind: "item", item })} />}
-          {tab === "taste" && <TasteScreen taste={taste} board={activeBoard} refresh={refreshTaste} onReset={reset} onUpload={handleUpload} />}
+          {tab === "taste" && <TasteScreen taste={taste} board={activeBoard} refresh={refreshTaste} onReset={reset} onUpload={handleUpload} isAdmin={user.role === "admin"} />}
         </main>
 
         {toast && (

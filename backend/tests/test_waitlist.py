@@ -52,6 +52,8 @@ def test_valid_signup_stores_normalized_signup(client):
     assert rows[0]["devices"] == "iphone,web"
     assert rows[0]["wants_testing"] == 1
     assert rows[0]["consent_at"]
+    assert rows[0]["status"] == "pending"
+    assert rows[0]["user_id"] is None
 
 
 @pytest.mark.parametrize(
@@ -169,6 +171,9 @@ def test_export_writes_header_and_rows(capsys):
         "created_at",
         "updated_at",
         "consent_at",
+        "status",
+        "user_id",
+        "reviewed_at",
     ]
     assert len(rows) == 3
     assert {row[1] for row in rows[1:]} == {"ada@example.com", "grace@example.com"}

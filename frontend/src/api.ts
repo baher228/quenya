@@ -133,9 +133,33 @@ export const api = {
   checkout: (outfit_id: string, board_id?: string) => post<Checkout>("/api/checkout", { outfit_id, board_id }),
   reset: () => post<unknown>("/api/reset"),
   stats: () => req<TaskStats[]>("/api/model/stats"),
+  adminWaitlist: (status: string) =>
+    req<AdminWaitlistEntry[]>(`/api/admin/waitlist?status=${encodeURIComponent(status)}`),
+  approveWaitlist: (id: string) =>
+    post<{ invite_url: string; user: Pick<User, "id" | "name" | "role"> }>(
+      `/api/admin/waitlist/${encodeURIComponent(id)}/approve`,
+    ),
+  rejectWaitlist: (id: string) =>
+    post<{ ok: boolean }>(`/api/admin/waitlist/${encodeURIComponent(id)}/reject`),
+  adminUsers: () => req<AdminUser[]>("/api/admin/users"),
+  rotateInvite: (id: string) =>
+    post<{ invite_url: string }>(`/api/admin/users/${encodeURIComponent(id)}/rotate-invite`),
+  revokeUser: (id: string) =>
+    post<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(id)}/revoke`),
 };
 
 export type User = { id: string; name: string; role: "tester" | "admin"; max_styles: number | null; style_count: number };
+export type AdminWaitlistEntry = {
+  id: string; email: string; name: string | null; handle: string | null;
+  style_text: string | null; wants_testing: boolean | number; devices: string | null;
+  source: string | null; created_at: string; status: "pending" | "approved" | "rejected";
+  reviewed_at: string | null; user_id: string | null;
+};
+export type AdminUser = {
+  id: string; name: string; role: "tester" | "admin"; created_at: string;
+  revoked_at: string | null; styles: { id: string; label: string }[];
+  swipe_count: number; last_seen_at: string | null;
+};
 
 export const img = (it: Item) => it.image ?? it.image_url ?? "";
 export const gbp = (n: number) => "£" + (Number.isInteger(n) ? n.toFixed(0) : n.toFixed(2));

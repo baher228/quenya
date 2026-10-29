@@ -268,6 +268,59 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 *{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
+
+.admin-stage{align-items:flex-start}
+.admin-phone{width:min(1080px,100%);height:min(920px,calc(100vh - 48px));border-radius:26px}
+.admin-body{padding:24px 28px 36px}
+.admin-header,.admin-section-head,.admin-row-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.admin-header{align-items:flex-start}
+.admin-header .h1{margin-top:4px}
+.admin-section{margin-top:20px;padding:20px;background:var(--surf);border:1px solid var(--line);border-radius:20px}
+.admin-section-head{align-items:flex-start;margin-bottom:10px}
+.admin-section-head .h3{font-size:18px}
+.admin-section-head .small{margin-top:4px}
+.admin-filters{display:flex;flex-wrap:wrap;gap:5px}
+.admin-filters button{padding:7px 10px;border-radius:999px;background:var(--surf2);color:var(--soft);font-size:11px}
+.admin-filters button.selected{background:var(--text);color:var(--phone)}
+.admin-row{padding:16px 0;border-top:1px solid var(--line)}
+.admin-row-title{align-items:flex-start}
+.admin-row-title h3{font-size:15px;font-weight:600}
+.admin-row-title a{display:inline-block;margin-top:2px;color:var(--mute);font-size:12px;text-decoration:none}
+.admin-status{flex:none;padding:4px 9px;border-radius:999px;background:var(--surf2);color:var(--soft);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.admin-status.pending{color:var(--sage)}
+.admin-status.approved{color:var(--sage);background:rgba(185,196,168,.12)}
+.admin-status.rejected{color:var(--coral);background:rgba(217,137,122,.12)}
+.admin-details{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.admin-details div{display:flex;min-width:0;flex-direction:column;gap:3px}
+.admin-details span,.admin-tester-copy span{color:var(--mute);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.admin-details b{overflow-wrap:anywhere;font-size:12px;font-weight:500;color:var(--soft)}
+.admin-style{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--surf2);color:var(--soft);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.admin-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.admin-invite{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-top:12px}
+.admin-invite input{min-width:0;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--surf2);font:11px ui-monospace,monospace}
+.admin-invite .btn{display:flex;align-items:center;justify-content:center;white-space:nowrap}
+.admin-empty{padding:16px 0;color:var(--mute);font-size:13px}
+.admin-error{padding:10px 12px;border-radius:12px;background:#2A1D1A;color:var(--blush);font-size:12px}
+.admin-tester{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:14px 0;border-top:1px solid var(--line)}
+.admin-tester-copy{display:flex;min-width:0;flex-direction:column;gap:3px}
+.admin-tester-copy b{font-size:14px}
+.admin-tester .admin-actions,.admin-tester .admin-invite{grid-column:1/-1;margin-top:0}
+.admin-entry{display:flex;justify-content:space-between;margin-top:22px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surf);color:var(--soft);text-decoration:none;font-size:13px}
+.admin-entry span{color:var(--sage)}
+.admin-unavailable{padding:24px;color:var(--text);font:14px/1.4 "Hanken Grotesk",system-ui,sans-serif}
+
+@media(max-width:600px){
+  .admin-phone{width:100vw;height:100dvh;border-radius:0}
+  .admin-phone .admin-body{padding:18px 16px 28px}
+  .admin-section{padding:16px 14px}
+  .admin-section-head{flex-direction:column;gap:12px}
+  .admin-filters{width:100%}
+  .admin-filters button{flex:1;padding:8px 6px}
+  .admin-details{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 8px}
+  .admin-invite{grid-template-columns:minmax(0,1fr) auto}
+  .admin-invite input{grid-column:1/-1}
+  .admin-header .btn{margin-top:12px}
+}
 ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 ::-webkit-scrollbar-button{display:none}
 .find-ex{margin-top:14px}
