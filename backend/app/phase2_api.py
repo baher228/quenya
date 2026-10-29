@@ -1451,7 +1451,13 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
         )
         if total > float(current["price_ceiling_gbp"]):
             continue
-        if set(outfit_errors([*other_pieces, item], include_shoes)) - before:
+        candidate_errors = set(
+            outfit_errors([*other_pieces, item], include_shoes)
+        )
+        if (
+            "two jackets or coats" in candidate_errors
+            or candidate_errors - before
+        ):
             continue
         candidates.append(item)
     if layer_role(replaced) == "base":

@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 
 from app import outfits, phase2_api
 from app.outfits import (
@@ -59,6 +60,14 @@ def _womenswear_piece(item_id: str, slot: str, category: str) -> dict:
         ("pointelle jersey vest", "top", "base"),
         ("sports bra", "top", "base"),
         ("trench coat", "outerwear", "outer"),
+        ("overcoat", "outerwear", "outer"),
+        ("topcoat", "outerwear", "outer"),
+        ("peacoat", "outerwear", "outer"),
+        ("bomber jacket", "outerwear", "outer"),
+        ("harrington jacket", "outerwear", "outer"),
+        ("windcheater", "outerwear", "outer"),
+        ("soft shell", "top", "outer"),
+        ("hard-shell", "top", "outer"),
         ("two-piece suit", "outerwear", "outer"),
     ],
 )
@@ -148,6 +157,45 @@ def test_layer_role_uses_slot_default(slot, expected):
 
 def test_layer_role_ignores_non_layer_slots():
     assert layer_role(_piece("piece", "shoes", "puffer jacket")) is None
+
+
+def test_outerwear_slot_item_cannot_be_a_base_layer():
+    assert layer_role(_piece("piece", "outerwear", "polo shirt")) == "outer"
+
+
+def test_mountain_hardware_soft_shell_in_top_slot_is_outer():
+    item = _piece(
+        "shell",
+        "top",
+        "technical layer",
+        title="Mountain Hardware Soft Shell",
+    )
+
+    assert layer_role(item) == "outer"
+
+
+def test_outfit_errors_reject_overcoat_and_outerwear_overshirt():
+    pieces = [
+        _piece("overcoat", "outerwear", "overcoat"),
+        _piece("overshirt", "outerwear", "overshirt"),
+        _piece("tee", "top", "t-shirt"),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    assert "two jackets or coats" in outfits.outfit_errors(pieces, True)
+
+
+def test_outfit_errors_allow_jacket_hoodie_tee_and_bottom():
+    pieces = [
+        _piece("jacket", "outerwear", "denim jacket"),
+        _piece("hoodie", "knitwear", "graphic hoodie"),
+        _piece("tee", "top", "t-shirt"),
+        _piece("bottom", "bottom", "jeans"),
+        _piece("shoes", "shoes", "trainers"),
+    ]
+
+    assert outfits.outfit_errors(pieces, True) == []
 
 
 @pytest.fixture
@@ -350,8 +398,18 @@ def test_stylist_pool_lines_include_layer_roles_and_system_rules():
 
     assert "tee | top | base | - | £30 | graphic t-shirt" in content
     assert "bag | bag | - | - | £30 | tote bag" in content
-    assert PROMPT_VERSION == "2026-10-26.1"
+    assert PROMPT_VERSION == "2026-10-26.2"
     assert "one bottom plus exactly one base layer" in STYLIST_SYSTEM
+    assert (
+        "- Each outfit has one bottom plus exactly one base layer worn against "
+        "the skin (t-shirt, shirt, polo, tank or blouse), or one dress instead "
+        "of both. Optionally add one mid layer (hoodie, jumper, sweatshirt, "
+        "cardigan, quarter-zip or overshirt) and/or one outer layer (coat, "
+        "jacket, blazer or gilet). At most one piece may come from the outerwear "
+        "slot: never put a coat and a jacket, or two jackets, in the same "
+        "outfit. Never use two pieces with the same layer role. Use at most 4 "
+        "clothing pieces, then shoes unless the request says no shoes."
+    ) in STYLIST_SYSTEM
     assert "Never use two pieces with the same layer role" in STYLIST_SYSTEM
     assert "at most 2 of them combined" in STYLIST_SYSTEM
     assert "shorts work with a light jacket, overshirt or hoodie" in STYLIST_SYSTEM
@@ -414,3 +472,55 @@ def test_swap_keeps_the_replaced_layer_role(monkeypatch):
 
     assert updates == [("outfit-1", ["new-tee", "jeans", "shoes"], 100)]
     assert result["piece_ids"] == ["new-tee", "jeans", "shoes"]
+
+
+def test_swap_rejects_coat_and_outerwear_slot_overshirt(monkeypatch):
+    coat = _piece("coat", "outerwear", "overcoat")
+    replaced = _piece("old-overshirt", "outerwear", "tech fleece zip-up hoodie")
+    overshirt = _piece("overshirt", "outerwear", "overshirt")
+    tee = _piece("tee", "top", "t-shirt")
+    jeans = _piece("jeans", "bottom", "jeans")
+    shoes = _piece("shoes", "shoes", "trainers")
+    outfit = {
+        "id": "outfit",
+        "profile_id": "profile",
+        "piece_ids": ["coat", "old-overshirt", "tee", "jeans", "shoes"],
+        "total_gbp": 150,
+    }
+    items_by_id = {
+        item["id"]: item for item in [coat, replaced, overshirt, tee, jeans, shoes]
+    }
+    monkeypatch.setattr(
+        phase2_api,
+        "_user_profile",
+        lambda: {"id": "profile", "brief": {}},
+    )
+    monkeypatch.setattr(
+        phase2_api, "_taste", lambda _profile_id: {"price_ceiling_gbp": 500}
+    )
+    monkeypatch.setattr(phase2_api, "_core", lambda: {})
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api.db, "get_outfit", lambda _outfit_id: outfit)
+    monkeypatch.setattr(
+        phase2_api.db,
+        "get_item_with_tags",
+        lambda item_id: items_by_id.get(item_id),
+    )
+    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: [overshirt])
+    monkeypatch.setattr(
+        phase2_api.db, "profile_swipe_items", lambda _profile_id: []
+    )
+    monkeypatch.setattr(
+        phase2_api, "rank_items", lambda *_args, **_kwargs: [overshirt]
+    )
+    monkeypatch.setattr(
+        phase2_api.db,
+        "update_outfit_pieces",
+        lambda *_args, **_kwargs: pytest.fail("invalid swap was saved"),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        phase2_api.swap("outfit", SwapRequest(item_id="old-overshirt"))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "No eligible same-slot replacement"

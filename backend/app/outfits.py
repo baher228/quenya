@@ -15,7 +15,9 @@ _NON_OUTFIT_BASE = re.compile(
 )
 _OUTER_LAYER = re.compile(
     r"\b(?:(?:insulated|puffer|padded|down|quilted|fleece|synthetic)\s+vests?|"
-    r"coats?|jackets?|parkas?|puffers?|anoraks?|blazers?|gilets?|"
+    r"overcoats?|topcoats?|peacoats?|coats?|jackets?|parkas?|puffers?|"
+    r"bombers?|harringtons?|windcheaters?|(?:soft|hard)[\s-]?shells?|"
+    r"anoraks?|blazers?|gilets?|"
     r"windbreakers?|raincoats?|shackets?|trenches|trench|cagoules?|"
     r"ponchos?|mac|suits?)\b",
     re.I,
@@ -97,9 +99,9 @@ def _layer_role_for_text(
     category_base = category if slot == "top" else _VEST_WORD.sub("", category)
     title_base = title if slot == "top" else _VEST_WORD.sub("", title)
     if _BASE_LAYER.search(category_base):
-        return "base"
+        return "outer" if slot == "outerwear" else "base"
     if _BASE_LAYER.search(title_base):
-        return "base"
+        return "outer" if slot == "outerwear" else "base"
     return {"outerwear": "outer", "knitwear": "mid", "top": "base"}[slot]
 
 
@@ -323,6 +325,13 @@ def outfit_errors(
         role: sum(layer_role(piece) == role for piece in pieces)
         for role in ("base", "mid", "outer")
     }
+    jacket_or_coat_count = sum(
+        str(tags_for(piece).get("slot") or "").strip().lower() == "outerwear"
+        or layer_role(piece) == "outer"
+        for piece in pieces
+    )
+    if jacket_or_coat_count > 1:
+        errors.append("two jackets or coats")
     if dress_count:
         if layer_counts["base"]:
             errors.append("a dress outfit cannot include a base layer")
