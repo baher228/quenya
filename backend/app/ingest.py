@@ -9,7 +9,7 @@ from typing import Any
 
 from app import db, embed, tag
 from app.config import BACKEND_ROOT
-from app.sources import retail, vinted
+from app.sources import lv, retail, vinted
 
 SEED_PATH = BACKEND_ROOT / "seeds" / "seed_queries.txt"
 
@@ -47,6 +47,7 @@ def ingest(
     per_query: int,
     sample: int | None = None,
     *,
+    limit: int = 25,
     run_tag: bool = False,
     run_embed: bool = False,
     tag_concurrency: int = 2,
@@ -56,24 +57,34 @@ def ingest(
     db.init_db()
     all_records = []
     query_errors = 0
-    seeds = select_seeds(read_seeds(), sample)
+    lv_report = None
+    existing_urls = None
+    if source == "lv":
+        seeds = []
+        existing_urls = db.source_urls()
+        all_records, lv_report = _run_with_logs_on_stderr(
+            lv.trickle, limit, existing_urls=existing_urls
+        )
+    else:
+        seeds = select_seeds(read_seeds(), sample)
     if source == "retail":
         retail.reset_domain_report()
-    for gender, query in seeds:
-        try:
-            if source == "vinted":
-                records = vinted.search(query, gender, per_query)
-            else:
-                records = retail.search(query, per_query, gender)
-            all_records.extend(records)
-        except Exception as exc:
-            query_errors += 1
-            print(
-                f"Query failed ({source}, {gender}|{query}): "
-                f"{type(exc).__name__}: {exc}",
-                file=sys.stderr,
-            )
-    existing_urls = db.source_urls()
+    if source != "lv":
+        for gender, query in seeds:
+            try:
+                if source == "vinted":
+                    records = vinted.search(query, gender, per_query)
+                else:
+                    records = retail.search(query, per_query, gender)
+                all_records.extend(records)
+            except Exception as exc:
+                query_errors += 1
+                print(
+                    f"Query failed ({source}, {gender}|{query}): "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+        existing_urls = db.source_urls()
     inserted = db.insert_items(all_records)
     summary: dict[str, Any] = {
         "source": source,
@@ -82,6 +93,8 @@ def ingest(
         "inserted": inserted,
         "query_errors": query_errors,
     }
+    if lv_report is not None:
+        summary["lv"] = lv_report
     new_item_ids = list(dict.fromkeys(
         item["id"]
         for item in all_records
@@ -113,9 +126,10 @@ def ingest(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest listing records into the catalog")
-    parser.add_argument("--source", choices=("vinted", "retail"), required=True)
+    parser.add_argument("--source", choices=("vinted", "retail", "lv"), required=True)
     parser.add_argument("--per-query", type=int, default=10)
     parser.add_argument("--sample", type=int)
+    parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--tag", action="store_true")
     parser.add_argument("--embed", action="store_true")
     parser.add_argument("--tag-concurrency", type=int, default=2)
@@ -126,6 +140,8 @@ def main() -> None:
         parser.error("--per-query must be positive")
     if args.sample is not None and args.sample < 1:
         parser.error("--sample must be positive")
+    if args.source == "lv" and args.limit < 1:
+        parser.error("--limit must be positive")
     if args.tag_concurrency < 1 or args.tag_concurrency > 4:
         parser.error("--tag-concurrency must be between 1 and 4")
     if args.embed_batch_size < 1:
@@ -137,6 +153,7 @@ def main() -> None:
             args.source,
             args.per_query,
             args.sample,
+            limit=args.limit,
             run_tag=args.tag,
             run_embed=args.embed,
             tag_concurrency=args.tag_concurrency,

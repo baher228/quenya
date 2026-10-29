@@ -9,9 +9,9 @@ fi
 source=$1
 shift
 case "$source" in
-    vinted|retail) ;;
+    vinted|retail|lv) ;;
     *)
-        echo "source must be vinted or retail" >&2
+        echo "source must be vinted, retail or lv" >&2
         exit 64
         ;;
 esac
