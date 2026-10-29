@@ -48,7 +48,10 @@ default cap; both pacing and cap are configurable from the CLI and registry.
 `--probe` checks each configured shop (Shopify: `meta.json` and page one of the
 product feed) without changing the registry. Probe evidence is saved as
 `scraper/out/probe-<timestamp>.json`. Enable a shop only after the probe shows
-GBP clothing rows. The regular run writes each shop's JSONL as it progresses,
+clothing rows in the configured currency. Shopify shops may opt into EUR with
+`currency = "EUR"`; one EUR-to-GBP rate is fetched per run, and EUR shops are
+skipped if that request fails. Other non-GBP currencies remain unsupported.
+The regular run writes each shop's JSONL as it progresses,
 flushing after each listing page, plus `all.jsonl`, `batch_001.jsonl` and
 further batches, and `summary.json` / `summary.md`. Outputs are timestamped
 under `scraper/out/`.
