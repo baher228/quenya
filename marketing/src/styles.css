@@ -1471,7 +1471,7 @@ img {
 
 @media (max-width: 720px) {
   :root {
-    --space-section: 5.5rem;
+    --space-section: 3.3rem;
   }
 
   .page-width,
@@ -1582,7 +1582,11 @@ img {
   }
 
   .section-heading {
-    margin-bottom: 1.45rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .outfit-section .section-heading {
+    margin-bottom: 1.2rem;
   }
 
   .section-heading h2 {
@@ -1591,12 +1595,39 @@ img {
 
   .taste-panel {
     grid-template-columns: 1fr;
-    gap: 2rem;
-    padding: 1.35rem;
+    gap: 1.1rem;
+    padding: 1rem;
   }
 
   .taste-column + .taste-column {
-    padding-top: 1.8rem;
+    padding-top: 1.1rem;
+  }
+
+  .taste-intro {
+    gap: 0.7rem;
+  }
+
+  .taste-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .taste-chips {
+    gap: 0.4rem;
+    margin: 0.9rem 0 1rem;
+  }
+
+  .taste-signals {
+    gap: 0.55rem;
+  }
+
+  .taste-signal {
+    gap: 0.25rem;
+  }
+
+  .taste-likes .taste-signal:nth-child(n + 5),
+  .taste-avoids .taste-signal:nth-child(n + 4) {
+    display: none;
   }
 
   .outfit-panel {
@@ -1682,10 +1713,20 @@ img {
   }
 
   .found-card {
-    width: min(74vw, 300px);
+    width: min(68vw, 300px);
     margin-left: 0;
     scroll-snap-align: start;
     transform: none;
+  }
+
+  .found-card img {
+    aspect-ratio: 8 / 9;
+  }
+
+  .found-card figcaption {
+    min-height: 96px;
+    gap: 0.16rem;
+    padding: 0.65rem 0.8rem 0.75rem;
   }
 
   .faq-layout {
@@ -1714,13 +1755,59 @@ img {
 
   .waitlist-panel {
     grid-template-columns: 1fr;
-    gap: 1.6rem;
-    padding: 1.4rem;
+    gap: 1rem;
+    padding: 1rem;
   }
 
   .waitlist-copy h2 {
-    max-width: 11ch;
-    font-size: clamp(2.8rem, 10vw, 4.2rem);
+    max-width: 12ch;
+    font-size: clamp(2.2rem, 8.8vw, 3.4rem);
+  }
+
+  .waitlist-copy p {
+    margin-top: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .signup-form {
+    gap: 0.75rem;
+  }
+
+  .signup-field {
+    gap: 0.375rem;
+  }
+
+  .signup-form .signup-field-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .signup-form input:not([type="checkbox"]) {
+    min-height: 44px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .signup-form legend {
+    margin-bottom: 0.35rem;
+  }
+
+  .device-options {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .device-chip {
+    min-height: 36px;
+    gap: 0.3rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.84rem;
+  }
+
+  .consent-line {
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.35;
   }
 
   .field-row {
