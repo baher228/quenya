@@ -1,3 +1,4 @@
+import { Silhouette } from "./Silhouette";
 import type { ReactNode } from "react";
 
 export const CONTACT_EMAIL = "hello@quenya.co.uk";
@@ -6,7 +7,10 @@ export function Header({ home = true }: { home?: boolean }) {
   return (
     <header className="site-header">
       <div className="header-row">
-        <a className="wordmark-small" href="/" aria-label="Quenya home">quenya.</a>
+        <a className="wordmark-small" href="/" aria-label="Quenya home">
+          <Silhouette className="brand-mark" />
+          <span className="brand-name">quenya.</span>
+        </a>
         <nav className="top-nav" aria-label="Primary">
           <a href={home ? "#method" : "/#method"}>How it works</a>
           <a href={home ? "#outfits" : "/#outfits"}>Outfits</a>
