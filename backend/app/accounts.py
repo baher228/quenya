@@ -1,13 +1,19 @@
 """Invite-link users and bearer sessions."""
 import argparse
+import base64
+import getpass
 import hashlib
+import hmac
 import secrets
 import uuid
+from collections import deque
 from contextvars import ContextVar
 from datetime import UTC, datetime
+from threading import Lock
+from time import monotonic
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from app import db
 from app.config import QUENYA_APP_URL
@@ -15,10 +21,115 @@ from app.config import QUENYA_APP_URL
 _user_context: ContextVar[dict[str, Any] | None] = ContextVar("user_context", default=None)
 _in_request: ContextVar[bool] = ContextVar("in_request", default=False)
 router = APIRouter()
+_LOGIN_RATE_WINDOW_S = 15 * 60
+_LOGIN_RATE_LIMIT = 5
+_login_rate_lock = Lock()
+_login_failures_by_ip: dict[str, deque[float]] = {}
+_login_failures_by_name: dict[str, deque[float]] = {}
 
 
 def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _password_hash(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(
+        password.encode(),
+        salt=salt,
+        n=2**14,
+        r=8,
+        p=1,
+        dklen=32,
+    )
+    return (
+        f"scrypt$16384$8$1${base64.b64encode(salt).decode('ascii')}"
+        f"${base64.b64encode(digest).decode('ascii')}"
+    )
+
+
+_DUMMY_PASSWORD_HASH = _password_hash("quenya-dummy-admin-password")
+
+
+def set_password(user_id: str, password: str) -> None:
+    if len(password) < 12:
+        raise ValueError("password must be at least 12 characters")
+    password_hash = _password_hash(password)
+    db.init_db()
+    with db.db_connection() as connection:
+        result = connection.execute(
+            "UPDATE users SET password_hash=? WHERE id=?",
+            (password_hash, user_id),
+        )
+        if result.rowcount == 0:
+            raise ValueError("user not found")
+
+
+def verify_password(stored: str | None, password: str) -> bool:
+    if not stored:
+        return False
+    try:
+        scheme, n, r, p, salt_text, digest_text = stored.split("$")
+        if (scheme, n, r, p) != ("scrypt", "16384", "8", "1"):
+            return False
+        salt = base64.b64decode(salt_text, validate=True)
+        expected = base64.b64decode(digest_text, validate=True)
+        if len(salt) != 16 or len(expected) != 32:
+            return False
+        actual = hashlib.scrypt(
+            password.encode(),
+            salt=salt,
+            n=2**14,
+            r=8,
+            p=1,
+            dklen=32,
+        )
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(expected, actual)
+
+
+def _prune_failures(failures: dict[str, deque[float]], key: str, now: float) -> int:
+    attempts = failures.get(key)
+    if attempts is None:
+        return 0
+    while attempts and now - attempts[0] >= _LOGIN_RATE_WINDOW_S:
+        attempts.popleft()
+    if not attempts:
+        failures.pop(key, None)
+        return 0
+    return len(attempts)
+
+
+def _login_is_limited(ip: str, name: str) -> bool:
+    now = monotonic()
+    with _login_rate_lock:
+        return (
+            _prune_failures(_login_failures_by_ip, ip, now) >= _LOGIN_RATE_LIMIT
+            or _prune_failures(_login_failures_by_name, name, now) >= _LOGIN_RATE_LIMIT
+        )
+
+
+def _record_login_failure(ip: str, name: str) -> None:
+    now = monotonic()
+    with _login_rate_lock:
+        for failures, key in (
+            (_login_failures_by_ip, ip),
+            (_login_failures_by_name, name),
+        ):
+            _prune_failures(failures, key, now)
+            failures.setdefault(key, deque()).append(now)
+
+
+def _clear_name_failures(name: str) -> None:
+    with _login_rate_lock:
+        _login_failures_by_name.pop(name, None)
+
+
+def reset_admin_login_rate_limit() -> None:
+    with _login_rate_lock:
+        _login_failures_by_ip.clear()
+        _login_failures_by_name.clear()
 
 
 def _public(user: dict[str, Any]) -> dict[str, Any]:
@@ -40,8 +151,9 @@ def create_user(name: str, role: str = "tester") -> tuple[dict[str, Any], str]:
     }
     with db.db_connection() as connection:
         connection.execute(
-            """INSERT INTO users (id,name,role,invite_hash,created_at,revoked_at)
-               VALUES (?,?,?,?,?,?)""",
+            """INSERT INTO users
+               (id,name,role,invite_hash,created_at,revoked_at,password_hash)
+               VALUES (?,?,?,?,?,?,NULL)""",
             tuple(user.values()),
         )
     return user, token
@@ -58,23 +170,42 @@ def rotate_invite(user_id: str) -> str:
     return token
 
 
-def redeem_invite(token: str) -> str:
+def _new_session(user_id: str) -> str:
     db.init_db()
-    token_hash = _hash(token)
+    session = secrets.token_urlsafe(32)
+    now = db.now_iso()
     with db.db_connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM users WHERE invite_hash=? AND revoked_at IS NULL", (token_hash,)
-        ).fetchone()
-        if not row:
-            raise ValueError("invalid invite")
-        session = secrets.token_urlsafe(32)
         connection.execute(
             """INSERT INTO auth_sessions
                (token_hash,user_id,created_at,last_seen_at,revoked_at)
                VALUES (?,?,?,?,NULL)""",
-            (_hash(session), row["id"], db.now_iso(), db.now_iso()),
+            (_hash(session), user_id, now, now),
         )
     return session
+
+
+def redeem_invite(token: str) -> str:
+    db.init_db()
+    with db.db_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM users WHERE invite_hash=? AND revoked_at IS NULL", (_hash(token),)
+        ).fetchone()
+        if not row:
+            raise ValueError("invalid invite")
+        user_id = row["id"]
+    return _new_session(user_id)
+
+
+def _client_ip(request: Request) -> str:
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    forwarded_ip = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+    if forwarded_ip:
+        return forwarded_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 def user_for_session(token: str) -> dict[str, Any] | None:
@@ -165,6 +296,44 @@ def redeem(body: dict[str, str]) -> dict[str, Any]:
     return {"token": token, "user": _public(user or {})}
 
 
+@router.post("/api/auth/admin-login")
+def admin_login(body: dict[str, str], request: Request) -> dict[str, Any]:
+    name = body.get("name", "").strip()
+    password = body.get("password", "")
+    normalized_name = name.casefold()
+    ip = _client_ip(request)
+    if _login_is_limited(ip, normalized_name):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts, try again later",
+        )
+
+    db.init_db()
+    with db.db_connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM users
+               WHERE role='admin' AND revoked_at IS NULL
+                 AND password_hash IS NOT NULL"""
+        ).fetchall()
+    matching_users = [
+        dict(row)
+        for row in rows
+        if row["name"].strip().casefold() == normalized_name
+    ]
+    user = matching_users[0] if len(matching_users) == 1 else None
+    valid_password = verify_password(
+        user["password_hash"] if user else _DUMMY_PASSWORD_HASH,
+        password,
+    )
+    if not user or not valid_password:
+        _record_login_failure(ip, normalized_name)
+        raise HTTPException(status_code=401, detail="Wrong name or password")
+
+    _clear_name_failures(normalized_name)
+    token = _new_session(user["id"])
+    return {"token": token, "user": _public(user)}
+
+
 @router.post("/api/auth/logout")
 def logout(
     _user: CurrentUser,
@@ -224,6 +393,34 @@ def admin_users(_user: AdminUser) -> list[dict[str, Any]]:
     return _admin_users()
 
 
+@router.post("/api/admin/password")
+def admin_change_password(
+    body: dict[str, str],
+    user: AdminUser,
+    authorization: str | None = Header(default=None),
+) -> dict[str, bool]:
+    if user.get("password_hash") and not verify_password(
+        user["password_hash"],
+        body.get("current_password", ""),
+    ):
+        raise HTTPException(status_code=403, detail="Current password is incorrect")
+    new_password = body.get("new_password", "")
+    if len(new_password) < 12:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be at least 12 characters",
+        )
+    set_password(user["id"], new_password)
+    token = authorization.removeprefix("Bearer ").strip() if authorization else ""
+    with db.db_connection() as connection:
+        connection.execute(
+            """UPDATE auth_sessions SET revoked_at=?
+               WHERE user_id=? AND token_hash<>?""",
+            (db.now_iso(), user["id"], _hash(token)),
+        )
+    return {"ok": True}
+
+
 @router.post("/api/admin/invites")
 def admin_invite(body: dict[str, str], _user: AdminUser):
     user, token = create_user(body["name"], body.get("role", "tester"))
@@ -257,6 +454,9 @@ def main() -> None:
     rotate.add_argument("--id", required=True)
     revoke = sub.add_parser("revoke")
     revoke.add_argument("--id", required=True)
+    set_password_command = sub.add_parser("set-password")
+    set_password_command.add_argument("--name", required=True)
+    set_password_command.add_argument("--generate", action="store_true")
     args = parser.parse_args()
     db.init_db()
     if args.command == "list":
@@ -290,6 +490,27 @@ def main() -> None:
         print(invite_url(rotate_invite(args.id)))
     elif args.command == "revoke":
         revoke_user(args.id)
+    elif args.command == "set-password":
+        with db.db_connection() as connection:
+            users = connection.execute(
+                "SELECT id FROM users WHERE role='admin' AND name=?",
+                (args.name,),
+            ).fetchall()
+        if len(users) != 1:
+            parser.error(f"expected exactly one admin user named {args.name!r}")
+        password = (
+            secrets.token_urlsafe(15)
+            if args.generate
+            else getpass.getpass("Password: ")
+        )
+        try:
+            set_password(users[0]["id"], password)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if args.generate:
+            print(password)
+        else:
+            print("Password updated.")
 
 
 if __name__ == "__main__":
