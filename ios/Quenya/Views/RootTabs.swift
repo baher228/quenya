@@ -69,21 +69,16 @@ struct RootTabs: View {
     private var signedInContent: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    (
-                        Text("quenya").foregroundColor(QuenyaTheme.webText)
-                        + Text(".").foregroundColor(QuenyaTheme.sage)
-                    )
-                        .font(.system(size: 19, weight: .semibold))
-                    Spacer()
-                    Text(state.fetchNote ?? "")
+                if let fetchNote = state.fetchNote, !fetchNote.isEmpty {
+                    Text(fetchNote)
                         .font(.system(size: 11))
                         .foregroundStyle(QuenyaTheme.webMuted)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                        .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
 
                 if state.selectedTab != .swipe {
                     BoardStrip()
