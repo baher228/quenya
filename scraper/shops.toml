@@ -66,7 +66,7 @@ gender_rule = "sunspel"
 default_gender = "m"
 max_pages = 20
 max_requests = 30
-tee_collections = [{ handle = "mens-polo-shirts", gender = "m" }]
+tee_collections = [{ handle = "mens-knitted-polo-shirts", gender = "m" }]
 
 [[shop]]
 key = "selfportrait"
