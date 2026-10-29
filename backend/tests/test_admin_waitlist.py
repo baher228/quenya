@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -159,6 +161,35 @@ def test_approval_creates_tester_invite_and_duplicate_approval_conflicts(
             f"/api/admin/waitlist/{waitlist_id}/approve", headers=headers
         )
         assert duplicate.status_code == 409
+        with db.db_connection() as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM users WHERE role='tester'"
+            ).fetchone()[0] == 1
+
+
+def test_concurrent_approvals_create_only_one_tester(isolated_waitlist_db):
+    _admin, admin_token = _session("admin")
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    with TestClient(main.app) as client:
+        _signup(client, name="Ada Lovelace")
+        with db.db_connection() as connection:
+            waitlist_id = connection.execute(
+                "SELECT id FROM waitlist WHERE email='ada@example.com'"
+            ).fetchone()["id"]
+
+        barrier = Barrier(2)
+
+        def approve():
+            barrier.wait()
+            return client.post(
+                f"/api/admin/waitlist/{waitlist_id}/approve",
+                headers=headers,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(lambda _index: approve(), range(2)))
+
+        assert sorted(response.status_code for response in responses) == [200, 409]
         with db.db_connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM users WHERE role='tester'"

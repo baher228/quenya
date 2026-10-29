@@ -180,22 +180,46 @@ def admin_waitlist(
 @router.post("/api/admin/waitlist/{waitlist_id}/approve")
 def approve_waitlist(waitlist_id: str, _user: AdminUser) -> dict:
     db.init_db()
+    reviewed_at = db.now_iso()
     with db.db_connection() as connection:
         row = connection.execute(
-            "SELECT id, email, name, status FROM waitlist WHERE id=?",
+            "SELECT email, name, status, reviewed_at FROM waitlist WHERE id=?",
             (waitlist_id,),
         ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Waitlist entry not found")
-    if row["status"] == "approved":
-        raise HTTPException(status_code=409, detail="Waitlist entry already approved")
+        cursor = connection.execute(
+            """UPDATE waitlist SET status='approved', reviewed_at=?
+               WHERE id=? AND status<>'approved'""",
+            (reviewed_at, waitlist_id),
+        )
+        if cursor.rowcount == 0:
+            exists = connection.execute(
+                "SELECT 1 FROM waitlist WHERE id=?", (waitlist_id,)
+            ).fetchone()
+            if not exists:
+                raise HTTPException(status_code=404, detail="Waitlist entry not found")
+            raise HTTPException(
+                status_code=409, detail="Waitlist entry already approved"
+            )
+        if not row:
+            row = connection.execute(
+                "SELECT email, name, status, reviewed_at FROM waitlist WHERE id=?",
+                (waitlist_id,),
+            ).fetchone()
 
-    user, token = accounts.create_user(row["name"] or row["email"], "tester")
+    try:
+        user, token = accounts.create_user(row["name"] or row["email"], "tester")
+    except Exception:
+        with db.db_connection() as connection:
+            connection.execute(
+                """UPDATE waitlist SET status=?, reviewed_at=?
+                   WHERE id=? AND status='approved' AND user_id IS NULL""",
+                (row["status"], row["reviewed_at"], waitlist_id),
+            )
+        raise
     with db.db_connection() as connection:
         connection.execute(
-            """UPDATE waitlist SET status='approved', user_id=?, reviewed_at=?
-               WHERE id=?""",
-            (user["id"], db.now_iso(), waitlist_id),
+            "UPDATE waitlist SET user_id=? WHERE id=? AND status='approved'",
+            (user["id"], waitlist_id),
         )
     return {
         "invite_url": accounts.invite_url(token),
