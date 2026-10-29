@@ -1350,6 +1350,7 @@ def test_embed_deck_searches_past_the_initial_vector_window(
 
     assert [item["id"] for item in result] == [target["id"]]
     assert "recent-item" in vector_queries[0]
+    assert len(vector_queries[0]) == 201
     assert target["id"] not in vector_queries[0]
     assert target["id"] in vector_queries[1]
 

@@ -5,7 +5,7 @@ import os
 import re
 import statistics
 import uuid
-from collections import Counter
+from collections import Counter, OrderedDict
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
@@ -253,6 +253,13 @@ CREATE TABLE IF NOT EXISTS waitlist (
 _INIT_LOCK = Lock()
 _POSTGRES_INIT_ADVISORY_LOCK_KEY = 7301442001
 _INITIALIZED_DATABASES: set[str] = set()
+_ITEM_MIX_VECTOR_CACHE_MAX_ENTRIES = 6000
+_ITEM_MIX_VECTOR_MISSING_TTL_S = 600
+_ITEM_MIX_VECTOR_MISSING = object()
+_ITEM_MIX_VECTOR_CACHE: OrderedDict[
+    str, tuple[Any, float | None]
+] = OrderedDict()
+_ITEM_MIX_VECTOR_CACHE_LOCK = Lock()
 _POSTGRES_POOL_LOCK = Lock()
 _POSTGRES_POOL: Any | None = None
 _POSTGRES_POOL_PID: int | None = None
@@ -1218,32 +1225,70 @@ def item_mix_vectors(item_ids: list[str]) -> dict[str, dict[str, Any]]:
     item_ids = list(dict.fromkeys(item_ids))
     if not item_ids:
         return {}
-    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+
     vectors = {}
+    missing_ids = []
+    now = monotonic()
+    with _ITEM_MIX_VECTOR_CACHE_LOCK:
+        for item_id in item_ids:
+            cached = _ITEM_MIX_VECTOR_CACHE.get(item_id)
+            if cached is None:
+                missing_ids.append(item_id)
+                continue
+            vector, expires_at = cached
+            if (
+                vector is _ITEM_MIX_VECTOR_MISSING
+                and expires_at is not None
+                and now >= expires_at
+            ):
+                del _ITEM_MIX_VECTOR_CACHE[item_id]
+                missing_ids.append(item_id)
+                continue
+            _ITEM_MIX_VECTOR_CACHE.move_to_end(item_id)
+            if vector is not _ITEM_MIX_VECTOR_MISSING:
+                vectors[item_id] = {"mix": vector}
+
+    if not missing_ids:
+        return vectors
+
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
     with db_connection() as connection:
         if postgres:
             rows = connection.execute(
                 """SELECT item_id, mix::text AS mix FROM item_embeddings
                    WHERE model='clip32' AND item_id = ANY(?) AND mix IS NOT NULL""",
-                (item_ids,),
+                (missing_ids,),
             ).fetchall()
-            batches = [rows]
         else:
-            batches = []
-            for start in range(0, len(item_ids), 900):
-                batch = item_ids[start : start + 900]
-                placeholders = ",".join("?" for _ in batch)
-                batches.append(connection.execute(
-                    f"""SELECT item_id, mix FROM item_embeddings
-                        WHERE model='clip32' AND item_id IN ({placeholders})
-                        AND mix IS NOT NULL""",
-                    tuple(batch),
-                ).fetchall())
-        for rows in batches:
-            vectors.update({
-                row["item_id"]: {"mix": _vector_value(row["mix"])}
-                for row in rows
-            })
+            rows = connection.execute(
+                """SELECT item_id, mix FROM item_embeddings
+                   WHERE model='clip32'
+                   AND item_id IN (SELECT value FROM json_each(?))
+                   AND mix IS NOT NULL""",
+                (json.dumps(missing_ids, separators=(",", ":")),),
+            ).fetchall()
+    fetched = {
+        row["item_id"]: _vector_value(row["mix"])
+        for row in rows
+    }
+
+    now = monotonic()
+    with _ITEM_MIX_VECTOR_CACHE_LOCK:
+        for item_id in missing_ids:
+            vector = fetched.get(item_id)
+            if vector is None:
+                vector = _ITEM_MIX_VECTOR_MISSING
+            expires_at = (
+                now + _ITEM_MIX_VECTOR_MISSING_TTL_S
+                if vector is _ITEM_MIX_VECTOR_MISSING
+                else None
+            )
+            _ITEM_MIX_VECTOR_CACHE[item_id] = (vector, expires_at)
+            _ITEM_MIX_VECTOR_CACHE.move_to_end(item_id)
+            if vector is not _ITEM_MIX_VECTOR_MISSING:
+                vectors[item_id] = {"mix": vector}
+        while len(_ITEM_MIX_VECTOR_CACHE) > _ITEM_MIX_VECTOR_CACHE_MAX_ENTRIES:
+            _ITEM_MIX_VECTOR_CACHE.popitem(last=False)
     return vectors
 
 

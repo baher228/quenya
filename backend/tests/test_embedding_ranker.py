@@ -1,9 +1,11 @@
 import hashlib
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from app import db
 from app.clip_tokenizer import SimpleTokenizer
 from app.embedding_ranker import (
     blend_score,
@@ -31,6 +33,19 @@ def _item(item_id, vector=None, score=0):
         },
         "score": score,
     }
+
+
+@pytest.fixture
+def item_vector_cache_db(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "item-vector-cache.sqlite")
+    db._INITIALIZED_DATABASES.clear()
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        db._ITEM_MIX_VECTOR_CACHE.clear()
+    db.init_db()
+    yield
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        db._ITEM_MIX_VECTOR_CACHE.clear()
+    db._INITIALIZED_DATABASES.clear()
 
 
 def test_blend_matches_direct_numpy_formula(monkeypatch):
@@ -100,10 +115,10 @@ def test_profile_ranker_arm_is_persisted(monkeypatch, tmp_path):
 
 
 def test_swipes_and_brief_vectors_are_loaded_per_board(monkeypatch, tmp_path):
-    from app import db
-
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "boards.sqlite")
     db._INITIALIZED_DATABASES.clear()
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        db._ITEM_MIX_VECTOR_CACHE.clear()
     db.create_profile("board-a", {"text": "workwear"}, ranker_arm="tags")
     db.create_profile("board-b", {"text": "workwear"}, ranker_arm="embed")
     db.insert_swipe("board-a", "item-a", True)
@@ -131,6 +146,89 @@ def test_swipes_and_brief_vectors_are_loaded_per_board(monkeypatch, tmp_path):
     np.testing.assert_array_equal(nearest[0][1], vector_a)
     assert len(db.random_item_mix_vectors(1)) == 1
     db._INITIALIZED_DATABASES.clear()
+
+
+def test_item_mix_vectors_reuses_cached_vectors_and_missing_ids(
+    item_vector_cache_db, monkeypatch
+):
+    vector = np.asarray([1, 2, 3], dtype=np.float32)
+    db.store_item_embedding("cached-vector", "clip32", vector, vector, vector)
+
+    first = db.item_mix_vectors(["cached-vector", "cached-missing"])
+    np.testing.assert_array_equal(first["cached-vector"]["mix"], vector)
+    assert "cached-missing" not in first
+
+    def fail_if_database_is_used():
+        raise AssertionError("cached vector ids should not query the database")
+
+    monkeypatch.setattr(db, "db_connection", fail_if_database_is_used)
+    second = db.item_mix_vectors(["cached-vector", "cached-missing"])
+
+    np.testing.assert_array_equal(second["cached-vector"]["mix"], vector)
+    assert "cached-missing" not in second
+
+
+def test_item_mix_vectors_cache_evicts_least_recently_used(
+    item_vector_cache_db, monkeypatch
+):
+    monkeypatch.setattr(db, "_ITEM_MIX_VECTOR_CACHE_MAX_ENTRIES", 2)
+    vector = np.asarray([1, 0], dtype=np.float32)
+    for item_id in ("lru-a", "lru-b", "lru-c"):
+        db.store_item_embedding(item_id, "clip32", vector, vector, vector)
+
+    original_db_connection = db.db_connection
+    query_count = 0
+
+    @contextmanager
+    def tracked_db_connection():
+        nonlocal query_count
+        query_count += 1
+        with original_db_connection() as connection:
+            yield connection
+
+    monkeypatch.setattr(db, "db_connection", tracked_db_connection)
+    db.item_mix_vectors(["lru-a", "lru-b"])
+    db.item_mix_vectors(["lru-a"])
+    db.item_mix_vectors(["lru-c"])
+    db.item_mix_vectors(["lru-b"])
+
+    assert query_count == 3
+    with db._ITEM_MIX_VECTOR_CACHE_LOCK:
+        assert list(db._ITEM_MIX_VECTOR_CACHE) == ["lru-c", "lru-b"]
+
+
+def test_item_mix_vectors_requeries_missing_ids_after_ttl(
+    item_vector_cache_db, monkeypatch
+):
+    clock = [100.0]
+    monkeypatch.setattr(db, "monotonic", lambda: clock[0])
+    original_db_connection = db.db_connection
+    query_count = 0
+
+    @contextmanager
+    def tracked_db_connection():
+        nonlocal query_count
+        query_count += 1
+        with original_db_connection() as connection:
+            yield connection
+
+    monkeypatch.setattr(db, "db_connection", tracked_db_connection)
+    assert db.item_mix_vectors(["appears-later"]) == {}
+    assert query_count == 1
+
+    monkeypatch.setattr(db, "db_connection", original_db_connection)
+    vector = np.asarray([1, 0], dtype=np.float32)
+    db.store_item_embedding("appears-later", "clip32", vector, vector, vector)
+    monkeypatch.setattr(db, "db_connection", tracked_db_connection)
+
+    clock[0] += db._ITEM_MIX_VECTOR_MISSING_TTL_S - 0.1
+    assert db.item_mix_vectors(["appears-later"]) == {}
+    assert query_count == 1
+
+    clock[0] += 0.2
+    refreshed = db.item_mix_vectors(["appears-later"])
+    np.testing.assert_array_equal(refreshed["appears-later"]["mix"], vector)
+    assert query_count == 2
 
 
 def test_no_brief_vector_history_only_and_items_without_vectors_fall_back_safely():

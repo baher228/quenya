@@ -37,6 +37,7 @@ from app.outfits import (
 )
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import (
+    LOOKALIKE_VECTOR_WINDOW,
     _is_secondhand,
     add_exploration,
     drop_lookalikes,
@@ -1081,7 +1082,7 @@ def deck(
     swiped_items = db.profile_swipe_items(active["id"])
     recent_item_ids = db.recent_deck_item_ids(active["id"]) if arm == "embed" else []
     vector_ids = list(dict.fromkeys([
-        *[item["id"] for item in tag_ranked[:800]],
+        *[item["id"] for item in tag_ranked[:LOOKALIKE_VECTOR_WINDOW]],
         *recent_item_ids,
         *[item["id"] for item, _liked in swiped_items],
     ]))
@@ -1094,6 +1095,7 @@ def deck(
             for item_id, vectors in embeddings.items()
             if vectors.get("mix") is not None
         },
+        vector_window=LOOKALIKE_VECTOR_WINDOW,
     )
     brief_vector = db.profile_embedding(active["id"]) if arm == "embed" else None
     history = history_query(swipes, embeddings) if arm == "embed" else None

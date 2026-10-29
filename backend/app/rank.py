@@ -14,6 +14,7 @@ from app.images import ASOS_IMAGE_HOST, normalize_image_url
 DISLIKE_LOOKALIKE_COS = 0.90
 LIKE_LOOKALIKE_COS = 0.95
 COMMON_IMAGE_PRODUCT_THRESHOLD = 5
+LOOKALIKE_VECTOR_WINDOW = 200
 
 _KEY_PREFIX = re.compile(
     r"^(?:style|styles|aesthetic|aesthetics|color|colour|colors|colours|"
@@ -81,7 +82,7 @@ def drop_lookalikes(
     *,
     dislike_cos: float = DISLIKE_LOOKALIKE_COS,
     like_cos: float = LIKE_LOOKALIKE_COS,
-    vector_window: int = 800,
+    vector_window: int = LOOKALIKE_VECTOR_WINDOW,
 ) -> list[dict[str, Any]]:
     keyed_items = []
     image_products: dict[str, set[str]] = {}
