@@ -149,6 +149,19 @@ img {
   text-decoration: none;
 }
 
+.wordmark-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-mark {
+  width: auto;
+  height: 34px;
+  flex: 0 0 auto;
+  color: #cdb48a;
+}
+
 .top-nav {
   display: flex;
   align-items: center;
@@ -1474,6 +1487,19 @@ img {
 
   .wordmark-small {
     font-size: 1.3rem;
+  }
+
+  .brand-mark {
+    height: 38px;
+  }
+
+  .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .top-nav {
