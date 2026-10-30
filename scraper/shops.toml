@@ -2921,7 +2921,7 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -2938,7 +2938,7 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -2955,7 +2955,7 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -2972,7 +2972,7 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -2989,7 +2989,7 @@ currency = "DKK"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -3006,7 +3006,7 @@ currency = "CAD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -3023,7 +3023,7 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -3040,7 +3040,7 @@ currency = "JPY"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
 
 [[shop]]
@@ -3059,5 +3059,5 @@ currency = "USD"
 price_country = "GB"
 status = "pending"
 gender_rule = "default"
-max_requests = 30
+max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
