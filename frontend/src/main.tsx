@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import AdminApp from "./Admin";
+import OpenInvitePage from "./OpenInvite";
 import "./styles.css";
 
 const standalone =
@@ -29,7 +30,11 @@ if (standalone) {
   addEventListener("orientationchange", fit);
 }
 
-const Root = window.location.pathname === "/admin" ? AdminApp : App;
+const Root = window.location.pathname === "/admin"
+  ? AdminApp
+  : window.location.pathname === "/open"
+    ? OpenInvitePage
+    : App;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

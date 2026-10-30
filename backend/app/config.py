@@ -28,6 +28,10 @@ QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )
 QUENYA_APP_URL = os.getenv("QUENYA_APP_URL", "https://app.quenya.co.uk").rstrip("/")
+QUENYA_TESTFLIGHT_URL = os.getenv(
+    "QUENYA_TESTFLIGHT_URL",
+    "https://testflight.apple.com/join/DNNd7Naj",
+).rstrip("/")
 QUENYA_SMTP_HOST = os.getenv("QUENYA_SMTP_HOST") or "smtp.gmail.com"
 QUENYA_SMTP_PORT = int(os.getenv("QUENYA_SMTP_PORT") or "587")
 QUENYA_SMTP_USER = os.getenv("QUENYA_SMTP_USER") or "hello@quenya.co.uk"
