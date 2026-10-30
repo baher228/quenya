@@ -1,9 +1,34 @@
 import io
 
 import numpy as np
+from app import db, embed
 from PIL import Image
 
-from app import db, embed
+
+def test_image_source_uses_r2_public_url_when_enabled(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://supabase.example")
+    monkeypatch.setattr(embed.images, "r2_enabled", lambda: True)
+    monkeypatch.setattr(
+        embed.images,
+        "r2_public_url",
+        lambda path: f"https://r2.example/{path}",
+    )
+
+    assert embed._image_source(
+        {"image_path": "abc.jpg", "image_url": "https://origin.example/abc.jpg"}
+    ) == "https://r2.example/abc.jpg"
+
+
+def test_image_source_uses_supabase_url_when_r2_is_disabled(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://supabase.example/")
+    monkeypatch.setattr(embed.images, "r2_enabled", lambda: False)
+
+    assert embed._image_source(
+        {"image_path": "folder/abc.jpg", "image_url": "https://origin.example/abc.jpg"}
+    ) == (
+        "https://supabase.example/storage/v1/object/public/quenya-img/"
+        "folder/abc.jpg"
+    )
 
 
 def test_items_missing_embeddings_filters_orders_and_limits(monkeypatch, tmp_path):
@@ -93,13 +118,22 @@ def test_backfill_fills_missing_item_vectors_and_resumes(monkeypatch, tmp_path):
         calls["image"] += len(images)
         return np.tile(np.asarray([[0, 1, 0, 0]], dtype=np.float32), (len(images), 1))
 
-    monkeypatch.setattr("httpx.get", lambda *_args, **_kwargs: Response())
+    download = {}
+
+    def fake_get(url, **kwargs):
+        download["url"] = url
+        download.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr("httpx.get", fake_get)
     monkeypatch.setattr(embed, "encode_texts", encode_texts)
     monkeypatch.setattr(embed, "encode_images", encode_images)
 
     embed.backfill(batch_size=1)
     vectors = db.item_embedding_map()["item"]
     assert calls == {"text": 1, "image": 1}
+    assert download["headers"] == {"User-Agent": embed.images.BROWSER_UA}
+    assert download["follow_redirects"] is True
     np.testing.assert_array_equal(vectors["img"], [0, 1, 0, 0])
     np.testing.assert_array_equal(vectors["txt"], [1, 0, 0, 0])
     np.testing.assert_allclose(vectors["mix"], [2**-0.5, 2**-0.5, 0, 0])

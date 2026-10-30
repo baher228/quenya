@@ -1,3 +1,4 @@
+import json
 import re
 from functools import lru_cache
 from typing import Any
@@ -66,6 +67,29 @@ _UK_TOP_RANGES = (
     (16, 18, 4),
     (20, 22, 5),
 )
+
+
+def item_box_from_raw_json(raw_json: Any) -> dict[str, Any] | None:
+    if isinstance(raw_json, str):
+        try:
+            raw_json = json.loads(raw_json)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw_json, dict):
+        return None
+    item_box = raw_json.get("item_box")
+    return item_box if isinstance(item_box, dict) else None
+
+
+def item_box_accessibility_label(raw_json: Any) -> str:
+    item_box = item_box_from_raw_json(raw_json)
+    return str((item_box or {}).get("accessibility_label") or "")
+
+
+def item_box_first_line(raw_json: Any) -> str | None:
+    item_box = item_box_from_raw_json(raw_json)
+    first_line = str((item_box or {}).get("first_line") or "").strip()
+    return first_line or None
 
 
 @lru_cache(maxsize=65536)

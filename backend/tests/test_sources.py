@@ -109,3 +109,62 @@ def test_vinted_normalizer_uses_catalog_fixture():
     assert record["image_url"].startswith("https://images1.vinted.net/")
     assert record["condition_hint"] == "second-hand"
     assert record["gender_hint"] == "w"
+
+
+def test_vinted_normalizer_extracts_brand_from_production_item_box_fixture():
+    fixture = json.loads(
+        (FIXTURES / "vinted_stussy_brand.json").read_text(encoding="utf-8")
+    )
+
+    record = normalize_item(fixture, "stussy top", "w")
+
+    assert record is not None
+    assert record["brand"] == "Stüssy"
+
+
+def test_vinted_normalizer_falls_back_to_item_box_first_line():
+    item = {
+        "id": 456,
+        "title": "Vintage tee",
+        "price": 12,
+        "url": "/items/456-vintage-tee",
+        "photos": [{"url": "https://images.example/tee.jpg"}],
+        "item_box": {
+            "accessibility_label": "Vintage tee, Condition: Good, Size: M",
+            "first_line": "Noah NYC",
+        },
+    }
+
+    record = normalize_item(item, "vintage tee", "m")
+
+    assert record is not None
+    assert record["brand"] == "Noah NYC"
+
+
+def test_vinted_normalizer_preserves_commas_in_accessibility_brand():
+    fixture = json.loads(
+        (FIXTURES / "vinted_stussy_brand.json").read_text(encoding="utf-8")
+    )
+    fixture["item_box"]["accessibility_label"] = (
+        "Top, Brand: Atelier, Inc., Condition: Good, Size: M"
+    )
+
+    record = normalize_item(fixture, "top", "w")
+
+    assert record is not None
+    assert record["brand"] == "Atelier, Inc."
+
+
+def test_vinted_normalizer_without_item_box_has_no_brand():
+    item = {
+        "id": 789,
+        "title": "Vintage tee",
+        "price": 12,
+        "url": "/items/789-vintage-tee",
+        "photos": [{"url": "https://images.example/tee.jpg"}],
+    }
+
+    record = normalize_item(item, "vintage tee", "m")
+
+    assert record is not None
+    assert record["brand"] is None

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app import db
+from app import db, images
 from app.embedding import MODEL_NAME, brief_text, encode_images, encode_texts, item_text
 
 DEFAULT_EMBED_DIR = Path("/home/ubuntu/research/rec/emb/clip32")
@@ -57,6 +57,8 @@ def import_research(directory: Path) -> None:
 
 def _image_source(item: dict) -> str | None:
     image_path = item.get("image_path")
+    if image_path and images.r2_enabled():
+        return images.r2_public_url(image_path)
     base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     if image_path and base_url:
         from urllib.parse import quote
@@ -123,7 +125,12 @@ def backfill(batch_size: int, limit: int = 100000) -> None:
                 if not source:
                     continue
                 try:
-                    response = httpx.get(source, follow_redirects=True, timeout=20)
+                    response = httpx.get(
+                        source,
+                        headers={"User-Agent": images.BROWSER_UA},
+                        follow_redirects=True,
+                        timeout=20,
+                    )
                     response.raise_for_status()
                     with Image.open(BytesIO(response.content)) as opened:
                         image_rows.append(opened.convert("RGB"))

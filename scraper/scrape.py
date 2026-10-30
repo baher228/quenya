@@ -32,7 +32,9 @@ def _prepare_fx_rates(shops):
     rate = None
     try:
         response = httpx.get(
-            "https://api.frankfurter.app/latest?from=EUR&to=GBP", timeout=10
+            "https://api.frankfurter.dev/v1/latest?from=EUR&to=GBP",
+            timeout=10,
+            follow_redirects=True,
         )
         response.raise_for_status()
         rate = float(response.json()["rates"]["GBP"])

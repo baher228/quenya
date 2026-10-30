@@ -145,14 +145,16 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
         json=lambda: {"rates": {"GBP": 0.86}},
     )
 
-    def fake_get(url, timeout):
-        calls.append((url, timeout))
+    def fake_get(url, timeout, follow_redirects):
+        calls.append((url, timeout, follow_redirects))
         return response
 
     monkeypatch.setattr(scrape.httpx, "get", fake_get)
     scrape._prepare_fx_rates([*eur_shops, gbp_shop])
 
-    assert calls == [("https://api.frankfurter.app/latest?from=EUR&to=GBP", 10)]
+    assert calls == [
+        ("https://api.frankfurter.dev/v1/latest?from=EUR&to=GBP", 10, True)
+    ]
     assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [
         0.86,
         0.86,
@@ -164,7 +166,7 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
 def test_fx_fetch_failure_skips_eur_shop(monkeypatch):
     config = shop("eur", adapter="shopify", currency="EUR")
 
-    def fail_get(_url, timeout):
+    def fail_get(_url, timeout, follow_redirects):
         raise ValueError("rate unavailable")
 
     monkeypatch.setattr(scrape.httpx, "get", fail_get)
