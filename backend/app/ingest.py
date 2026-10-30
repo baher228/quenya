@@ -4,6 +4,7 @@ import io
 import json
 import random
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -14,20 +15,47 @@ from app.sources import lv, retail, vinted
 SEED_PATH = BACKEND_ROOT / "seeds" / "seed_queries.txt"
 
 
-def read_seeds(path: Path = SEED_PATH) -> list[tuple[str, str]]:
+def _resolve_seed_path(path: Path) -> Path:
+    path = Path(path)
+    return path if path.is_absolute() else BACKEND_ROOT / path
+
+
+def read_seeds(
+    path: Path = SEED_PATH,
+) -> list[tuple[str, str] | tuple[str, str, str]]:
+    path = _resolve_seed_path(path)
     seeds = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        gender, query = line.split("|", 1)
-        seeds.append((gender.strip(), query.strip()))
+        fields = [field.strip() for field in line.split("|")]
+        if len(fields) not in {2, 3}:
+            raise ValueError(f"invalid seed line: {line!r}")
+        gender, query = fields[:2]
+        required_brand = fields[2] if len(fields) == 3 else ""
+        seeds.append(
+            (gender, query, required_brand)
+            if required_brand
+            else (gender, query)
+        )
     return seeds
 
 
+def _normalize_brand(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return "".join(character for character in normalized if character.isalnum())
+
+
+def _matches_required_brand(record: dict[str, Any], required_brand: str) -> bool:
+    brand = _normalize_brand(record.get("brand"))
+    required = _normalize_brand(required_brand)
+    return bool(brand and required and (brand in required or required in brand))
+
+
 def select_seeds(
-    seeds: list[tuple[str, str]], sample: int | None = None
-) -> list[tuple[str, str]]:
+    seeds: list[tuple[str, str] | tuple[str, str, str]], sample: int | None = None
+) -> list[tuple[str, str] | tuple[str, str, str]]:
     if sample is None or sample >= len(seeds):
         return seeds
     return random.sample(seeds, sample)
@@ -53,6 +81,7 @@ def ingest(
     tag_concurrency: int = 2,
     embed_batch_size: int = 32,
     embed_limit: int = 2000,
+    seed_path: Path = SEED_PATH,
 ) -> dict[str, Any]:
     db.init_db()
     all_records = []
@@ -66,14 +95,22 @@ def ingest(
             lv.trickle, limit, existing_urls=existing_urls
         )
     else:
-        seeds = select_seeds(read_seeds(), sample)
+        seeds = select_seeds(read_seeds(seed_path), sample)
     if source == "retail":
         retail.reset_domain_report()
     if source != "lv":
-        for gender, query in seeds:
+        for seed in seeds:
+            gender, query = seed[:2]
+            required_brand = seed[2] if len(seed) == 3 else None
             try:
                 if source == "vinted":
                     records = vinted.search(query, gender, per_query)
+                    if required_brand:
+                        records = [
+                            record
+                            for record in records
+                            if _matches_required_brand(record, required_brand)
+                        ]
                 else:
                     records = retail.search(query, per_query, gender)
                 all_records.extend(records)
@@ -127,6 +164,7 @@ def ingest(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest listing records into the catalog")
     parser.add_argument("--source", choices=("vinted", "retail", "lv"), required=True)
+    parser.add_argument("--seeds", type=Path, default=SEED_PATH)
     parser.add_argument("--per-query", type=int, default=10)
     parser.add_argument("--sample", type=int)
     parser.add_argument("--limit", type=int, default=25)
@@ -159,6 +197,7 @@ def main() -> None:
             tag_concurrency=args.tag_concurrency,
             embed_batch_size=args.embed_batch_size,
             embed_limit=args.embed_limit,
+            seed_path=_resolve_seed_path(args.seeds),
         ),
         ensure_ascii=False,
         separators=(",", ":"),

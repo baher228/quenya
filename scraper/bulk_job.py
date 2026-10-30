@@ -402,10 +402,9 @@ def scrape_vinted(
     page_limit: int, chunk_size: int, known_urls: set[str], budget: int,
     tag_streak: int,
 ) -> int:
-    from vinted_scraper import VintedScraper
-
     from app.sources import STOCK_PHRASE
     from app.sources.vinted import normalize_item
+    from vinted_scraper import VintedScraper
 
     if state.get("blocked", {}).get("vinted"):
         return tag_streak

@@ -24,7 +24,7 @@ def _prepare_fx_rates(shops):
     eur_shops = [
         shop
         for shop in shops
-        if shop.get("adapter") == "shopify"
+        if shop.get("adapter") in {"shopify", "sitemap_jsonld"}
         and str(shop.get("currency") or "GBP").upper() == "EUR"
     ]
     if not eur_shops:
@@ -475,7 +475,7 @@ def _run(shops, args):
         split = {}
         for row in shop_rows:
             split[row["gender"]] = split.get(row["gender"], 0) + 1
-        return {
+        result = {
             "key": shop["key"],
             "status": status,
             "reason": reason,
@@ -496,6 +496,11 @@ def _run(shops, args):
             "image_checks": checks,
             "output": str(shop_path),
         }
+        if shop.get("price_country"):
+            result["price_country_report"] = shop.get("_price_country_report")
+        if shop.get("adapter") == "sitemap_jsonld":
+            result["sitemap_jsonld_report"] = shop.get("_sitemap_jsonld_report")
+        return result
 
     try:
         with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 8))) as pool:

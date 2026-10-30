@@ -1,4 +1,5 @@
 import json
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -135,6 +136,7 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
     eur_shops = [
         shop("eur-a", adapter="shopify", currency="EUR"),
         shop("eur-b", adapter="shopify", currency="EUR"),
+        shop("eur-sitemap", adapter="sitemap_jsonld", currency="EUR"),
     ]
     gbp_shop = shop("gbp", adapter="shopify")
     calls = []
@@ -151,7 +153,11 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
     scrape._prepare_fx_rates([*eur_shops, gbp_shop])
 
     assert calls == [("https://api.frankfurter.app/latest?from=EUR&to=GBP", 10)]
-    assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [0.86, 0.86]
+    assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [
+        0.86,
+        0.86,
+        0.86,
+    ]
     assert "_fx_rate" not in gbp_shop
 
 
@@ -378,8 +384,10 @@ def test_tee_category_rejects_kids_and_toddlers_anywhere_in_title(title, product
             "t-shirt",
         ),
         (
-            "Vintage Polo Ralph Lauren Women's Heavyweight Striped Woven Crewneck Henley "
-            "T-Shirt - L",
+            (
+                "Vintage Polo Ralph Lauren Women's Heavyweight Striped Woven Crewneck Henley "
+                "T-Shirt - L"
+            ),
             "T-Shirts",
             (),
             "t-shirt",
@@ -560,6 +568,67 @@ def test_shopify_tee_colour_splitting_and_vendor_brand():
     ]
 
 
+def test_oipolloi_tees_include_feed_and_brand_collection_with_dimensioned_image():
+    config = shop(
+        "oipolloi",
+        "Oi Polloi",
+        "shopify",
+        "oipolloi.com",
+        max_pages=1,
+        brand_from_vendor=True,
+        _category_set="tees",
+        tee_collections=[{"handle": "carhartt-wip"}],
+        tee_include_main_feed=True,
+    )
+    product = {
+        "id": 1,
+        "title": "Main Feed Graphic Tee",
+        "product_type": "T-Shirts",
+        "vendor": "Other Brand",
+        "handle": "main-feed-graphic-tee",
+        "tags": [],
+        "images": [{"src": "https://cdn.shopify.com/main-feed-tee.jpg"}],
+        "variants": [{"id": 1, "available": True, "price": "25.00"}],
+        "options": [{"name": "Size"}],
+    }
+    carhartt_product = {
+        "id": 2,
+        "title": "Carhartt WIP S/S Pocket T-Shirt Dark Navy",
+        "product_type": "S/S TEES",
+        "vendor": "Carhartt WIP",
+        "handle": "carhartt-wip-pocket-t-shirt",
+        "tags": ["in-stock"],
+        "images": [
+            {
+                "src": (
+                    "https://cdn.shopify.com/s/files/1/0491/9773/files/"
+                    "Carhartt_WIP_Pocket_T-Shirt_Front_1__2800x2800_q90_qc1.webp"
+                )
+            }
+        ],
+        "variants": [{"id": 2, "available": True, "price": "30.00"}],
+        "options": [{"name": "Size"}],
+    }
+    session = FakeSession(
+        [
+            '{"currency":"GBP","domain":"oipolloi.com"}',
+            json.dumps({"products": [product]}),
+            json.dumps({"products": [carhartt_product]}),
+        ]
+    )
+
+    rows = shopify.scrape(config, session)
+
+    assert [row["brand"] for row in rows] == ["Other Brand", "Carhartt WIP"]
+    assert [row["title"] for row in rows] == [
+        "Main Feed Graphic Tee",
+        "Carhartt WIP S/S Pocket T-Shirt Dark Navy",
+    ]
+    assert "__2800x2800_" in rows[1]["image_url_original"]
+    assert "/products.json?" in session.requests[1]["url"]
+    assert "/collections/carhartt-wip/products.json?" in session.requests[2]["url"]
+
+
 def test_jsonld_uses_tee_pages():
     body = """<script type="application/ld+json">{
       "@type":"Product","name":"Logo Tee",
@@ -673,6 +742,138 @@ def test_shopify_rejects_non_gbp_before_products_request():
     assert shopify.scrape(config, fake) == []
     assert config["_status"] == "non_gbp"
     assert len(fake.requests) == 1
+
+
+def test_shopify_price_country_uses_gbp_product_page_price():
+    localized_page = (
+        '<script type="application/ld+json">'
+        '{"@type":"Product","offers":{"@type":"Offer","priceCurrency":"GBP",'
+        '"price":"35.00","availability":"https://schema.org/InStock"}}'
+        "</script>"
+    )
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-usd.json"),
+            fixture("shopify-products.json"),
+            localized_page,
+        ]
+    )
+    config = shop(
+        "market-shop",
+        "Market Shop",
+        "shopify",
+        "example-shop.test",
+        currency="USD",
+        price_country="GB",
+        max_pages=1,
+    )
+
+    rows = shopify.scrape(config, fake)
+
+    assert len(rows) == 1
+    assert rows[0]["price_gbp"] == 35
+    assert rows[0]["record"]["raw_json"]["price_source"] == "shopify_market_gbp"
+    assert fake.requests[-1]["url"].endswith("?country=GB")
+    assert config["_price_country_report"] == {
+        "country": "GB",
+        "currency_required": "GBP",
+        "checked": 1,
+        "kept": 1,
+        "skipped_no_gbp": 0,
+        "unverified": 0,
+    }
+
+
+def test_shopify_price_country_skips_non_gbp_product_page_price():
+    localized_page = (
+        '<script type="application/ld+json">'
+        '{"@type":"Product","offers":{"@type":"Offer","priceCurrency":"USD",'
+        '"price":"35.00","availability":"https://schema.org/InStock"}}'
+        "</script>"
+    )
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-usd.json"),
+            fixture("shopify-products.json"),
+            localized_page,
+        ]
+    )
+    config = shop(
+        "market-shop",
+        "Market Shop",
+        "shopify",
+        "example-shop.test",
+        currency="USD",
+        price_country="GB",
+        max_pages=1,
+    )
+
+    assert shopify.scrape(config, fake) == []
+    assert config["_price_country_report"]["skipped_no_gbp"] == 1
+    assert config["_price_country_report"]["kept"] == 0
+
+
+def test_shopify_localized_gbp_price_reads_open_graph_metadata():
+    html = (
+        '<meta property="og:price:currency" content="GBP">'
+        '<meta property="og:price:amount" content="44.00">'
+    )
+
+    assert shopify._localized_gbp_price(html) == 44
+
+
+def test_tee_shop_configuration_parses_with_expected_market_settings():
+    root = Path(__file__).resolve().parents[2]
+    shops = tomllib.loads(
+        (root / "scraper" / "shops.toml").read_text(encoding="utf-8")
+    )["shop"]
+    by_key = {entry["key"]: entry for entry in shops}
+
+    assert all(
+        by_key[key]["category_sets"] == ["apparel", "tees"]
+        for key in (
+            "buttergoods",
+            "patta",
+            "poptradingcompany",
+            "storymfg",
+            "kith_eu",
+            "satisfy",
+            "polarskate",
+            "stanray",
+        )
+    )
+    assert by_key["dailypaper"]["enabled"] is True
+    assert by_key["dailypaper"]["currency"] == "EUR"
+    assert by_key["woodwood"]["enabled"] is False
+    assert by_key["poptradingcompany"]["tee_collections"] == [{"handle": "t-shirts"}]
+    assert by_key["goodhood"]["tee_collections"] == [
+        {"handle": "t-shirts"},
+        {"handle": "noah"},
+        {"handle": "awake-ny"},
+        {"handle": "cav-empt"},
+        {"handle": "wacko-maria"},
+    ]
+    assert by_key["oipolloi"]["tee_include_main_feed"] is True
+    assert by_key["oipolloi"]["tee_collections"] == [
+        {"handle": "carhartt-wip"},
+        {"handle": "gramicci"},
+    ]
+    assert by_key["hockey"]["collections"] == [{"handle": "hockey"}]
+    assert by_key["hockey"]["tee_collections"] == [{"handle": "hockey"}]
+    assert {
+        entry["key"] for entry in shops if entry.get("price_country") == "GB"
+    } == {
+        "braindead",
+        "fuckingawesome",
+        "denimtears",
+        "sportyandrich",
+        "norseprojects",
+        "dime",
+        "pleasures",
+        "neighborhood",
+        "hockey",
+    }
+    assert by_key["neighborhood"]["currency"] == "JPY"
 
 
 def test_shopify_gender_clothing_and_variant_availability():
