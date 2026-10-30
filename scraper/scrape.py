@@ -475,7 +475,7 @@ def _run(shops, args):
         split = {}
         for row in shop_rows:
             split[row["gender"]] = split.get(row["gender"], 0) + 1
-        return {
+        result = {
             "key": shop["key"],
             "status": status,
             "reason": reason,
@@ -496,6 +496,9 @@ def _run(shops, args):
             "image_checks": checks,
             "output": str(shop_path),
         }
+        if shop.get("price_country"):
+            result["price_country_report"] = shop.get("_price_country_report")
+        return result
 
     try:
         with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 8))) as pool:

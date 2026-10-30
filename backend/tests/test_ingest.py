@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from app import ingest
 
@@ -22,13 +23,67 @@ def test_select_seeds_samples_requested_count_without_duplicates(monkeypatch):
     assert ingest.select_seeds(seeds) is seeds
 
 
+def test_read_seeds_preserves_two_field_entries(tmp_path):
+    path = tmp_path / "queries.txt"
+    path.write_text("# gender|query\nm|graphic tee\nw|vintage top\n", encoding="utf-8")
+
+    assert ingest.read_seeds(path) == [("m", "graphic tee"), ("w", "vintage top")]
+
+
+def test_read_seeds_accepts_brand_field_and_relative_backend_path(
+    monkeypatch, tmp_path
+):
+    seed_dir = tmp_path / "seeds"
+    seed_dir.mkdir()
+    (seed_dir / "brands.txt").write_text(
+        "m|stussy tee|Stüssy\nm|noah tee|Noah\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(ingest, "BACKEND_ROOT", tmp_path)
+
+    assert ingest.read_seeds(Path("seeds/brands.txt")) == [
+        ("m", "stussy tee", "Stüssy"),
+        ("m", "noah tee", "Noah"),
+    ]
+
+
+def test_required_brand_matching_normalizes_accents_and_containment():
+    assert ingest._matches_required_brand({"brand": "Stussy"}, "Stüssy")
+    assert ingest._matches_required_brand({"brand": "Carhartt WIP"}, "Carhartt")
+    assert ingest._matches_required_brand({"brand": "Noah NYC"}, "Noah")
+    assert not ingest._matches_required_brand({"brand": "Nike"}, "Noah")
+    assert not ingest._matches_required_brand({}, "Noah")
+
+
+def test_ingest_filters_vinted_records_for_brand_seed(monkeypatch):
+    records = [
+        {**_record("stussy", "logo tee"), "brand": "Stussy"},
+        {**_record("wrong-brand", "logo tee"), "brand": "Nike"},
+        {**_record("missing-brand", "logo tee"), "brand": None},
+    ]
+    inserted = []
+    monkeypatch.setattr(
+        ingest, "read_seeds", lambda _path: [("m", "logo tee", "Stüssy")]
+    )
+    monkeypatch.setattr(ingest.db, "init_db", lambda: None)
+    monkeypatch.setattr(ingest.db, "source_urls", lambda: set())
+    monkeypatch.setattr(
+        ingest.db, "insert_items", lambda items: inserted.extend(items) or len(items)
+    )
+    monkeypatch.setattr(ingest.vinted, "search", lambda *_args: records)
+
+    summary = ingest.ingest("vinted", 5)
+
+    assert summary["queries"] == 1
+    assert [record["id"] for record in inserted] == ["stussy"]
+
+
 def test_ingest_tags_new_items_embeds_and_continues_after_query_error(monkeypatch):
     records = [_record("new-item", "band tee")]
     calls = {"tag": None, "tag_kwargs": None, "embed": None}
     monkeypatch.setattr(
         ingest,
         "read_seeds",
-        lambda: [("m", "band tee"), ("w", "broken query")],
+        lambda _path: [("m", "band tee"), ("w", "broken query")],
     )
     monkeypatch.setattr(
         ingest.db,
@@ -107,7 +162,16 @@ def test_main_prints_one_compact_json_summary_line(monkeypatch, capsys):
     monkeypatch.setattr(
         ingest.sys,
         "argv",
-        ["ingest", "--source", "retail", "--sample", "2", "--tag"],
+        [
+            "ingest",
+            "--source",
+            "retail",
+            "--sample",
+            "2",
+            "--tag",
+            "--seeds",
+            "seeds/vinted_brand_tees.txt",
+        ],
     )
 
     ingest.main()
@@ -117,3 +181,6 @@ def test_main_prints_one_compact_json_summary_line(monkeypatch, capsys):
     assert output.out.count("\n") == 1
     assert json.loads(output.out) == {"source": "retail", "queries": 2}
     assert calls["kwargs"]["embed_limit"] == 2000
+    assert calls["kwargs"]["seed_path"] == (
+        ingest.BACKEND_ROOT / "seeds/vinted_brand_tees.txt"
+    )

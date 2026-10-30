@@ -1,0 +1,43 @@
+# gender|query|required brand (matched against Vinted brand_title, case/accent-insensitive)
+m|stussy graphic tee|Stüssy
+m|stussy t-shirt|Stüssy
+m|carhartt wip graphic t-shirt|Carhartt
+m|noah t-shirt|Noah
+m|aime leon dore t-shirt|Aimé Leon Dore
+m|brain dead t-shirt|Brain Dead
+m|awake ny t-shirt|Awake
+m|butter goods t-shirt|Butter Goods
+m|yardsale t-shirt|Yardsale
+m|broken planet t-shirt|Broken Planet
+m|trapstar t-shirt|Trapstar
+m|places plus faces t-shirt|Places+Faces
+m|daily paper t-shirt|Daily Paper
+m|patta t-shirt|Patta
+m|pop trading company t-shirt|Pop Trading
+m|norse projects t-shirt|Norse Projects
+m|our legacy t-shirt|Our Legacy
+m|wood wood t-shirt|Wood Wood
+m|sporty and rich t-shirt|Sporty & Rich
+m|palace graphic tee|Palace
+m|corteiz t-shirt|Corteiz
+m|supreme graphic tee|Supreme
+m|fucking awesome t-shirt|Fucking Awesome
+m|bianca chandon t-shirt|Bianca Chandon
+m|dime mtl t-shirt|Dime
+m|polar skate co t-shirt|Polar
+m|kith t-shirt|Kith
+m|cav empt t-shirt|Cav Empt
+m|stone island t-shirt|Stone Island
+m|denim tears t-shirt|Denim Tears
+m|sky high farm t-shirt|Sky High Farm
+m|neighborhood t-shirt|Neighborhood
+m|wacko maria t-shirt|Wacko Maria
+m|human made t-shirt|Human Made
+m|bape graphic tee|A Bathing Ape
+m|undercover t-shirt|Undercover
+m|story mfg t-shirt|Story
+m|satisfy running t-shirt|Satisfy
+w|stussy t-shirt women|Stüssy
+w|sporty and rich t-shirt women|Sporty & Rich
+w|daily paper t-shirt women|Daily Paper
+w|carhartt wip t-shirt women|Carhartt

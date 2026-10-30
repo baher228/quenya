@@ -1,4 +1,5 @@
 import json
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -673,6 +674,125 @@ def test_shopify_rejects_non_gbp_before_products_request():
     assert shopify.scrape(config, fake) == []
     assert config["_status"] == "non_gbp"
     assert len(fake.requests) == 1
+
+
+def test_shopify_price_country_uses_gbp_product_page_price():
+    localized_page = (
+        '<script type="application/ld+json">'
+        '{"@type":"Product","offers":{"@type":"Offer","priceCurrency":"GBP",'
+        '"price":"35.00","availability":"https://schema.org/InStock"}}'
+        "</script>"
+    )
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-usd.json"),
+            fixture("shopify-products.json"),
+            localized_page,
+        ]
+    )
+    config = shop(
+        "market-shop",
+        "Market Shop",
+        "shopify",
+        "example-shop.test",
+        currency="USD",
+        price_country="GB",
+        max_pages=1,
+    )
+
+    rows = shopify.scrape(config, fake)
+
+    assert len(rows) == 1
+    assert rows[0]["price_gbp"] == 35
+    assert rows[0]["record"]["raw_json"]["price_source"] == "shopify_market_gbp"
+    assert fake.requests[-1]["url"].endswith("?country=GB")
+    assert config["_price_country_report"] == {
+        "country": "GB",
+        "currency_required": "GBP",
+        "checked": 1,
+        "kept": 1,
+        "skipped_no_gbp": 0,
+        "unverified": 0,
+    }
+
+
+def test_shopify_price_country_skips_non_gbp_product_page_price():
+    localized_page = (
+        '<script type="application/ld+json">'
+        '{"@type":"Product","offers":{"@type":"Offer","priceCurrency":"USD",'
+        '"price":"35.00","availability":"https://schema.org/InStock"}}'
+        "</script>"
+    )
+    fake = FakeSession(
+        [
+            fixture("shopify-meta-usd.json"),
+            fixture("shopify-products.json"),
+            localized_page,
+        ]
+    )
+    config = shop(
+        "market-shop",
+        "Market Shop",
+        "shopify",
+        "example-shop.test",
+        currency="USD",
+        price_country="GB",
+        max_pages=1,
+    )
+
+    assert shopify.scrape(config, fake) == []
+    assert config["_price_country_report"]["skipped_no_gbp"] == 1
+    assert config["_price_country_report"]["kept"] == 0
+
+
+def test_shopify_localized_gbp_price_reads_open_graph_metadata():
+    html = (
+        '<meta property="og:price:currency" content="GBP">'
+        '<meta property="og:price:amount" content="44.00">'
+    )
+
+    assert shopify._localized_gbp_price(html) == 44
+
+
+def test_tee_shop_configuration_parses_with_expected_market_settings():
+    root = Path(__file__).resolve().parents[2]
+    shops = tomllib.loads(
+        (root / "scraper" / "shops.toml").read_text(encoding="utf-8")
+    )["shop"]
+    by_key = {entry["key"]: entry for entry in shops}
+
+    assert all(
+        by_key[key]["category_sets"] == ["apparel", "tees"]
+        for key in (
+            "buttergoods",
+            "patta",
+            "poptradingcompany",
+            "storymfg",
+            "kith_eu",
+            "satisfy",
+            "polarskate",
+            "stanray",
+        )
+    )
+    assert by_key["dailypaper"]["enabled"] is True
+    assert by_key["dailypaper"]["currency"] == "EUR"
+    assert by_key["poptradingcompany"]["tee_collections"] == [{"handle": "t-shirts"}]
+    assert by_key["hockey"]["collections"] == [{"handle": "hockey"}]
+    assert by_key["hockey"]["tee_collections"] == [{"handle": "hockey"}]
+    assert {
+        entry["key"] for entry in shops if entry.get("price_country") == "GB"
+    } == {
+        "braindead",
+        "fuckingawesome",
+        "denimtears",
+        "sportyandrich",
+        "norseprojects",
+        "dime",
+        "pleasures",
+        "neighborhood",
+        "hockey",
+    }
+    assert by_key["neighborhood"]["currency"] == "JPY"
 
 
 def test_shopify_gender_clothing_and_variant_availability():

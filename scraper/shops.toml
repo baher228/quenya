@@ -377,13 +377,15 @@ brand = "Daily Paper"
 host = "www.dailypaperclothing.com"
 domain = "www.dailypaperclothing.com"
 adapter = "shopify"
-enabled = false
+enabled = true
 where = "any"
 group = "streetwear"
-status = "non_gbp"
-note = "Probe 2026-10-25: meta.json currency EUR."
+category_sets = ["apparel", "tees"]
+status = "pending"
+note = "Probe 2026-10-26: /products.json 200 via VPS; meta.json EUR; UK shipping listed."
 gender_rule = "default"
 default_gender = "m"
+currency = "EUR"
 max_pages = 20
 max_requests = 30
 
@@ -2779,3 +2781,283 @@ status = "pending"
 note = "Tee probe 2026-10-26"
 gender_rule = "men"
 max_requests = 40
+
+[[shop]]
+key = "buttergoods"
+brand = "Butter Goods"
+host = "uk.buttergoods.com"
+domain = "uk.buttergoods.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "patta"
+brand = "Patta"
+host = "patta.co"
+domain = "patta.co"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "poptradingcompany"
+brand = "Pop Trading Company"
+host = "poptradingcompany.com"
+domain = "poptradingcompany.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+currency = "EUR"
+tee_collections = [{ handle = "t-shirts" }]
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "storymfg"
+brand = "Story mfg."
+host = "storymfg.com"
+domain = "storymfg.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "kith_eu"
+brand = "Kith"
+host = "eu.kith.com"
+domain = "eu.kith.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+currency = "EUR"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "satisfy"
+brand = "Satisfy"
+host = "satisfyrunning.com"
+domain = "satisfyrunning.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+currency = "EUR"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "polarskate"
+brand = "Polar Skate Co."
+host = "polarskateco.com"
+domain = "polarskateco.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+currency = "EUR"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "stanray"
+brand = "Stan Ray"
+host = "stanray.com"
+domain = "stanray.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "Probe 2026-10-26: public feed and representative image returned 200; not imported yet."
+
+[[shop]]
+key = "braindead"
+brand = "Brain Dead"
+host = "wearebraindead.com"
+domain = "wearebraindead.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "fuckingawesome"
+brand = "Fucking Awesome"
+host = "faworldentertainment.com"
+domain = "faworldentertainment.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "denimtears"
+brand = "Denim Tears"
+host = "denimtears.com"
+domain = "denimtears.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "sportyandrich"
+brand = "Sporty & Rich"
+host = "sportyandrich.com"
+domain = "sportyandrich.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "norseprojects"
+brand = "Norse Projects"
+host = "norseprojects.com"
+domain = "norseprojects.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+currency = "DKK"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "dime"
+brand = "Dime"
+host = "dimemtl.com"
+domain = "dimemtl.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "CAD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "pleasures"
+brand = "Pleasures"
+host = "pleasuresnow.com"
+domain = "pleasuresnow.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "neighborhood"
+brand = "Neighborhood"
+host = "www.neighborhood.jp"
+domain = "www.neighborhood.jp"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "JPY"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "hockey"
+brand = "Hockey"
+host = "faworldentertainment.com"
+domain = "faworldentertainment.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+collections = [{ handle = "hockey" }]
+tee_collections = [{ handle = "hockey" }]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+max_requests = 30
+note = "UK product endpoint verified with GBP pricing."
