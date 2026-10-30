@@ -1,10 +1,11 @@
 import base64
 import io
 import sqlite3
+from contextlib import contextmanager
 
 from PIL import Image
 
-from app import db, images, phase2_api, tagging
+from app import backfill_previews, db, images, phase2_api, tagging
 from app.backfill_previews import backfill
 
 
@@ -105,17 +106,54 @@ def test_backfill_dry_run_and_real_run_skip_failures(monkeypatch, tmp_path):
     content = _image_bytes()
 
     def download(path: str) -> bytes:
+        assert active_connections == 0
         if path == f"{images.image_key(records[1]['image_url'])}.jpg":
             raise OSError("missing image")
         return content
 
     monkeypatch.setattr(images, "display_storage_enabled", lambda: True)
     monkeypatch.setattr(images, "download_display_object", download)
-    dry_run = backfill(dry_run=True, batch_size=1)
+    original_db_connection = db.db_connection
+    active_connections = 0
+    connection_statements = []
+
+    @contextmanager
+    def tracked_db_connection():
+        nonlocal active_connections
+        with original_db_connection() as connection:
+            active_connections += 1
+            statements = []
+
+            class TrackedConnection:
+                def execute(self, query, params=()):
+                    statements.append(query.lstrip().split(maxsplit=1)[0].upper())
+                    return connection.execute(query, params)
+
+            try:
+                yield TrackedConnection()
+            finally:
+                active_connections -= 1
+                connection_statements.append(statements)
+
+    sleep_calls = []
+    with monkeypatch.context() as patcher:
+        patcher.setattr(db, "db_connection", tracked_db_connection)
+        dry_run = backfill(dry_run=True, batch_size=1)
+
     assert dry_run == {"scanned": 3, "built": 2, "failed": 1, "updated": 0}
     assert all(db.get_item(record["id"])["image_preview"] is None for record in records)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(db, "db_connection", tracked_db_connection)
+        patcher.setattr(backfill_previews.time, "sleep", sleep_calls.append)
+        result = backfill(batch_size=2, limit=3, sleep_seconds=0.25)
 
-    result = backfill(batch_size=2, limit=3)
+    assert sleep_calls == [0.25]
+    assert active_connections == 0
+    assert connection_statements == [
+        ["SELECT"], ["SELECT"], ["SELECT"], ["SELECT"],
+        ["SELECT"], ["UPDATE"], ["SELECT"], ["UPDATE"],
+    ]
+
     assert result == {"scanned": 3, "built": 2, "failed": 1, "updated": 2}
     assert db.get_item("a-item")["image_preview"].startswith("data:image/jpeg;base64,")
     assert db.get_item("b-item")["image_preview"] is None
