@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { api, gbp, img } from "./api";
+import { api, gbp } from "./api";
+import { ItemImage } from "./ItemImage";
 import { ErrorBox, Loading, Provenance } from "./ui";
 import type { Item, Outfit } from "./types";
 
@@ -101,7 +102,7 @@ export function OutfitsScreen({ boardId, outfits, locked, setLocked, loading, er
                   {!!major.length && <div className="pieces">
                     {major.map((p, index) => (
                       <figure key={p.id} className={"piece" + (keep.includes(p.id) ? " locked" : "") + (major.length % 2 === 1 && index === 0 ? " wide" : "")}>
-                        <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><img src={img(p)} alt={p.title} loading="lazy" /></button>
+                        <button className="piece-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}><ItemImage item={p} alt={p.title} loading="lazy" /></button>
                         <figcaption><b>{p.brand || p.tags?.category || "Piece"}</b><span>{gbp(p.price_gbp)}</span></figcaption>
                         <button className="pbtn lock" onClick={() => toggleLock(o, p.id)} aria-pressed={keep.includes(p.id)}>{keep.includes(p.id) ? "Locked" : "Lock"}</button>
                         <button className="pbtn swap" disabled={!!busy} onClick={() => swap(o, p.id)}>
@@ -113,7 +114,7 @@ export function OutfitsScreen({ boardId, outfits, locked, setLocked, loading, er
                     {minor.map(p => (
                       <div key={p.id} className={"minor-row" + (keep.includes(p.id) ? " locked" : "")}>
                         <button className="minor-hit" onClick={() => onOpenItem(p)} aria-label={`Details for ${p.title}`}>
-                          <img src={img(p)} alt={p.title} loading="lazy" />
+                          <ItemImage item={p} alt={p.title} loading="lazy" />
                         </button>
                         <button className="minor-copy" onClick={() => onOpenItem(p)}>
                           <span>{p.brand ? `${p.brand} · ` : ""}{p.title}</span>

@@ -27,11 +27,18 @@ def _local_tagger() -> LocalTagger:
     return LocalTagger.from_db()
 
 
+def _set_image_preview(item: dict[str, Any], content: bytes) -> None:
+    if not item.get("image_preview"):
+        item["image_preview"] = images.preview_data_url(content)
+
+
 def _image_input(item: dict[str, Any]) -> str | Image.Image | None:
     stored_path = item.get("image_path")
     if stored_path:
         path = Path(str(stored_path))
         if path.is_file():
+            if not item.get("image_preview"):
+                _set_image_preview(item, path.read_bytes())
             return str(path)
         if (
             images.display_storage_enabled()
@@ -40,6 +47,7 @@ def _image_input(item: dict[str, Any]) -> str | Image.Image | None:
         ):
             try:
                 content = images.download_display_object(str(stored_path))
+                _set_image_preview(item, content)
                 with Image.open(io.BytesIO(content)) as opened:
                     return ImageOps.exif_transpose(opened).convert("RGB").copy()
             except (httpx.HTTPError, OSError, RuntimeError):
@@ -59,10 +67,13 @@ def _image_input(item: dict[str, Any]) -> str | Image.Image | None:
             from urllib.parse import unquote_to_bytes
 
             content = unquote_to_bytes(payload)
+        _set_image_preview(item, content)
         with Image.open(io.BytesIO(content)) as opened:
             return ImageOps.exif_transpose(opened).convert("RGB").copy()
     images.image_data_url(image_url)
     cached_path = images.image_path(image_url)
+    if cached_path.is_file() and not item.get("image_preview"):
+        _set_image_preview(item, cached_path.read_bytes())
     return str(cached_path) if cached_path.is_file() else None
 
 
@@ -84,11 +95,15 @@ def user_content(item: dict[str, Any], note: str | None = None) -> list[dict[str
     if note:
         text += f"\nReviewer correction: {note}"
     item["image_path"] = str(images.image_path(item["image_url"]))
+    image_data_url = images.image_data_url(item["image_url"])
+    cached_path = Path(item["image_path"])
+    if cached_path.is_file() and not item.get("image_preview"):
+        _set_image_preview(item, cached_path.read_bytes())
     return [
         {"type": "text", "text": text},
         {
             "type": "image_url",
-            "image_url": {"url": images.image_data_url(item["image_url"])},
+            "image_url": {"url": image_data_url},
         },
     ]
 

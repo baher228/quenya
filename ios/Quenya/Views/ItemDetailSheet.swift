@@ -20,7 +20,7 @@ struct ItemDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    RemoteImage(path: item.imagePath)
+                    RemoteImage(path: item.imagePath, preview: item.imagePreview)
                         .frame(height: 310)
                         .clipShape(RoundedRectangle(cornerRadius: 22))
                     Text(item.brand ?? "Unbranded")

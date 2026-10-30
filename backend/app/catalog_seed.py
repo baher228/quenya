@@ -74,7 +74,10 @@ def seed(per_category: int, tavily_budget: int, old_money_queries: int) -> dict:
             })
             try:
                 tags, meta = future.result()
-                db.save_tags(item["id"], tags.model_dump(), meta.request_id, item["image_path"])
+                db.save_tags(
+                    item["id"], tags.model_dump(), meta.request_id, item["image_path"],
+                    image_preview=item.get("image_preview"),
+                )
                 source_report["tagged"] += 1
             except Exception as exc:
                 db.save_tag_error(item["id"], str(exc))

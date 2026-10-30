@@ -176,13 +176,14 @@ struct Item: Codable, Identifiable, Equatable {
     var condition: String?
     var image: String?
     var imageUrl: String?
+    var imagePreview: String?
     var tags: ItemTags?
     var fetchedAt: String?
     var origin: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, brand, priceGbp, size, source, sourceUrl
-        case condition, image, imageUrl, tags, fetchedAt, origin
+        case condition, image, imageUrl, imagePreview, tags, fetchedAt, origin
     }
 
     var imagePath: String? { image ?? imageUrl }
@@ -191,7 +192,8 @@ struct Item: Codable, Identifiable, Equatable {
         id: String, title: String, brand: String? = nil, priceGbp: Double = 0,
         size: String? = nil, source: String = "", sourceUrl: String = "",
         condition: String? = nil, image: String? = nil, imageUrl: String? = nil,
-        tags: ItemTags? = nil, fetchedAt: String? = nil, origin: String? = nil
+        imagePreview: String? = nil, tags: ItemTags? = nil, fetchedAt: String? = nil,
+        origin: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -203,6 +205,7 @@ struct Item: Codable, Identifiable, Equatable {
         self.condition = condition
         self.image = image
         self.imageUrl = imageUrl
+        self.imagePreview = imagePreview
         self.tags = tags
         self.fetchedAt = fetchedAt
         self.origin = origin
@@ -220,6 +223,7 @@ struct Item: Codable, Identifiable, Equatable {
         condition = try c.decodeIfPresent(String.self, forKey: .condition)
         image = try c.decodeIfPresent(String.self, forKey: .image)
         imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        imagePreview = try c.decodeIfPresent(String.self, forKey: .imagePreview)
         tags = try c.decodeIfPresent(ItemTags.self, forKey: .tags)
         fetchedAt = try c.decodeIfPresent(String.self, forKey: .fetchedAt)
         origin = try c.decodeIfPresent(String.self, forKey: .origin)

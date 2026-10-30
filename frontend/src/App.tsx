@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errText, gbp, img, type User } from "./api";
+import { api, errText, gbp, type User } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
 import { cacheKey, clearAll as clearCache, get as getCache, remove as removeCache, set as setCache } from "./cache";
 import { DeckScreen } from "./Deck";
 import { FindScreen } from "./Find";
+import { ItemImage } from "./ItemImage";
 import { OutfitsScreen, REASONS } from "./Outfits";
 import { TasteScreen } from "./Taste";
 import { ErrorBox, Loading, Provenance } from "./ui";
@@ -520,7 +521,7 @@ function ItemSheet({ item, onClose, onCorrected }: { item: Item; onClose: () => 
   return (
     <>
       <div className="item-head">
-        <img src={img(item)} alt={item.title} />
+        <ItemImage item={item} alt={item.title} />
         <div>
           <p className="brand">{item.brand || "Unbranded"}</p>
           <p className="h3">{item.title}</p>

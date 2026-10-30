@@ -242,7 +242,7 @@ private struct SwipeCard: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
-                RemoteImage(path: item.imagePath)
+                RemoteImage(path: item.imagePath, preview: item.imagePreview)
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.12), .black.opacity(0.9)],
                     startPoint: .center,

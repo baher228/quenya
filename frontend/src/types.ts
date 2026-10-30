@@ -39,6 +39,7 @@ export interface Item {
   condition?: string | null;
   image?: string;
   image_url?: string;
+  image_preview?: string | null;
   tags: ItemTags | null;
   fetched_at?: string;
   origin?: "snapshot" | "live";
