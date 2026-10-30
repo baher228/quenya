@@ -65,6 +65,10 @@ export default function App() {
   }, [tab, picking, activeBoard?.id]);
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
   useEffect(() => {
+    if (window.location.pathname === "/open") {
+      setAuthLoading(false);
+      return;
+    }
     const start = async () => {
       try {
         const invite = new URLSearchParams(window.location.search).get("invite");

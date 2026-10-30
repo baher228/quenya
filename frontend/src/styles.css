@@ -329,6 +329,18 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 .admin-sign-in-card{width:min(420px,100%);padding:32px;background:var(--phone);border:1px solid var(--line);border-radius:24px;box-shadow:0 32px 70px -36px #000}
 .admin-sign-in-card .eyebrow{margin-top:0}
 .admin-sign-in-copy{margin-top:10px;color:var(--mute);font-size:13px}
+.invite-landing-stage{padding:0}
+.invite-landing{width:min(390px,100vw);height:min(844px,100dvh)}
+.invite-landing-body{display:flex;align-items:center;justify-content:center}
+.invite-landing-content{width:100%;max-width:420px;margin:auto 0}
+.invite-landing .eyebrow{margin-top:0;letter-spacing:.12em;text-transform:uppercase}
+.invite-landing .h1{margin-top:10px}
+.invite-landing-copy{margin-top:12px}
+.invite-testflight{display:block;margin-top:16px;text-align:center;color:var(--sage);font-size:13px;text-underline-offset:3px}
+.invite-fallback{border:1px solid var(--line)}
+.invite-copy-error{margin-top:8px}
+.invite-web-link{display:block;margin-top:20px;text-align:center;color:var(--mute);font-size:12px;text-underline-offset:3px}
+.invite-incomplete{margin-top:16px;color:var(--mute)}
 .admin-form{display:grid;gap:2px;margin-top:18px}
 .admin-form .field{margin-top:8px}
 .admin-form input{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--surf2);font-size:16px}

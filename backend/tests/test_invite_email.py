@@ -108,7 +108,25 @@ def test_approved_invite_is_sent_over_smtp(isolated_invite_email_db, monkeypatch
     assert message["To"] == "ada@example.com"
     assert "hello@quenya.co.uk" in message["From"]
     assert message["Subject"] == "Your Quenya tester invite"
-    assert invite_url in message.get_body(preferencelist=("plain",)).get_content()
+    token = invite_url.removeprefix(f"{config.QUENYA_APP_URL}/?invite=")
+    open_url = f"{config.QUENYA_APP_URL}/open?invite={token}"
+    text = message.get_body(preferencelist=("plain",)).get_content()
+    html_body = message.get_body(preferencelist=("html",)).get_content()
+    assert "You're in. Quenya runs as an iPhone app in beta:" in text
+    assert (
+        "1. Install it with TestFlight: "
+        f"{config.QUENYA_TESTFLIGHT_URL} "
+        "(this opens Apple's TestFlight app; install that first if asked)."
+    ) in text
+    assert (
+        "2. Back on your iPhone, open your personal sign-in link: "
+        f"{open_url}"
+    ) in text
+    assert "don't forward it" in text
+    assert config.QUENYA_TESTFLIGHT_URL in html_body
+    assert open_url in html_body
+    assert invite_url not in text
+    assert invite_url not in html_body
 
 
 def test_missing_smtp_password_returns_503_without_connecting(
@@ -270,11 +288,15 @@ def test_invite_rotation_invalidates_the_old_email_link(
 def test_invite_email_escapes_name_in_html():
     subject, text, html_body = mailer.invite_email(
         "<Ada & Co>",
-        "https://app.quenya.co.uk/?invite=abc123",
+        "https://app.quenya.co.uk/open?invite=abc123",
+        "https://testflight.apple.com/join/DNNd7Naj",
     )
 
     assert subject == "Your Quenya tester invite"
+    assert "You're in. Quenya runs as an iPhone app in beta:" in text
     assert "Hi <Ada & Co>," in text
     assert "Hi &lt;Ada &amp; Co&gt;," in html_body
     assert "<Ada & Co>" not in html_body
-    assert 'href="https://app.quenya.co.uk/?invite=abc123"' in html_body
+    assert "https://testflight.apple.com/join/DNNd7Naj" in text
+    assert "https://testflight.apple.com/join/DNNd7Naj" in html_body
+    assert 'href="https://app.quenya.co.uk/open?invite=abc123"' in html_body

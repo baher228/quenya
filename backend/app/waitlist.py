@@ -16,7 +16,7 @@ from starlette.requests import Request
 
 from app import accounts, db, mailer
 from app.accounts import AdminUser
-from app.config import QUENYA_APP_URL
+from app.config import QUENYA_APP_URL, QUENYA_TESTFLIGHT_URL
 
 RATE_LIMIT_REQUESTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
@@ -293,9 +293,14 @@ def email_waitlist_invite(
         )
 
     try:
+        open_url = f"{QUENYA_APP_URL}/open?invite={token}"
         mailer.send_email(
             entry["email"],
-            *mailer.invite_email(entry["name"], payload.invite_url),
+            *mailer.invite_email(
+                entry["name"],
+                open_url,
+                QUENYA_TESTFLIGHT_URL,
+            ),
         )
     except mailer.MailNotConfigured as exc:
         raise HTTPException(
