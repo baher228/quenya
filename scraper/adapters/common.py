@@ -302,7 +302,7 @@ def make_row(
         title
         and price > 0
         and image.startswith("https://")
-        and not re.search(r"__|[{}]", image)
+        and not re.search(r"__IMAGE_PARAMS__|[{}]", image, re.IGNORECASE)
         and clean_url
         and accepts(
             shop,

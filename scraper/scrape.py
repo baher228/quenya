@@ -15,9 +15,9 @@ import httpx
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "backend"))
 
-from adapters import REGISTRY
-from adapters.common import Blocked, ShopSession
-from store import _ensure_bucket, upload_rows
+from adapters import REGISTRY  # noqa: E402
+from adapters.common import Blocked, ShopSession  # noqa: E402
+from store import _ensure_bucket, upload_rows  # noqa: E402
 
 
 def _prepare_fx_rates(shops):
@@ -103,7 +103,7 @@ def _list(shops):
         print(
             f"{shop['key']:18} {str(shop.get('brand') or '—')[:24]:24} "
             f"{shop['adapter']:10} {shop.get('where', 'any'):6} "
-            f"{shop.get('enabled', False)!s:7} {shop.get('status', '')}"
+            f"{str(shop.get('enabled', False)):7} {shop.get('status', '')}"
         )
 
 

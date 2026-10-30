@@ -135,12 +135,12 @@ def _localized_gbp_price(html: str) -> Decimal | None:
     currencies = [
         value.upper()
         for key, value in parser.meta.items()
-        if key.endswith(("price:currency", "price.currency"))
+        if key.endswith("price:currency") or key.endswith("price.currency")
     ]
     amounts = [
         value
         for key, value in parser.meta.items()
-        if key.endswith(("price:amount", "price.amount"))
+        if key.endswith("price:amount") or key.endswith("price.amount")
     ]
     if "GBP" not in currencies:
         return None
@@ -161,9 +161,7 @@ def _colour_option_position(product):
     options = product.get("options") or []
     for index, option in enumerate(options):
         if not isinstance(option, dict) or not re.search(
-            r"colou?r|colorway|shade",
-            str(option.get("name") or ""),
-            re.IGNORECASE,
+            r"colou?r|colorway|shade", str(option.get("name") or ""), re.I
         ):
             continue
         try:
@@ -309,6 +307,8 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
         if tees
         else shop.get("collections") or [None]
     )
+    if tees and shop.get("tee_include_main_feed"):
+        collections = [None] + (shop.get("tee_collections") or [])
     max_pages = 1 if probe else int(shop.get("max_pages", 20))
     rows = []
     for collection in collections:

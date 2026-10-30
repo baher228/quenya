@@ -991,7 +991,7 @@ brand = "Wood Wood"
 host = "www.woodwood.com"
 domain = "woodwood.com"
 adapter = "sitemap_jsonld"
-enabled = true
+enabled = false
 where = "any"
 group = "designer"
 category_sets = ["apparel", "tees"]
@@ -999,8 +999,8 @@ currency = "EUR"
 sitemap_url = "https://www.woodwood.com/en-eu/sitemap.xml"
 url_include = "/en-eu/"
 max_requests = 150
-status = "pending"
-note = "EU sitemap; EUR values convert to GBP."
+status = "blocked"
+note = "Disabled: VPS dry-run kept 0; 144 of 145 checked product pages lacked machine-readable prices, so a run would spend up to 150 requests without producing rows."
 
 # Disabled: the supplied UK product-page sample had no machine-readable GBP price.
 [[shop]]
@@ -2195,6 +2195,7 @@ collections = [
   { handle = "wacko-maria" },
 ]
 tee_collections = [
+  { handle = "t-shirts" },
   { handle = "noah" },
   { handle = "awake-ny" },
   { handle = "cav-empt" },
@@ -2567,6 +2568,7 @@ tee_collections = [
   { handle = "carhartt-wip" },
   { handle = "gramicci" },
 ]
+tee_include_main_feed = true
 max_requests = 40
 
 [[shop]]

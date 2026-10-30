@@ -192,17 +192,24 @@ def test_new_shop_configurations_parse_and_use_supported_adapters():
     for key in (
         "carharttwip",
         "ourlegacy",
-        "woodwood",
         "gramicciuk",
         "oipolloi",
         "goodhood",
     ):
         assert by_key[key]["enabled"] is True
+    assert by_key["woodwood"]["enabled"] is False
     assert by_key["carharttwip"]["adapter"] == "sitemap_jsonld"
     assert by_key["carharttwip"]["max_requests"] == 250
     assert by_key["ourlegacy"]["currency"] == "EUR"
     assert by_key["woodwood"]["currency"] == "EUR"
     assert by_key["gramicciuk"]["adapter"] == "shopify"
+    assert by_key["goodhood"]["tee_collections"] == [
+        {"handle": "t-shirts"},
+        {"handle": "noah"},
+        {"handle": "awake-ny"},
+        {"handle": "cav-empt"},
+        {"handle": "wacko-maria"},
+    ]
     assert by_key["oipolloi"]["tee_collections"] == [
         {"handle": "carhartt-wip"},
         {"handle": "gramicci"},
@@ -210,12 +217,6 @@ def test_new_shop_configurations_parse_and_use_supported_adapters():
     assert by_key["oipolloi"]["collections"] == [
         {"handle": "carhartt-wip"},
         {"handle": "gramicci"},
-    ]
-    assert by_key["goodhood"]["tee_collections"] == [
-        {"handle": "noah"},
-        {"handle": "awake-ny"},
-        {"handle": "cav-empt"},
-        {"handle": "wacko-maria"},
     ]
     assert by_key["goodhood"]["collections"] == [
         {"handle": "noah"},

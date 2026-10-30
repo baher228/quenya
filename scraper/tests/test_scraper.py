@@ -568,6 +568,67 @@ def test_shopify_tee_colour_splitting_and_vendor_brand():
     ]
 
 
+def test_oipolloi_tees_include_feed_and_brand_collection_with_dimensioned_image():
+    config = shop(
+        "oipolloi",
+        "Oi Polloi",
+        "shopify",
+        "oipolloi.com",
+        max_pages=1,
+        brand_from_vendor=True,
+        _category_set="tees",
+        tee_collections=[{"handle": "carhartt-wip"}],
+        tee_include_main_feed=True,
+    )
+    product = {
+        "id": 1,
+        "title": "Main Feed Graphic Tee",
+        "product_type": "T-Shirts",
+        "vendor": "Other Brand",
+        "handle": "main-feed-graphic-tee",
+        "tags": [],
+        "images": [{"src": "https://cdn.shopify.com/main-feed-tee.jpg"}],
+        "variants": [{"id": 1, "available": True, "price": "25.00"}],
+        "options": [{"name": "Size"}],
+    }
+    carhartt_product = {
+        "id": 2,
+        "title": "Carhartt WIP S/S Pocket T-Shirt Dark Navy",
+        "product_type": "S/S TEES",
+        "vendor": "Carhartt WIP",
+        "handle": "carhartt-wip-pocket-t-shirt",
+        "tags": ["in-stock"],
+        "images": [
+            {
+                "src": (
+                    "https://cdn.shopify.com/s/files/1/0491/9773/files/"
+                    "Carhartt_WIP_Pocket_T-Shirt_Front_1__2800x2800_q90_qc1.webp"
+                )
+            }
+        ],
+        "variants": [{"id": 2, "available": True, "price": "30.00"}],
+        "options": [{"name": "Size"}],
+    }
+    session = FakeSession(
+        [
+            '{"currency":"GBP","domain":"oipolloi.com"}',
+            json.dumps({"products": [product]}),
+            json.dumps({"products": [carhartt_product]}),
+        ]
+    )
+
+    rows = shopify.scrape(config, session)
+
+    assert [row["brand"] for row in rows] == ["Other Brand", "Carhartt WIP"]
+    assert [row["title"] for row in rows] == [
+        "Main Feed Graphic Tee",
+        "Carhartt WIP S/S Pocket T-Shirt Dark Navy",
+    ]
+    assert "__2800x2800_" in rows[1]["image_url_original"]
+    assert "/products.json?" in session.requests[1]["url"]
+    assert "/collections/carhartt-wip/products.json?" in session.requests[2]["url"]
+
+
 def test_jsonld_uses_tee_pages():
     body = """<script type="application/ld+json">{
       "@type":"Product","name":"Logo Tee",
@@ -783,7 +844,20 @@ def test_tee_shop_configuration_parses_with_expected_market_settings():
     )
     assert by_key["dailypaper"]["enabled"] is True
     assert by_key["dailypaper"]["currency"] == "EUR"
+    assert by_key["woodwood"]["enabled"] is False
     assert by_key["poptradingcompany"]["tee_collections"] == [{"handle": "t-shirts"}]
+    assert by_key["goodhood"]["tee_collections"] == [
+        {"handle": "t-shirts"},
+        {"handle": "noah"},
+        {"handle": "awake-ny"},
+        {"handle": "cav-empt"},
+        {"handle": "wacko-maria"},
+    ]
+    assert by_key["oipolloi"]["tee_include_main_feed"] is True
+    assert by_key["oipolloi"]["tee_collections"] == [
+        {"handle": "carhartt-wip"},
+        {"handle": "gramicci"},
+    ]
     assert by_key["hockey"]["collections"] == [{"handle": "hockey"}]
     assert by_key["hockey"]["tee_collections"] == [{"handle": "hockey"}]
     assert {
