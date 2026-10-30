@@ -136,6 +136,7 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
     eur_shops = [
         shop("eur-a", adapter="shopify", currency="EUR"),
         shop("eur-b", adapter="shopify", currency="EUR"),
+        shop("eur-sitemap", adapter="sitemap_jsonld", currency="EUR"),
     ]
     gbp_shop = shop("gbp", adapter="shopify")
     calls = []
@@ -152,7 +153,11 @@ def test_prepare_fx_rates_fetches_once_and_leaves_gbp_shops_unchanged(monkeypatc
     scrape._prepare_fx_rates([*eur_shops, gbp_shop])
 
     assert calls == [("https://api.frankfurter.app/latest?from=EUR&to=GBP", 10)]
-    assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [0.86, 0.86]
+    assert [shop_config["_fx_rate"] for shop_config in eur_shops] == [
+        0.86,
+        0.86,
+        0.86,
+    ]
     assert "_fx_rate" not in gbp_shop
 
 
@@ -379,8 +384,10 @@ def test_tee_category_rejects_kids_and_toddlers_anywhere_in_title(title, product
             "t-shirt",
         ),
         (
-            "Vintage Polo Ralph Lauren Women's Heavyweight Striped Woven Crewneck Henley "
-            "T-Shirt - L",
+            (
+                "Vintage Polo Ralph Lauren Women's Heavyweight Striped Woven Crewneck Henley "
+                "T-Shirt - L"
+            ),
             "T-Shirts",
             (),
             "t-shirt",

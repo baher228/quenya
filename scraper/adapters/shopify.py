@@ -1,12 +1,13 @@
 import json
 import re
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin
 
 from .common import (
     ShopSession,
     accepts,
+    eur_to_gbp,
     make_row,
     request_succeeded,
     unique_rows,
@@ -134,12 +135,12 @@ def _localized_gbp_price(html: str) -> Decimal | None:
     currencies = [
         value.upper()
         for key, value in parser.meta.items()
-        if key.endswith("price:currency") or key.endswith("price.currency")
+        if key.endswith(("price:currency", "price.currency"))
     ]
     amounts = [
         value
         for key, value in parser.meta.items()
-        if key.endswith("price:amount") or key.endswith("price.amount")
+        if key.endswith(("price:amount", "price.amount"))
     ]
     if "GBP" not in currencies:
         return None
@@ -160,7 +161,9 @@ def _colour_option_position(product):
     options = product.get("options") or []
     for index, option in enumerate(options):
         if not isinstance(option, dict) or not re.search(
-            r"colou?r|colorway|shade", str(option.get("name") or ""), re.I
+            r"colou?r|colorway|shade",
+            str(option.get("name") or ""),
+            re.IGNORECASE,
         ):
             continue
         try:
@@ -441,7 +444,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                     if colour and colour.casefold() not in title.casefold():
                         row_title = f"{title} - {colour}"
                     row_shop = shop
-                    if tees and shop.get("brand_from_vendor"):
+                    if shop.get("brand_from_vendor"):
                         vendor = str(product.get("vendor") or "").strip()
                         if vendor:
                             row_shop = dict(shop, brand=vendor)
@@ -476,11 +479,7 @@ def scrape(shop: dict, session: ShopSession, probe: bool = False):
                         except (TypeError, ValueError):
                             pass
                     if not price_country and currency == "EUR":
-                        price = int(
-                            (Decimal(str(original_price)) * fx_rate).quantize(
-                                Decimal(1), rounding=ROUND_HALF_UP
-                            )
-                        )
+                        price = eur_to_gbp(original_price, fx_rate)
                         extra.update(
                             original_price=original_price,
                             original_currency=currency,

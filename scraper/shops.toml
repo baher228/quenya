@@ -375,7 +375,7 @@ max_requests = 30
 key = "dailypaper"
 brand = "Daily Paper"
 host = "www.dailypaperclothing.com"
-domain = "www.dailypaperclothing.com"
+domain = "dailypaperclothing.com"
 adapter = "shopify"
 enabled = true
 where = "any"
@@ -953,19 +953,89 @@ key = "carharttwip"
 brand = "Carhartt WIP"
 host = "www.carhartt-wip.com"
 domain = "carhartt-wip.com"
-adapter = "jsonld"
-enabled = false
-where = "uk"
+adapter = "sitemap_jsonld"
+enabled = true
+where = "any"
 group = "streetwear"
-status = "challenge"
-note = "Probe 2026-10-25: challenge page on the first UK category request."
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+sitemap_url = "https://www.carhartt-wip.com/en-gb/product/sitemap.xml"
+url_include = "/en-gb/"
+url_pattern = "(?:^|[-/])(?:t-s|t-shirts?|tees?)(?:[-/]|$)"
+max_requests = 250
+status = "pending"
+note = "UK product sitemap has machine-readable GBP JSON-LD; tee-first URL filter."
 
-[[shop.pages]]
-gender = "m"
-url = "https://www.carhartt-wip.com/en-gb/c/men"
-[[shop.pages]]
-gender = "w"
-url = "https://www.carhartt-wip.com/en-gb/c/women"
+[[shop]]
+key = "ourlegacy"
+brand = "Our Legacy"
+host = "www.ourlegacy.com"
+domain = "ourlegacy.com"
+adapter = "sitemap_jsonld"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+sitemap_url = [
+  "https://www.ourlegacy.com/sitemap/product/0/sitemap.xml",
+  "https://www.ourlegacy.com/sitemap/product/1/sitemap.xml",
+]
+max_requests = 150
+status = "pending"
+note = "Product-page JSON-LD prices; EUR values convert to GBP, missing currencies are skipped."
+
+[[shop]]
+key = "woodwood"
+brand = "Wood Wood"
+host = "www.woodwood.com"
+domain = "woodwood.com"
+adapter = "sitemap_jsonld"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+sitemap_url = "https://www.woodwood.com/en-eu/sitemap.xml"
+url_include = "/en-eu/"
+max_requests = 150
+status = "pending"
+note = "EU sitemap; EUR values convert to GBP."
+
+# Disabled: the supplied UK product-page sample had no machine-readable GBP price.
+[[shop]]
+key = "stoneisland_jsonld"
+brand = "Stone Island"
+host = "www.stoneisland.com"
+domain = "stoneisland.com"
+adapter = "sitemap_jsonld"
+enabled = false
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+sitemap_url = "https://www.stoneisland.com/en-gb/sitemap_0-product.xml"
+url_include = "/en-gb/"
+url_pattern = "t-shirt"
+max_requests = 150
+status = "blocked"
+note = "Disabled: no machine-readable GBP price in the supplied product sample; sitemap returned HTTP 403 from VPS."
+
+[[shop]]
+key = "gramicciuk"
+brand = "Gramicci"
+host = "gramicci.co.uk"
+domain = "gramicci.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "outdoor"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+max_pages = 20
+max_requests = 40
 
 [[shop]]
 key = "reiss"
@@ -2113,12 +2183,23 @@ adapter = "shopify"
 enabled = true
 where = "any"
 group = "streetwear"
-category_sets = ["tees"]
+category_sets = ["apparel", "tees"]
 status = "pending"
-note = "Tee probe 2026-10-26"
+note = "Stockist feed restricted to selected brand collections; product vendor supplies brand."
 gender_rule = "default"
 brand_from_vendor = true
-tee_collections = [{ handle = "t-shirts" }]
+collections = [
+  { handle = "noah" },
+  { handle = "awake-ny" },
+  { handle = "cav-empt" },
+  { handle = "wacko-maria" },
+]
+tee_collections = [
+  { handle = "noah" },
+  { handle = "awake-ny" },
+  { handle = "cav-empt" },
+  { handle = "wacko-maria" },
+]
 max_requests = 40
 
 [[shop]]
@@ -2466,18 +2547,26 @@ max_requests = 40
 
 [[shop]]
 key = "oipolloi"
-brand = "Oipolloi"
+brand = "Oi Polloi"
 host = "oipolloi.com"
 domain = "oipolloi.com"
 adapter = "shopify"
 enabled = true
 where = "any"
 group = "premium"
-category_sets = ["tees"]
+category_sets = ["apparel", "tees"]
 status = "pending"
-note = "Tee probe 2026-10-26"
+note = "Stockist feed restricted to selected brand collections; product vendor supplies brand."
 gender_rule = "default"
 brand_from_vendor = true
+collections = [
+  { handle = "carhartt-wip" },
+  { handle = "gramicci" },
+]
+tee_collections = [
+  { handle = "carhartt-wip" },
+  { handle = "gramicci" },
+]
 max_requests = 40
 
 [[shop]]

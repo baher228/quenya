@@ -15,16 +15,16 @@ import httpx
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "backend"))
 
-from adapters import REGISTRY  # noqa: E402
-from adapters.common import Blocked, ShopSession  # noqa: E402
-from store import _ensure_bucket, upload_rows  # noqa: E402
+from adapters import REGISTRY
+from adapters.common import Blocked, ShopSession
+from store import _ensure_bucket, upload_rows
 
 
 def _prepare_fx_rates(shops):
     eur_shops = [
         shop
         for shop in shops
-        if shop.get("adapter") == "shopify"
+        if shop.get("adapter") in {"shopify", "sitemap_jsonld"}
         and str(shop.get("currency") or "GBP").upper() == "EUR"
     ]
     if not eur_shops:
@@ -103,7 +103,7 @@ def _list(shops):
         print(
             f"{shop['key']:18} {str(shop.get('brand') or '—')[:24]:24} "
             f"{shop['adapter']:10} {shop.get('where', 'any'):6} "
-            f"{str(shop.get('enabled', False)):7} {shop.get('status', '')}"
+            f"{shop.get('enabled', False)!s:7} {shop.get('status', '')}"
         )
 
 
@@ -498,6 +498,8 @@ def _run(shops, args):
         }
         if shop.get("price_country"):
             result["price_country_report"] = shop.get("_price_country_report")
+        if shop.get("adapter") == "sitemap_jsonld":
+            result["sitemap_jsonld_report"] = shop.get("_sitemap_jsonld_report")
         return result
 
     try:

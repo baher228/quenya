@@ -5,11 +5,11 @@ import re
 import threading
 import time
 import urllib.robotparser
+from decimal import ROUND_HALF_UP, Decimal
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
-from scrapling.fetchers import Fetcher
-
 from app.accessories import accessory_gender, accessory_kind
+from scrapling.fetchers import Fetcher
 
 from .tees import tee_category
 
@@ -157,7 +157,7 @@ class ShopSession:
                     retries=0,
                     retry_delay=0,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self.errors += 1
             self.requests.append(
                 {"url": url, "final_url": url, "status": "error", "error": type(exc).__name__}
@@ -248,7 +248,7 @@ def is_clothing(value: str) -> bool:
             r"age\s*\d{1,2}|\d{1,2}\s*yrs?|archive\s*[-–:]\s*vests?|"
             r"candle|mug|toy|rug|cushion|blanket|home decor)\b",
             value,
-            re.I,
+            re.IGNORECASE,
         )
     )
 
@@ -311,7 +311,11 @@ def make_row(
             product_type=product_type,
             tags=tags,
         )
-        and not re.search(r"OutOfStock|SoldOut|Discontinued|Unavailable", availability, re.I)
+        and not re.search(
+            r"OutOfStock|SoldOut|Discontinued|Unavailable",
+            availability,
+            re.IGNORECASE,
+        )
     ):
         return None
     row_gender = gender
@@ -379,6 +383,14 @@ def unique_rows(rows):
         if row:
             result.setdefault(row["url"], row)
     return list(result.values())
+
+
+def eur_to_gbp(price, rate):
+    return int(
+        (Decimal(str(price)) * Decimal(str(rate))).quantize(
+            Decimal(1), rounding=ROUND_HALF_UP
+        )
+    )
 
 
 def request_succeeded(session) -> bool:

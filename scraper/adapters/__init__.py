@@ -1,4 +1,4 @@
-from . import burberry, jsonld, nike, sfcc, shopify, ssense, tiles
+from . import burberry, jsonld, nike, sfcc, shopify, sitemap_jsonld, ssense, tiles
 
 REGISTRY = {
     "shopify": shopify.scrape,
@@ -8,4 +8,5 @@ REGISTRY = {
     "sfcc": sfcc.scrape,
     "tiles": tiles.scrape,
     "ssense": ssense.scrape,
+    "sitemap_jsonld": sitemap_jsonld.scrape,
 }
