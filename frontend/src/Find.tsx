@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { api, gbp, img } from "./api";
+import { api, gbp } from "./api";
+import { ItemImage } from "./ItemImage";
 import { ErrorBox, Loading, Provenance } from "./ui";
 import type { Item } from "./types";
 
@@ -48,7 +49,7 @@ export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
         <div className="grid">
           {items.map(it => (
             <button key={it.id} className="tile" onClick={() => onOpenItem(it)}>
-              <img src={img(it)} alt={it.title} loading="lazy" />
+              <ItemImage item={it} alt={it.title} loading="lazy" />
               <span className="t-meta"><b>{gbp(it.price_gbp)}</b><span>{it.title}</span><Provenance source={it.source} /></span>
             </button>
           ))}

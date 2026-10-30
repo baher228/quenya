@@ -75,7 +75,7 @@ struct FindView: View {
                         ForEach(items) { item in
                             Button { state.presentedSheet = .item(item) } label: {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    RemoteImage(path: item.imagePath)
+                                    RemoteImage(path: item.imagePath, preview: item.imagePreview)
                                         .frame(height: 145)
                                         .clipShape(RoundedRectangle(cornerRadius: 13))
                                     Text(gbp(item.priceGbp)).font(.system(size: 12, weight: .semibold))

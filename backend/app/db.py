@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS items (
     description TEXT,
     image_url TEXT NOT NULL,
     image_path TEXT,
+    image_preview TEXT,
     gender_hint TEXT,
     condition_hint TEXT,
     availability TEXT,
@@ -146,6 +147,7 @@ CREATE TABLE IF NOT EXISTS items (
     description TEXT,
     image_url TEXT NOT NULL,
     image_path TEXT,
+    image_preview TEXT,
     gender_hint TEXT,
     condition_hint TEXT,
     availability TEXT,
@@ -563,6 +565,9 @@ def init_db() -> None:
                     if statement.strip():
                         connection.execute(statement)
                 connection.execute(
+                    "ALTER TABLE items ADD COLUMN IF NOT EXISTS image_preview TEXT"
+                )
+                connection.execute(
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
                 )
                 for column, definition in {
@@ -593,6 +598,7 @@ def init_db() -> None:
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.executescript(SCHEMA)
             migrations = {
+                "items": {"image_preview": "TEXT"},
                 "users": {"password_hash": "TEXT"},
                 "profiles": {
                     "kind": "TEXT NOT NULL DEFAULT 'user'",
@@ -696,11 +702,11 @@ def insert_items(items: list[dict[str, Any]]) -> int:
     sql = """
     INSERT OR IGNORE INTO items (
         id, source, source_url, title, brand, price_gbp, size, description,
-        image_url, image_path, gender_hint, condition_hint, availability,
+        image_url, image_path, image_preview, gender_hint, condition_hint, availability,
         query, fetched_at, raw_json
     ) VALUES (
         :id, :source, :source_url, :title, :brand, :price_gbp, :size, :description,
-        :image_url, :image_path, :gender_hint, :condition_hint, :availability,
+        :image_url, :image_path, :image_preview, :gender_hint, :condition_hint, :availability,
         :query, :fetched_at, :raw_json
     )
     """
@@ -709,6 +715,7 @@ def insert_items(items: list[dict[str, Any]]) -> int:
             row = dict(item)
             row.setdefault("fetched_at", now_iso())
             row.setdefault("image_path", None)
+            row.setdefault("image_preview", None)
             row.setdefault("description", None)
             row.setdefault("brand", None)
             row.setdefault("size", None)
@@ -791,17 +798,20 @@ def save_tags(
     request_id: str | None,
     cached_image_path: str | None = None,
     vectors: tuple[Any, Any, Any] | None = None,
+    image_preview: str | None = None,
 ) -> None:
     with db_connection() as connection:
         cursor = connection.execute(
             """UPDATE items SET tags_json=?, tags_request_id=?, tagged_at=?,
-               image_path=COALESCE(?, image_path), tag_error=NULL
+               image_path=COALESCE(?, image_path),
+               image_preview=COALESCE(?, image_preview), tag_error=NULL
                WHERE id=?""",
             (
                 json.dumps(tags, ensure_ascii=False),
                 request_id,
                 now_iso(),
                 cached_image_path,
+                image_preview,
                 item_id,
             ),
         )
@@ -907,7 +917,7 @@ def list_items(
 
 
 _LIVE_CATALOGUE_COLUMNS = """id, source, source_url, title, brand, price_gbp, size,
-    description, image_url, image_path, gender_hint, condition_hint,
+    description, image_url, image_path, image_preview, gender_hint, condition_hint,
     availability, query, fetched_at, tags_json, tags_request_id, tagged_at, tag_error"""
 _LIVE_CATALOGUE_FILTER = """tags_json IS NOT NULL
     AND (availability IS NULL OR

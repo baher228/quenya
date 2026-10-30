@@ -12,9 +12,15 @@ from app.tagging import tag_item
 def _tag_one(item: dict[str, Any]) -> tuple[str, int | None, str | None]:
     try:
         tags, meta = tag_item(item)
-        db.save_tags(
-            item["id"], tags.model_dump(), meta.request_id, item.get("image_path")
-        )
+        if item.get("image_preview"):
+            db.save_tags(
+                item["id"], tags.model_dump(), meta.request_id, item.get("image_path"),
+                image_preview=item["image_preview"],
+            )
+        else:
+            db.save_tags(
+                item["id"], tags.model_dump(), meta.request_id, item.get("image_path")
+            )
         return "ok", meta.latency_ms, None
     except TaskError as exc:
         message = f"{exc}; request_ids={','.join(exc.request_ids)}"

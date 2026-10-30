@@ -86,6 +86,14 @@ def _cache_image(image_url: str, content: bytes) -> str:
     return str(destination)
 
 
+def _preview_data_url(content: bytes) -> str | None:
+    try:
+        return images.preview_data_url(content)
+    except Exception as exc:
+        LOG.info("Could not generate image preview (%s)", type(exc).__name__)
+        return None
+
+
 def _is_stock_row(row: dict[str, Any], record: dict[str, Any] | None = None) -> bool:
     if record is None:
         record = row.get("record")
@@ -173,9 +181,11 @@ def run_insert_only_file_import(
                     content = _download_original_image(image_url)
                     local_image = _cache_image(image_url, content)
                     with open(local_image, "rb") as image_file:
+                        display_content = image_file.read()
                         image_path = images.persist_display_image(
-                            image_url, image_file.read()
+                            image_url, display_content
                         )
+                    image_preview = _preview_data_url(display_content)
                 except (httpx.HTTPError, OSError, RuntimeError, ValueError):
                     failed += 1
                     continue
@@ -190,6 +200,7 @@ def run_insert_only_file_import(
                     description=record.get("description"),
                     image_url=image_url,
                     image_path=image_path,
+                    image_preview=image_preview,
                     gender_hint=row.get("gender") or record.get("gender_hint"),
                     condition_hint=row.get("condition") or record.get("condition_hint"),
                     availability=row.get("availability") or record.get("availability"),
@@ -239,6 +250,7 @@ def run_insert_only_file_import(
                         item["id"], item["source"], item["source_url"], item["title"],
                         item.get("brand"), item["price_gbp"], item.get("size"),
                         item.get("description"), item["image_url"], item["image_path"],
+                        item.get("image_preview"),
                         item.get("gender_hint"), item.get("condition_hint"),
                         item.get("availability"), item.get("query"), item["fetched_at"],
                         raw_json, json.dumps(tags.model_dump(mode="json"), ensure_ascii=False),
@@ -247,11 +259,12 @@ def run_insert_only_file_import(
                     cursor = connection.execute(
                         f"""INSERT INTO {table} (
                             id, source, source_url, title, brand, price_gbp, size,
-                            description, image_url, image_path, gender_hint, condition_hint,
+                            description, image_url, image_path, image_preview,
+                            gender_hint, condition_hint,
                             availability, query, fetched_at, raw_json, tags_json,
                             tags_request_id, tagged_at
                         ) VALUES (
-                            {", ".join([placeholder] * 19)}
+                            {", ".join([placeholder] * 20)}
                         ) ON CONFLICT (source_url) DO NOTHING RETURNING source_url""",
                         values,
                     )
@@ -353,9 +366,11 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                     _cache_image(image_url, _download_storage(storage_path))
                 local_image = str(local_image)
             with open(local_image, "rb") as image_file:
+                display_content = image_file.read()
                 image_path = images.persist_display_image(
-                    image_url, image_file.read()
+                    image_url, display_content
                 )
+            image_preview = _preview_data_url(display_content)
             record = dict(record)
             if file_import:
                 record.update(
@@ -369,6 +384,7 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                 )
             record["image_url"] = image_url
             record["image_path"] = image_path
+            record["image_preview"] = image_preview
             added = db.insert_items([record])
             if not added:
                 skipped += 1
@@ -383,7 +399,8 @@ def _import_rows(rows: list[dict[str, Any]], no_tag: bool) -> dict[str, int]:
                 try:
                     tags, meta = tag_item(item)
                     db.save_tags(
-                        item["id"], tags.model_dump(), meta.request_id, item.get("image_path")
+                        item["id"], tags.model_dump(), meta.request_id, item.get("image_path"),
+                        image_preview=item.get("image_preview"),
                     )
                     tagged += 1
                 except Exception as exc:

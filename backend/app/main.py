@@ -215,7 +215,10 @@ def correct_tags(item_id: str, body: CorrectionRequest, user: AdminUser) -> dict
             detail={"error": str(exc), "request_ids": exc.request_ids},
         ) from exc
     tags_json = tags.model_dump()
-    db.save_tags(item_id, tags_json, meta.request_id, item.get("image_path"))
+    db.save_tags(
+        item_id, tags_json, meta.request_id, item.get("image_path"),
+        image_preview=item.get("image_preview"),
+    )
     db.add_correction(
         profile["id"],
         "tag",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, gbp, img } from "./api";
+import { api, gbp } from "./api";
+import { ItemImage } from "./ItemImage";
 import { get as getCache, set as setCache } from "./cache";
 import { ErrorBox, Loading, Provenance, pretty, uniqueTasteEntries } from "./ui";
 import type { Item, TasteProfile } from "./types";
@@ -252,7 +253,7 @@ function Card({ item, depth, onDecide, onOpen, kick, nudge, onTouch }: {
       } : undefined}
     >
       <div className="ph">
-        <img src={img(item)} alt={item.title} draggable={false} />
+        <ItemImage item={item} alt={item.title} draggable={false} />
         <span className="stamp like">Keep</span><span className="stamp pass">Pass</span>
       </div>
       <div className="meta">

@@ -75,6 +75,16 @@ def encode_display_jpeg(content: bytes) -> bytes:
     return output.getvalue()
 
 
+def preview_data_url(content: bytes) -> str:
+    with Image.open(io.BytesIO(content)) as original:
+        image = ImageOps.exif_transpose(original).convert("RGB")
+        image.thumbnail((24, 24), Image.Resampling.LANCZOS)
+        output = io.BytesIO()
+        image.save(output, format="JPEG", quality=45, optimize=True)
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
 def upscale_image_url(url: str) -> str:
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()

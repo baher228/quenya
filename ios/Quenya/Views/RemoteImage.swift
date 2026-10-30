@@ -21,6 +21,21 @@ final class ImageCache: @unchecked Sendable {
         cache.object(forKey: cacheKey(url, pixelBucket: pixelBucket))
     }
 
+    func preview(for dataURL: String?) -> UIImage? {
+        guard let dataURL else { return nil }
+        let key = "preview|\(dataURL)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let comma = dataURL.firstIndex(of: ","),
+              dataURL[..<comma].contains(";base64"),
+              let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        cache.setObject(image, forKey: key, cost: cost)
+        return image
+    }
+
     func load(_ url: URL, pixelBucket: Int = 800) async -> UIImage? {
         if let cached = image(for: url, pixelBucket: pixelBucket) { return cached }
         do {
@@ -75,8 +90,11 @@ final class ImageCache: @unchecked Sendable {
 struct RemoteImage: View {
     let path: String?
     var contentMode: ContentMode = .fill
+    var preview: String? = nil
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
+    @State private var loadedPath: String?
+    @State private var failedPath: String?
 
     var body: some View {
         GeometryReader { geometry in
@@ -84,17 +102,31 @@ struct RemoteImage: View {
                 URL(string: $0, relativeTo: AppConfig.baseURL)?.absoluteURL
             }
             let pixelBucket = ImageCache.pixelBucket(for: geometry.size, scale: displayScale)
-            let displayedImage = image ?? resolvedURL.flatMap {
+            let cachedImage = resolvedURL.flatMap {
                 ImageCache.shared.image(for: $0, pixelBucket: pixelBucket)
             }
-            Group {
+            let displayedImage = (loadedPath == path ? image : nil) ?? cachedImage
+            let previewImage = ImageCache.shared.preview(for: preview)
+            let didFail = failedPath != nil && failedPath == path
+            ZStack {
+                if let previewImage {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                        .blur(radius: 14)
+                        .scaleEffect(1.12)
+                        .clipped()
+                } else {
+                    Rectangle().fill(QuenyaTheme.line)
+                }
                 if let displayedImage {
                     Image(uiImage: displayedImage)
                         .resizable()
                         .aspectRatio(contentMode: contentMode)
-                } else {
-                    Rectangle().fill(QuenyaTheme.line)
-                        .overlay(Image(systemName: "photo").font(.title2).foregroundStyle(QuenyaTheme.muted))
+                        .transition(.opacity)
+                }
+                if displayedImage == nil && !didFail {
+                    ProgressView().tint(.white.opacity(0.8))
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -103,11 +135,28 @@ struct RemoteImage: View {
                 guard let path,
                       let url = URL(string: path, relativeTo: AppConfig.baseURL)?.absoluteURL else {
                     image = nil
+                    loadedPath = nil
+                    failedPath = path
+                    return
+                }
+                image = nil
+                loadedPath = nil
+                failedPath = nil
+                if let cached = ImageCache.shared.image(for: url, pixelBucket: pixelBucket) {
+                    image = cached
+                    loadedPath = path
                     return
                 }
                 let loaded = await ImageCache.shared.load(url, pixelBucket: pixelBucket)
                 guard !Task.isCancelled else { return }
-                image = loaded
+                if let loaded {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        image = loaded
+                        loadedPath = path
+                    }
+                } else {
+                    failedPath = path
+                }
             }
         }
     }

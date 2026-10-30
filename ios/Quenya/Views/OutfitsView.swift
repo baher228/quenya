@@ -223,7 +223,7 @@ struct OutfitsView: View {
         return VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
                 Button { selectedItem = item } label: {
-                    RemoteImage(path: item.imagePath)
+                    RemoteImage(path: item.imagePath, preview: item.imagePreview)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 }
                 .buttonStyle(.plain)
@@ -276,7 +276,7 @@ struct OutfitsView: View {
         let swapping = state.busy.isBusy(swapKey(outfit, item))
         return HStack(spacing: 9) {
             Button { selectedItem = item } label: {
-                RemoteImage(path: item.imagePath).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
+                RemoteImage(path: item.imagePath, preview: item.imagePreview).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
             Button { selectedItem = item } label: {
@@ -479,6 +479,7 @@ private struct CheckoutSheetView: View {
                             CheckoutLineRow(
                                 line: line,
                                 imagePath: outfit.pieces.first { $0.sourceUrl == line.sourceUrl }?.imagePath,
+                                imagePreview: outfit.pieces.first { $0.sourceUrl == line.sourceUrl }?.imagePreview,
                                 open: {
                                     if let url = URL(string: line.sourceUrl) {
                                         safari = SafariTarget(url: url)
@@ -587,13 +588,14 @@ private struct CheckoutSkeletonRow: View {
 private struct CheckoutLineRow: View {
     let line: CheckoutLine
     let imagePath: String?
+    let imagePreview: String?
     let open: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Group {
                 if let imagePath {
-                    RemoteImage(path: imagePath)
+                    RemoteImage(path: imagePath, preview: imagePreview)
                 } else {
                     RoundedRectangle(cornerRadius: 8).fill(QuenyaTheme.webLine)
                 }

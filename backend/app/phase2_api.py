@@ -359,6 +359,7 @@ def _tag_pending_live(
                 db.save_tags(
                     item["id"], tags.model_dump(), meta.request_id,
                     item["image_path"], vectors=vectors,
+                    image_preview=item.get("image_preview"),
                 )
                 tagged += 1
                 domain_counts[domain]["tagged"] += 1
@@ -1819,6 +1820,7 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
                     db.save_tags(
                         item["id"], tags.model_dump(), meta.request_id,
                         item["image_path"], vectors=vectors,
+                        image_preview=item.get("image_preview"),
                     )
                 except TaskError as exc:
                     failures.append(exc)
