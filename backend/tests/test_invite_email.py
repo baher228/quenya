@@ -1,10 +1,9 @@
 import smtplib
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app import accounts, config, db, mailer, main
 from app.waitlist import reset_rate_limit
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -107,24 +106,23 @@ def test_approved_invite_is_sent_over_smtp(isolated_invite_email_db, monkeypatch
     message = events[3][1]
     assert message["To"] == "ada@example.com"
     assert "hello@quenya.co.uk" in message["From"]
-    assert message["Subject"] == "Your Quenya tester invite"
+    assert message["Subject"] == "Your Quenya invite: how to get the iPhone app"
     token = invite_url.removeprefix(f"{config.QUENYA_APP_URL}/?invite=")
     open_url = f"{config.QUENYA_APP_URL}/open?invite={token}"
     text = message.get_body(preferencelist=("plain",)).get_content()
     html_body = message.get_body(preferencelist=("html",)).get_content()
-    assert "You're in. Quenya runs as an iPhone app in beta:" in text
     assert (
-        "1. Install it with TestFlight: "
-        f"{config.QUENYA_TESTFLIGHT_URL} "
-        "(this opens Apple's TestFlight app; install that first if asked)."
+        "You're in! Quenya is an iPhone app in beta, so it's installed through "
+        "Apple's TestFlight app rather than the App Store. It takes about 2 minutes. "
+        "Open this email on your iPhone (iOS 17 or later) and follow these steps:"
     ) in text
-    assert (
-        "2. Back on your iPhone, open your personal sign-in link: "
-        f"{open_url}"
-    ) in text
-    assert "don't forward it" in text
-    assert config.QUENYA_TESTFLIGHT_URL in html_body
-    assert open_url in html_body
+    for body in (text, html_body):
+        assert mailer.TESTFLIGHT_APP_STORE_URL in body
+        assert config.QUENYA_TESTFLIGHT_URL in body
+        assert open_url in body
+        assert "Accept" in body
+        assert "Install" in body
+    assert "<ol" in html_body
     assert invite_url not in text
     assert invite_url not in html_body
 
@@ -292,11 +290,20 @@ def test_invite_email_escapes_name_in_html():
         "https://testflight.apple.com/join/DNNd7Naj",
     )
 
-    assert subject == "Your Quenya tester invite"
-    assert "You're in. Quenya runs as an iPhone app in beta:" in text
+    assert subject == "Your Quenya invite: how to get the iPhone app"
+    assert "You're in! Quenya is an iPhone app in beta" in text
     assert "Hi <Ada & Co>," in text
     assert "Hi &lt;Ada &amp; Co&gt;," in html_body
     assert "<Ada & Co>" not in html_body
-    assert "https://testflight.apple.com/join/DNNd7Naj" in text
-    assert "https://testflight.apple.com/join/DNNd7Naj" in html_body
+    for body in (text, html_body):
+        assert mailer.TESTFLIGHT_APP_STORE_URL in body
+        assert "https://testflight.apple.com/join/DNNd7Naj" in body
+        assert "https://app.quenya.co.uk/open?invite=abc123" in body
+        assert "Accept" in body
+        assert "Install" in body
+    assert "<ol" in html_body
+    assert (
+        f'href="{mailer.TESTFLIGHT_APP_STORE_URL}"'
+        in html_body
+    )
     assert 'href="https://app.quenya.co.uk/open?invite=abc123"' in html_body
