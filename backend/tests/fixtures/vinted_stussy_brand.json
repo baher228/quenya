@@ -1,0 +1,17 @@
+{
+  "id": 123456789,
+  "brand": null,
+  "brand_title": null,
+  "title": "Stüssy top",
+  "price": 3.75,
+  "url": "/items/123456789-stussy-top",
+  "photos": [
+    {
+      "url": "https://images.example/stussy-top.jpg"
+    }
+  ],
+  "item_box": {
+    "accessibility_label": "Stüssy top, Brand: Stüssy, Condition: Good, Size: XS / UK 4-6, 3.75 £, 4.64 £",
+    "first_line": "Stüssy"
+  }
+}

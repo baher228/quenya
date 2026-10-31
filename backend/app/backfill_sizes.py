@@ -1,24 +1,12 @@
 import argparse
-import json
 from typing import Any
 
 from app import db
-from app.sizes import listing_size_from_label
+from app.sizes import item_box_accessibility_label, listing_size_from_label
 
 
 def _size_from_raw_json(raw_json: Any) -> str | None:
-    if isinstance(raw_json, str):
-        try:
-            raw_json = json.loads(raw_json)
-        except json.JSONDecodeError:
-            return None
-    if not isinstance(raw_json, dict):
-        return None
-    item_box = raw_json.get("item_box")
-    if not isinstance(item_box, dict):
-        return None
-    label = item_box.get("accessibility_label")
-    return listing_size_from_label(str(label or ""))
+    return listing_size_from_label(item_box_accessibility_label(raw_json))
 
 
 def backfill(

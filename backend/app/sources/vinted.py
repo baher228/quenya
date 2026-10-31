@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import re
 import time
@@ -9,7 +10,15 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 from vinted_scraper import VintedScraper
 
-from app.sizes import listing_size_from_label
+from app.sizes import (
+    item_box_accessibility_label,
+    item_box_first_line,
+    listing_size_from_label,
+)
+
+_BRAND_FROM_LABEL = re.compile(
+    r"\bBrand:\s*(.*?)(?=,\s*(?:Condition|Size):|$)", re.IGNORECASE
+)
 
 
 def _get(value: Any, *names: str) -> Any:
@@ -59,6 +68,36 @@ def _first_photo(item: Any) -> str | None:
     return str(image) if image else None
 
 
+def _brand_value(item: Any) -> str | None:
+    brand = _get(item, "brand_title")
+    if not brand:
+        brand_value = _get(item, "brand")
+        brand = _get(brand_value, "title", "name") or brand_value
+    normalized = str(brand).strip() if brand else ""
+    return normalized or None
+
+
+def brand_from_raw_json(raw_json: Any) -> str | None:
+    if isinstance(raw_json, str):
+        try:
+            raw_json = json.loads(raw_json)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw_json, dict):
+        return None
+
+    brand = _brand_value(raw_json)
+    if brand:
+        return brand
+
+    match = _BRAND_FROM_LABEL.search(item_box_accessibility_label(raw_json))
+    if match:
+        brand = match.group(1).strip()
+        if brand:
+            return brand
+    return item_box_first_line(raw_json)
+
+
 def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
     url = _canonical_url(item)
     title = _get(item, "title")
@@ -75,20 +114,15 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
         return None
     if price_gbp < 0:
         return None
-    brand = _get(item, "brand_title")
-    if not brand:
-        brand_value = _get(item, "brand")
-        brand = _get(brand_value, "title", "name") or brand_value
+    raw = _raw_item(item)
+    brand = _brand_value(item) or brand_from_raw_json(raw)
     item_id = _get(item, "id")
     if not item_id:
         match = re.search(r"/items/(\d+)", url)
         item_id = match.group(1) if match else hashlib.sha1(url.encode("utf-8")).hexdigest()
-    raw = _raw_item(item)
     size = _get(item, "size_title") or _get(item, "size")
     if not size:
-        item_box = raw.get("item_box")
-        label = _get(item_box, "accessibility_label")
-        size = listing_size_from_label(str(label or ""))
+        size = listing_size_from_label(item_box_accessibility_label(raw))
     return {
         "id": f"vinted:{item_id}",
         "source": "vinted",
