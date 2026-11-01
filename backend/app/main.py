@@ -1,12 +1,13 @@
 import json
 import logging
+import os
 import re
 import time
 import uuid
 from threading import Thread
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -44,6 +45,7 @@ from app.prompts import (
     TAGGER_MODEL,
     TASTE_MODEL,
 )
+from app.request_timing import TimedFastAPI
 from app.tagging import tag_item
 from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
@@ -51,7 +53,7 @@ from app.waitlist import router as waitlist_router
 
 init_sentry("api")
 
-app = FastAPI(title="Quenya API")
+app = TimedFastAPI(title="Quenya API")
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("quenya.access")
 access_logger.setLevel(logging.INFO)
@@ -209,6 +211,24 @@ def _warm_caches() -> None:
             warm()
         except Exception:
             logger.exception("Failed to warm %s cache", cache_name)
+
+
+@app.get("/api/live", include_in_schema=False)
+def live() -> dict:
+    return {"ok": True}
+
+
+@app.get("/api/ready", include_in_schema=False)
+def ready() -> dict:
+    try:
+        with db.db_connection() as connection:
+            connection.execute("SELECT 1 FROM profiles LIMIT 1").fetchone()
+        if os.getenv("QUENYA_DATABASE_URL") and not db.schema_migration_status()["ok"]:
+            raise RuntimeError("Schema is not ready")
+    except Exception as exc:
+        logger.warning("Readiness probe failed")
+        raise HTTPException(status_code=503, detail="Service unavailable") from exc
+    return {"ok": True}
 
 
 @app.get("/health", include_in_schema=False)
