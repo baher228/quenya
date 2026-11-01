@@ -10,6 +10,7 @@ from threading import Event, Thread
 from typing import Any
 
 from app import db, jobs
+from app.observability import init_sentry
 
 logger = logging.getLogger(__name__)
 _stop = Event()
@@ -64,6 +65,7 @@ def run_worker(concurrency: int) -> None:
     if concurrency < 1:
         raise ValueError("concurrency must be at least 1")
     _stop.clear()
+    init_sentry("worker")
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
     logger.info("Warming live catalogue")

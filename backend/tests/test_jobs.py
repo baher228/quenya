@@ -390,6 +390,12 @@ def test_runner_maps_http_errors_and_resets_context(isolated_jobs_db, monkeypatc
     job = jobs.get(job_id, owner["id"])
     user_context_token = accounts._user_context.set(None)
     request_context_token = accounts._in_request.set(False)
+    captured = []
+    monkeypatch.setattr(
+        jobs.sentry_sdk,
+        "capture_exception",
+        lambda: captured.append(True),
+    )
 
     def fail_generation(_body):
         assert accounts.context_user()["id"] == owner["id"]
@@ -407,6 +413,7 @@ def test_runner_maps_http_errors_and_resets_context(isolated_jobs_db, monkeypatc
         }
         assert accounts.context_user() is None
         assert not accounts.in_request()
+        assert captured == []
     finally:
         accounts._in_request.reset(request_context_token)
         accounts._user_context.reset(user_context_token)
@@ -438,6 +445,12 @@ def test_runner_maps_unexpected_errors(isolated_jobs_db, monkeypatch, caplog):
         raise RuntimeError("sensitive internal details")
 
     monkeypatch.setattr(phase2_api, "generate_outfits", fail_generation)
+    captured = []
+    monkeypatch.setattr(
+        jobs.sentry_sdk,
+        "capture_exception",
+        lambda: captured.append(True),
+    )
 
     jobs.run_job(job)
 
@@ -448,3 +461,4 @@ def test_runner_maps_unexpected_errors(isolated_jobs_db, monkeypatch, caplog):
         "detail": "Outfit generation failed",
     }
     assert "sensitive internal details" in caplog.text
+    assert captured == [True]
