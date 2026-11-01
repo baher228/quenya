@@ -24,18 +24,25 @@ Display images continue to use Supabase by default. To use R2, create the `queny
    sudo install -m 644 deploy/vps/nginx-quenya-api.conf /etc/nginx/sites-available/quenya-api
    sudo ln -s /etc/nginx/sites-available/quenya-api /etc/nginx/sites-enabled/quenya-api
    sudo nginx -t && sudo systemctl reload nginx
-   sh deploy/vps/deploy.sh
+   QUENYA_RELEASE=<git sha> sh deploy/vps/deploy.sh
    sudo certbot --nginx -d srv948389.hstgr.cloud
    ```
 
-   The deploy script builds the image, applies pending migrations in a one-off
-   container, then replaces the API and waits for `/api/health`. The old API
-   continues serving while migrations run, so migrations must remain backward
-   compatible and additive.
+   The deploy script builds the tagged image, applies pending migrations in a
+   one-off container, then replaces the API and worker and waits for
+   `/api/health`. If the new release does not become healthy, it restores the
+   previous image. Migrations must remain backward compatible and additive
+   because the old API continues serving while migrations run.
 
    To add a migration, append a new ordered `("000N_name", function)` entry to
    `MIGRATIONS` in `backend/app/migrate.py`. Never edit a migration that has
    already been applied.
+
+   Roll back to the previous healthy release with
+   `sh deploy/vps/rollback.sh`; use `sh deploy/vps/rollback.sh <tag>` to select a
+   specific image and `sh deploy/vps/rollback.sh --list` to show release history
+   newest first (`*` marks the current release). Rollback does not run
+   migrations; additive migrations keep prior API releases compatible.
 
 3. Check `https://srv948389.hstgr.cloud/health` and confirm `llm_provider` is `cursor` and `llm_ready` is `true`. `QUENYA_CORS_ORIGINS` is a comma-separated exact-origin allowlist; add each Vercel preview origin explicitly if needed.
 
@@ -80,10 +87,10 @@ run (about 300 per day maximum). Product-page requests are separated by
 
 ## Update, logs and rollback
 
-Sync the approved branch/revision to the host, then run the deploy script:
+Sync the approved branch/revision to the host, then deploy a release:
 
 ```sh
-sh deploy/vps/deploy.sh
+QUENYA_RELEASE=<git sha> sh deploy/vps/deploy.sh
 docker compose -f deploy/vps/docker-compose.yml logs -f quenya-api quenya-worker
 ```
 
@@ -92,4 +99,11 @@ requests and keeps the synchronous endpoint available for existing iPhone
 builds. The worker claims jobs independently and finishes active jobs before
 exiting on SIGTERM.
 
-To roll back, check out the previously deployed revision and run the same deploy script. Do not remove the `quenya-cache` volume during an update or rollback.
+Roll back to the previous release or list available releases with:
+
+```sh
+sh deploy/vps/rollback.sh
+sh deploy/vps/rollback.sh --list
+```
+
+Do not remove the `quenya-cache` volume during an update or rollback.
