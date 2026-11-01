@@ -1445,6 +1445,74 @@ def activate_profile(
     return get_profile(profile_id, kind=kind)
 
 
+def profile_count(kind: str = "user", owner_id: str | None = None) -> int:
+    init_db()
+    query = "SELECT COUNT(*) FROM profiles WHERE kind=?"
+    params: list[Any] = [kind]
+    if kind == "user" and owner_id is not None:
+        query += " AND owner_id=?"
+        params.append(owner_id)
+    with db_connection() as connection:
+        return connection.execute(query, params).fetchone()[0]
+
+
+def profile_board_summaries(
+    kind: str = "user", owner_id: str | None = None
+) -> list[dict[str, Any]]:
+    init_db()
+    owner_filter = " AND owner_id=?" if kind == "user" and owner_id is not None else ""
+    params: list[Any] = [kind]
+    if owner_filter:
+        params.append(owner_id)
+    with db_connection() as connection:
+        rows = connection.execute(
+            f"""WITH selected_profiles AS (
+                SELECT id, label, context, active, brief_json, created_at, updated_at
+                FROM profiles WHERE kind=?{owner_filter}
+            ), versions AS (
+                SELECT profile_id, MAX(version) AS version FROM taste_versions
+                WHERE profile_id IN (SELECT id FROM selected_profiles)
+                GROUP BY profile_id
+            ), swipe_counts AS (
+                SELECT profile_id, COUNT(*) AS total FROM swipes
+                WHERE profile_id IN (SELECT id FROM selected_profiles)
+                GROUP BY profile_id
+            ), outfit_counts AS (
+                SELECT profile_id, COUNT(*) AS total FROM outfits
+                WHERE profile_id IN (SELECT id FROM selected_profiles)
+                GROUP BY profile_id
+            ), upload_counts AS (
+                SELECT profile_id, COUNT(*) AS total FROM uploads
+                WHERE profile_id IN (SELECT id FROM selected_profiles)
+                GROUP BY profile_id
+            )
+            SELECT p.id, p.label, p.context, p.active, p.brief_json,
+                   COALESCE(v.version, 0) AS version,
+                   COALESCE(s.total, 0) AS swipes,
+                   COALESCE(o.total, 0) AS outfits,
+                   COALESCE(u.total, 0) AS uploads
+            FROM selected_profiles p
+            LEFT JOIN versions v ON v.profile_id=p.id
+            LEFT JOIN swipe_counts s ON s.profile_id=p.id
+            LEFT JOIN outfit_counts o ON o.profile_id=p.id
+            LEFT JOIN upload_counts u ON u.profile_id=p.id
+            ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.created_at DESC""",
+            params,
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "label": row["label"],
+            "context": row["context"],
+            "active": bool(row["active"]),
+            "brief": json.loads(row["brief_json"]),
+            "version": row["version"],
+            "counts": {key: row[key] for key in ("swipes", "outfits", "uploads")},
+        }
+        for row in rows
+    ]
+
+
 def profile_boards(kind: str = "user", owner_id: str | None = None) -> list[dict[str, Any]]:
     init_db()
     with db_connection() as connection:
