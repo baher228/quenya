@@ -9,8 +9,10 @@ from collections import Counter, OrderedDict
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any
+
+from psycopg.errors import LockNotAvailable
 
 from app.config import DB_PATH, QUENYA_CATALOGUE_TTL_S
 from app.rank import tags_for, tokens
@@ -261,6 +263,7 @@ CREATE TABLE IF NOT EXISTS waitlist (
 _INIT_LOCK = Lock()
 _POSTGRES_INIT_ADVISORY_LOCK_KEY = 7301442001
 _INITIALIZED_DATABASES: set[str] = set()
+_POSTGRES_INIT_RETRY_DELAYS = (2, 4, 8)
 _ITEM_MIX_VECTOR_CACHE_MAX_ENTRIES = 6000
 _ITEM_MIX_VECTOR_MISSING_TTL_S = 600
 _ITEM_MIX_VECTOR_MISSING = object()
@@ -543,6 +546,143 @@ def db_connection():
         connection.close()
 
 
+def _pg_execute_init_statement(connection, statement, params=()):
+    connection._init_db_statement = statement
+    return connection.execute(statement, params)
+
+
+def _pg_add_column_if_missing(connection, table, column, definition):
+    existing = _pg_execute_init_statement(
+        connection,
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+        (table, column),
+    ).fetchone()
+    if existing is None:
+        _pg_execute_init_statement(
+            connection,
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}",
+        )
+
+
+def _run_postgres_init(connection):
+    connection._init_db_statement = "SELECT pg_advisory_xact_lock(?)"
+    connection.acquire_advisory_xact_lock(_POSTGRES_INIT_ADVISORY_LOCK_KEY)
+    _pg_execute_init_statement(connection, "SET LOCAL lock_timeout = '5s'")
+    _pg_execute_init_statement(connection, "CREATE SCHEMA IF NOT EXISTS quenya")
+    _pg_execute_init_statement(connection, "CREATE SCHEMA IF NOT EXISTS extensions")
+    _pg_execute_init_statement(
+        connection,
+        "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions",
+    )
+    for statement in POSTGRES_SCHEMA.split(";"):
+        if statement.strip():
+            _pg_execute_init_statement(connection, statement)
+
+    for table, columns in {
+        "items": {"image_preview": "TEXT"},
+        "users": {"password_hash": "TEXT"},
+        "profiles": {
+            "owner_id": "TEXT",
+            "ranker_arm": "TEXT",
+            "deck_request_count": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "routes": {"owner_id": "TEXT"},
+        "uploads": {"owner_id": "TEXT"},
+        "waitlist": {
+            "status": "TEXT NOT NULL DEFAULT 'pending'",
+            "user_id": "TEXT",
+            "reviewed_at": "TEXT",
+        },
+    }.items():
+        for column, definition in columns.items():
+            _pg_add_column_if_missing(connection, table, column, definition)
+
+    _pg_execute_init_statement(
+        connection,
+        """UPDATE profiles SET label=COALESCE(label, 'Your style'),
+           context=COALESCE(context, 'other'),
+           updated_at=COALESCE(updated_at, created_at)""",
+    )
+    _pg_execute_init_statement(
+        connection,
+        """UPDATE profiles SET active=0
+           WHERE kind='user' AND active=1 AND id != (
+               SELECT candidate.id FROM profiles AS candidate
+               WHERE candidate.kind='user' AND candidate.active=1
+                 AND (
+                     candidate.owner_id=profiles.owner_id
+                     OR (
+                         candidate.owner_id IS NULL
+                         AND profiles.owner_id IS NULL
+                     )
+                 )
+               ORDER BY COALESCE(candidate.updated_at, candidate.created_at) DESC,
+                        candidate.created_at DESC, candidate.id DESC
+               LIMIT 1
+           )""",
+    )
+
+
+def _postgres_items_table_exists():
+    with db_connection() as connection:
+        row = _pg_execute_init_statement(
+            connection,
+            "SELECT to_regclass('items') IS NOT NULL",
+        ).fetchone()
+    return bool(row and row[0])
+
+
+def _initialize_postgres_database(database_key):
+    for attempt in range(len(_POSTGRES_INIT_RETRY_DELAYS) + 1):
+        connection = None
+        try:
+            with db_connection() as connection:
+                _run_postgres_init(connection)
+        except LockNotAvailable as exc:
+            statement = getattr(
+                connection,
+                "_init_db_statement",
+                "PostgreSQL initialization connection",
+            )
+            statement = " ".join(statement.split())
+            if attempt < len(_POSTGRES_INIT_RETRY_DELAYS):
+                delay = _POSTGRES_INIT_RETRY_DELAYS[attempt]
+                logger.warning(
+                    "Postgres init statement timed out waiting for a lock: %s "
+                    "(attempt %s/%s); retrying in %ss: %s",
+                    statement,
+                    attempt + 1,
+                    len(_POSTGRES_INIT_RETRY_DELAYS) + 1,
+                    delay,
+                    exc,
+                )
+                sleep(delay)
+                continue
+
+            logger.warning(
+                "Postgres init statement timed out waiting for a lock: %s "
+                "(attempt %s/%s); no retries remain: %s",
+                statement,
+                attempt + 1,
+                len(_POSTGRES_INIT_RETRY_DELAYS) + 1,
+                exc,
+            )
+            if _postgres_items_table_exists():
+                logger.error(
+                    "Postgres init did not finish, but the items table exists; "
+                    "marking the database initialized to avoid a startup failure "
+                    "(last statement: %s)",
+                    statement,
+                )
+                _INITIALIZED_DATABASES.add(database_key)
+                return
+            raise
+        else:
+            _INITIALIZED_DATABASES.add(database_key)
+            return
+
+
 def init_db() -> None:
     if os.getenv("QUENYA_SKIP_DB_INIT") == "1":
         return
@@ -551,52 +691,12 @@ def init_db() -> None:
         database_key = f"postgres:{database_url}" if database_url else f"sqlite:{DB_PATH}"
         if database_key in _INITIALIZED_DATABASES:
             return
+        if database_url:
+            _initialize_postgres_database(database_key)
+            return
         with db_connection() as connection:
-            if database_url:
-                connection.acquire_advisory_xact_lock(
-                    _POSTGRES_INIT_ADVISORY_LOCK_KEY
-                )
-                connection.execute("CREATE SCHEMA IF NOT EXISTS quenya")
-                connection.execute("CREATE SCHEMA IF NOT EXISTS extensions")
-                connection.execute(
-                    "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions"
-                )
-                for statement in POSTGRES_SCHEMA.split(";"):
-                    if statement.strip():
-                        connection.execute(statement)
-                connection.execute(
-                    "ALTER TABLE items ADD COLUMN IF NOT EXISTS image_preview TEXT"
-                )
-                connection.execute(
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
-                )
-                for column, definition in {
-                    "owner_id": "TEXT",
-                    "ranker_arm": "TEXT",
-                    "deck_request_count": "INTEGER NOT NULL DEFAULT 0",
-                }.items():
-                    connection.execute(
-                        f"ALTER TABLE profiles ADD COLUMN IF NOT EXISTS {column} {definition}"
-                    )
-                connection.execute(
-                    "ALTER TABLE routes ADD COLUMN IF NOT EXISTS owner_id TEXT"
-                )
-                connection.execute(
-                    "ALTER TABLE uploads ADD COLUMN IF NOT EXISTS owner_id TEXT"
-                )
-                connection.execute(
-                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS "
-                    "status TEXT NOT NULL DEFAULT 'pending'"
-                )
-                connection.execute(
-                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS user_id TEXT"
-                )
-                connection.execute(
-                    "ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS reviewed_at TEXT"
-                )
-            else:
-                connection.execute("PRAGMA journal_mode=WAL")
-                connection.executescript(SCHEMA)
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.executescript(SCHEMA)
             migrations = {
                 "items": {"image_preview": "TEXT"},
                 "users": {"password_hash": "TEXT"},
