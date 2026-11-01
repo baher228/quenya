@@ -136,9 +136,15 @@ def test_postgres_init_db_takes_advisory_lock_as_first_statement(monkeypatch):
     statements = []
     commits = []
 
+    class FakeCursor:
+        def fetchone(self):
+            return (1,)
+
     class FakeConnection:
         def execute(self, sql, params=None):
             statements.append((sql, params))
+            if "information_schema.columns" in sql:
+                return FakeCursor()
 
         def commit(self):
             commits.append(len(statements))
@@ -167,6 +173,7 @@ def test_postgres_init_db_takes_advisory_lock_as_first_statement(monkeypatch):
         (db._POSTGRES_INIT_ADVISORY_LOCK_KEY,),
     )
     assert statements[1] == ("SET LOCAL search_path TO quenya, extensions", None)
+    assert statements[2] == ("SET LOCAL lock_timeout = '5s'", None)
     assert commits == [len(statements)]
 
 
