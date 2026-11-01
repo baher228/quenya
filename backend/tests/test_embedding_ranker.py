@@ -310,7 +310,11 @@ def test_diversity_penalty_avoids_near_duplicate(monkeypatch):
 
 
 def test_openclip_tokenizer_parity_when_model_fixture_exists():
-    if not Path("/home/ubuntu/research/onnx/text_fp32.onnx").exists():
+    try:
+        fixture_available = Path("/home/ubuntu/research/onnx/text_fp32.onnx").is_file()
+    except OSError:
+        fixture_available = False
+    if not fixture_available:
         pytest.skip("local CLIP ONNX model not present")
     open_clip = pytest.importorskip("open_clip")
     texts = [
@@ -322,3 +326,12 @@ def test_openclip_tokenizer_parity_when_model_fixture_exists():
     expected = open_clip.tokenize(texts, context_length=77).cpu().numpy()
     actual = SimpleTokenizer()(texts, context_length=77)
     np.testing.assert_array_equal(actual, expected)
+
+
+def test_optional_model_parity_skips_an_inaccessible_fixture(monkeypatch):
+    def inaccessible(_path):
+        raise PermissionError("model directory is inaccessible")
+
+    monkeypatch.setattr(Path, "is_file", inaccessible)
+    with pytest.raises(pytest.skip.Exception, match="local CLIP ONNX model not present"):
+        test_openclip_tokenizer_parity_when_model_fixture_exists()
