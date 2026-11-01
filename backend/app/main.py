@@ -147,7 +147,7 @@ def _warm_caches() -> None:
     from app.embedding_ranker import catalogue_sample
 
     for cache_name, warm in (
-        ("live catalogue", db.live_catalogue),
+        ("deck catalogue", db.deck_catalogue),
         ("embedding catalogue sample", catalogue_sample),
     ):
         try:

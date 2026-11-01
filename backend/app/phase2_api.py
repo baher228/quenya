@@ -37,6 +37,9 @@ from app.outfits import (
 )
 from app.prompts import READER_MODEL, READER_SYSTEM, STYLIST_MODEL, STYLIST_SYSTEM
 from app.rank import (
+    DECK_ACCESSORY_LIMIT,
+    DECK_CANDIDATE_LIMIT,
+    DECK_SECONDHAND_LIMIT,
     LOOKALIKE_VECTOR_WINDOW,
     _is_secondhand,
     add_exploration,
@@ -257,11 +260,6 @@ def _taste_update_result(profile: dict[str, Any]) -> dict[str, Any]:
         "request_id": meta.request_id,
         "latency_ms": meta.latency_ms,
     }
-
-
-DECK_CANDIDATE_LIMIT = 5000
-DECK_ACCESSORY_LIMIT = 500
-DECK_SECONDHAND_LIMIT = 2000
 
 
 def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1063,7 +1061,7 @@ def deck(
         ).fetchall()
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
-    candidates = db.live_catalogue(select=_deck_candidates)
+    candidates = db.deck_catalogue()
     profile_live_items = _fitting_sizes(
         db.profile_live_items(active["id"]), active["brief"]
     )

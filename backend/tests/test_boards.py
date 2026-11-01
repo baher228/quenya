@@ -28,7 +28,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _catalogue(items):
-    return lambda *, select=None: select(items) if select else items
+    return lambda: phase2_api._deck_candidates(items)
 
 
 @pytest.fixture(autouse=True)
@@ -537,7 +537,7 @@ def test_swipes_and_deck_exclusions_are_board_local(monkeypatch, tmp_path):
     monkeypatch.setattr(phase2_api, "_user_profile", lambda: db.get_profile("b"))
     profile = _profile()
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", _catalogue([item]))
+    monkeypatch.setattr(phase2_api.db, "deck_catalogue", _catalogue([item]))
     assert [entry["id"] for entry in phase2_api.deck(1)] == ["item-1"]
 
 
@@ -842,7 +842,7 @@ def test_shared_core_disabled_keeps_deck_and_outfit_prompt_board_local(
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
     for item in items:
         item["source"] = "vinted"
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", _catalogue(items))
+    monkeypatch.setattr(phase2_api.db, "deck_catalogue", _catalogue(items))
     route_rankings = []
     original_rank_items = phase2_api.rank_items
 
@@ -901,7 +901,7 @@ def test_shared_core_enabled_contributes_to_deck_ranking(monkeypatch, tmp_path):
         _item("a-minimal-item", "top", ["minimal"]),
         _item("z-workwear-item", "top", ["workwear"]),
     ]
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", _catalogue(items))
+    monkeypatch.setattr(phase2_api.db, "deck_catalogue", _catalogue(items))
     core_profiles = []
     original_rank_items = phase2_api.rank_items
 
@@ -1237,7 +1237,7 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
     )
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", _catalogue(items))
+    monkeypatch.setattr(phase2_api.db, "deck_catalogue", _catalogue(items))
 
     result = phase2_api.deck(10)
 
@@ -1272,7 +1272,7 @@ def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
     )
     monkeypatch.setattr(phase2_api, "_taste", lambda _profile_id: profile)
     monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", _catalogue([item]))
+    monkeypatch.setattr(phase2_api.db, "deck_catalogue", _catalogue([item]))
     monkeypatch.setattr(
         phase2_api, "catalogue_sample",
         lambda: np.asarray([vector, -vector], dtype=np.float32),
@@ -1345,7 +1345,7 @@ def test_embed_deck_searches_past_the_initial_vector_window(
     monkeypatch.setattr(phase2_api, "history_query", lambda *_args: None)
     monkeypatch.setattr(phase2_api, "catalogue_sample", lambda: np.asarray([vector]))
     monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
-    monkeypatch.setattr(db, "live_catalogue", _catalogue(items))
+    monkeypatch.setattr(db, "deck_catalogue", _catalogue(items))
     monkeypatch.setattr(db, "profile_embedding", lambda _profile_id: vector)
     monkeypatch.setattr(db, "recent_deck_item_ids", lambda _profile_id: ["recent-item"])
     monkeypatch.setattr(db, "item_mix_vectors", item_mix_vectors)
