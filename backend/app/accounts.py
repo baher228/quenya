@@ -389,20 +389,28 @@ def _admin_users() -> list[dict[str, Any]]:
                FROM users u LEFT JOIN auth_sessions s ON s.user_id=u.id
                GROUP BY u.id ORDER BY u.created_at"""
         ).fetchall()
+        styles = connection.execute(
+            """WITH swipe_counts AS (
+                   SELECT profile_id, COUNT(*) AS total FROM swipes GROUP BY profile_id
+               )
+               SELECT p.owner_id, p.id, p.label, COALESCE(s.total, 0) AS swipe_count
+               FROM profiles p LEFT JOIN swipe_counts s ON s.profile_id=p.id
+               WHERE p.kind='user' AND p.owner_id IN (SELECT id FROM users)
+               ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.created_at DESC"""
+        ).fetchall()
+    styles_by_owner: dict[str, list[dict[str, Any]]] = {}
+    swipes_by_owner: dict[str, int] = {}
+    for style in styles:
+        owner_id = style["owner_id"]
+        styles_by_owner.setdefault(owner_id, []).append({
+            "id": style["id"], "label": style["label"],
+        })
+        swipes_by_owner[owner_id] = swipes_by_owner.get(owner_id, 0) + style["swipe_count"]
     result = []
     for row in rows:
         user = dict(row)
-        boards = db.profile_boards("user", user["id"])
-        with db.db_connection() as connection:
-            swipe_count = connection.execute(
-                """SELECT COUNT(*) FROM swipes
-                   WHERE profile_id IN (
-                       SELECT id FROM profiles WHERE kind='user' AND owner_id=?
-                   )""",
-                (user["id"],),
-            ).fetchone()[0]
-        user["styles"] = [{"id": b["id"], "label": b["label"]} for b in boards]
-        user["swipe_count"] = swipe_count
+        user["styles"] = styles_by_owner.get(user["id"], [])
+        user["swipe_count"] = swipes_by_owner.get(user["id"], 0)
         result.append({key: user.get(key) for key in (
             "id", "name", "role", "created_at", "revoked_at", "last_seen_at",
             "styles", "swipe_count",
