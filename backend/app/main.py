@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import re
+import time
+import uuid
 from threading import Thread
 from typing import Literal
 
@@ -31,6 +34,7 @@ from app.images import (
     storage_public_url,
 )
 from app.llm import TaskError
+from app.observability import init_sentry
 from app.phase2_api import _public_item
 from app.phase2_api import router as phase2_router
 from app.prompts import (
@@ -47,8 +51,20 @@ from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
 from app.waitlist import router as waitlist_router
 
+init_sentry("api")
+
 app = TimedFastAPI(title="Quenya API")
 logger = logging.getLogger(__name__)
+access_logger = logging.getLogger("quenya.access")
+access_logger.setLevel(logging.INFO)
+access_logger.propagate = False
+if not access_logger.handlers:
+    access_handler = logging.StreamHandler()
+    access_handler.setFormatter(logging.Formatter("%(message)s"))
+    access_logger.addHandler(access_handler)
+
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -69,6 +85,45 @@ async def request_context(request: Request, call_next):
         return await call_next(request)
     finally:
         accounts._in_request.reset(token)
+
+
+@app.middleware("http")
+async def request_timing(request: Request, call_next):
+    incoming_id = request.headers.get("X-Request-ID", "")
+    request_id = (
+        incoming_id
+        if _REQUEST_ID_PATTERN.fullmatch(incoming_id)
+        else uuid.uuid4().hex
+    )
+    started = time.perf_counter()
+
+    def log_access(status_code: int) -> None:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        route = getattr(request.scope.get("route"), "path", "unmatched")
+        message = (
+            "request id=%s method=%s route=%s status=%s ms=%.1f",
+            request_id,
+            request.method,
+            route,
+            status_code,
+            elapsed_ms,
+        )
+        if status_code >= 500:
+            access_logger.error(*message)
+        elif elapsed_ms >= 2000:
+            access_logger.warning(*message)
+        elif request.url.path != "/api/health":
+            access_logger.info(*message)
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        log_access(500)
+        raise
+
+    response.headers["X-Request-ID"] = request_id
+    log_access(response.status_code)
+    return response
 
 
 @app.exception_handler(HTTPException)

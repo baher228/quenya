@@ -1,0 +1,92 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Probe endpoints
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_url="https://app.quenya.co.uk/api/health"
+          site_url="https://quenya.co.uk/"
+          failures=()
+          health_body="$(mktemp)"
+          if health_status="$(curl --silent --show-error --location --retry 2 --retry-delay 1 --max-time 20 --output "$health_body" --write-out '%{http_code}' "$health_url")"; then
+            :
+          else
+            health_status="${health_status:-000}"
+          fi
+          if [[ "$health_status" != "200" ]]; then
+            failures+=("$health_url: HTTP $health_status (expected 200)")
+          elif ! jq -e '.ok == true' "$health_body" >/dev/null 2>&1; then
+            failures+=("$health_url: HTTP 200 but JSON .ok was not true")
+          fi
+          rm -f "$health_body"
+
+          if site_status="$(curl --silent --show-error --location --retry 2 --retry-delay 1 --max-time 20 --output /dev/null --write-out '%{http_code}' "$site_url")"; then
+            :
+          else
+            site_status="${site_status:-000}"
+          fi
+          if [[ "$site_status" != "200" ]]; then
+            failures+=("$site_url: HTTP $site_status (expected 200)")
+          fi
+
+          checked_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            echo "failure_details<<EOF"
+            if ((${#failures[@]})); then
+              printf '%s\n' "${failures[@]}"
+            fi
+            echo "EOF"
+            echo "checked_at=$checked_at"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update outage issue
+        if: steps.probe.outputs.failure_details != ''
+        env:
+          FAILURE_DETAILS: ${{ steps.probe.outputs.failure_details }}
+          CHECKED_AT: ${{ steps.probe.outputs.checked_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          label_exists="$(gh label list --repo "$GITHUB_REPOSITORY" --limit 100 --json name --jq 'any(.[]; .name == "outage")')"
+          if [[ "$label_exists" != "true" ]]; then
+            gh label create outage --repo "$GITHUB_REPOSITORY" --color d1242f --description "Service outage"
+          fi
+          issue_number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label outage --json number --jq '.[0].number // empty')"
+          body="$(printf 'Checked at %s (UTC)\n\nFailing endpoints:\n%s' "$CHECKED_AT" "$FAILURE_DETAILS")"
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Quenya is down" --body "$body" --label outage
+          fi
+
+      - name: Close recovered outage issue
+        if: steps.probe.outputs.failure_details == ''
+        env:
+          CHECKED_AT: ${{ steps.probe.outputs.checked_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          label_exists="$(gh label list --repo "$GITHUB_REPOSITORY" --limit 100 --json name --jq 'any(.[]; .name == "outage")')"
+          if [[ "$label_exists" == "true" ]]; then
+            issue_number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label outage --json number --jq '.[0].number // empty')"
+            if [[ -n "$issue_number" ]]; then
+              gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "Recovered at $CHECKED_AT"
+              gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY"
+            fi
+          fi

@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
 
+import sentry_sdk
 from fastapi import HTTPException
 
 from app import db
@@ -329,6 +330,7 @@ def run_job(job: dict[str, Any]) -> None:
         fail(job_id, exc.status_code, exc.detail)
     except Exception:
         logger.exception("Outfit job %s failed", job_id)
+        sentry_sdk.capture_exception()
         fail(job_id, 500, "Outfit generation failed")
     finally:
         accounts._in_request.reset(request_token)
