@@ -218,13 +218,43 @@ def _baseline(connection) -> None:
                  )
                ORDER BY COALESCE(candidate.updated_at, candidate.created_at) DESC,
                         candidate.created_at DESC, candidate.id DESC
-               LIMIT 1
+           LIMIT 1
            )"""
+    )
+
+
+def _jobs(connection) -> None:
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS jobs (
+               id TEXT PRIMARY KEY,
+               kind TEXT NOT NULL,
+               owner_id TEXT,
+               profile_id TEXT,
+               status TEXT NOT NULL,
+               payload_json TEXT NOT NULL,
+               result_json TEXT,
+               error_json TEXT,
+               attempts INTEGER NOT NULL DEFAULT 0,
+               worker_id TEXT,
+               created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+               started_at TIMESTAMPTZ,
+               heartbeat_at TIMESTAMPTZ,
+               finished_at TIMESTAMPTZ
+           )"""
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_jobs_status_created "
+        "ON jobs(status, created_at)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_jobs_owner_created "
+        "ON jobs(owner_id, created_at)"
     )
 
 
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
+    ("0002_jobs", _jobs),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 

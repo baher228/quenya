@@ -6,13 +6,16 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from threading import Thread
+from time import monotonic, sleep
 from typing import Annotated, Any
 
 import numpy as np
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from PIL import Image, ImageOps
 
-from app import db, images
+from app import db, images, jobs
 from app.accessories import is_accessory_slot
 from app.accounts import context_user, current_user, in_request
 from app.config import CONTEXT_SOURCES, SHARED_CORE_ENABLED, SHOP_TIERS, SPORT_CONTEXTS
@@ -1251,8 +1254,7 @@ def taste_history(board_id: str | None = None) -> dict[str, Any]:
     }
 
 
-@router.post("/api/outfits")
-def outfits(body: OutfitRequest) -> dict[str, Any]:
+def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
     active = _board_profile(body.board_id)
     current = db.latest_taste(active["id"])
     profile = current["profile"]
@@ -1386,6 +1388,78 @@ def outfits(body: OutfitRequest) -> dict[str, Any]:
         ),
         "request_ids": request_ids,
     }
+
+
+def _run_inline_outfit_job(job_id: str) -> None:
+    job = jobs.claim(job_id, f"inline-{uuid.uuid4().hex[:8]}")
+    if job is not None:
+        jobs.run_job(job)
+
+
+def _enqueue_outfit_job(body: OutfitRequest) -> str:
+    active = _board_profile(body.board_id)
+    owner_id = _owner_id()
+    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
+    if runner not in {"inline", "worker"}:
+        raise ValueError("QUENYA_JOB_RUNNER must be inline or worker")
+    job_id = jobs.enqueue(
+        "outfits",
+        owner_id,
+        active["id"],
+        body.model_dump(),
+    )
+    if runner == "inline":
+        Thread(
+            target=_run_inline_outfit_job,
+            args=(job_id,),
+            name=f"outfit-job-{job_id[:8]}",
+            daemon=True,
+        ).start()
+    return job_id
+
+
+@router.post("/api/outfits/jobs", status_code=202)
+def enqueue_outfit_job(body: OutfitRequest) -> dict[str, str]:
+    job_id = _enqueue_outfit_job(body)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/api/outfits/jobs/{job_id}")
+def get_outfit_job(job_id: str) -> dict[str, Any]:
+    job = jobs.get(job_id, _owner_id())
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    result: dict[str, Any] = {"status": job["status"]}
+    if job["status"] == "done":
+        result["result"] = job["result"]
+    elif job["status"] == "error":
+        result["error"] = job["error"]
+    return result
+
+
+@router.post("/api/outfits", response_model=None)
+def outfits(body: OutfitRequest) -> dict[str, Any] | JSONResponse:
+    job_id = _enqueue_outfit_job(body)
+    owner_id = _owner_id()
+    wait_s = max(0.0, float(os.getenv("QUENYA_OUTFIT_SYNC_WAIT_S", "100")))
+    deadline = monotonic() + wait_s
+    while monotonic() < deadline:
+        job = jobs.get(job_id, owner_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job["status"] == "done":
+            return job["result"]
+        if job["status"] == "error":
+            error = job["error"] or {}
+            raise HTTPException(
+                status_code=error.get("status_code", 500),
+                detail=error.get("detail", "Outfit generation failed"),
+            )
+        sleep(0.5)
+    return JSONResponse(
+        status_code=504,
+        content={"error": "Outfits are still being made", "job_id": job_id},
+    )
 
 
 def _interleave_base_candidates(

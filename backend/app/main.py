@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request
 
-from app import accounts, db
+from app import accounts, db, jobs
 from app.accounts import AdminUser, CurrentUser
 from app.accounts import router as accounts_router
 from app.config import (
@@ -182,6 +182,7 @@ def health() -> dict:
         "prompt_version": PROMPT_VERSION,
         "items_total": total,
         "items_tagged": tagged,
+        "jobs": jobs.stats(),
         "schema": db.schema_migration_status(),
     }
 

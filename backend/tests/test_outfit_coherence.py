@@ -514,7 +514,7 @@ def test_outfits_saves_and_returns_piece_ids_in_canonical_order(monkeypatch):
 
     monkeypatch.setattr(phase2_api.db, "save_outfit", save_outfit)
 
-    result = phase2_api.outfits(OutfitRequest(count=1))
+    result = phase2_api.generate_outfits(OutfitRequest(count=1))
 
     expected = ["outer", "mid", "tee", "bottom", "shoes", "bag", "accessory"]
     assert saved["piece_ids"] == expected

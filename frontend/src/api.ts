@@ -14,6 +14,18 @@ export class ApiError extends Error {
   }
 }
 
+function apiErrorFromDetail(detail: unknown, status: number): ApiError {
+  let message = `Request failed (${status})`;
+  let ids: string[] = [];
+  if (typeof detail === "string") message = detail;
+  else if (detail && typeof detail === "object") {
+    const d = detail as { error?: string; request_ids?: string[] };
+    if (d.error) message = d.error;
+    if (Array.isArray(d.request_ids)) ids = d.request_ids;
+  }
+  return new ApiError(message, status, ids);
+}
+
 export type ProfileResult = {
   profile_id: string;
   brief: Brief;
@@ -61,21 +73,36 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       window.localStorage.removeItem("quenya.token");
       window.dispatchEvent(new Event("quenya:unauthorized"));
     }
-    let message = `Request failed (${res.status})`;
-    let ids: string[] = [];
-    if (typeof detail === "string") message = detail;
-    else if (detail && typeof detail === "object") {
-      const d = detail as { error?: string; request_ids?: string[] };
-      if (d.error) message = d.error;
-      if (Array.isArray(d.request_ids)) ids = d.request_ids;
-    }
-    throw new ApiError(message, res.status, ids);
+    throw apiErrorFromDetail(detail, res.status);
   }
   return body as T;
 }
 
 const post = <T>(path: string, data?: unknown) =>
   req<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
+
+type OutfitJobResponse = {
+  status: "queued" | "running" | "done" | "error";
+  result?: OutfitsResponse;
+  error?: { status_code: number; detail: unknown };
+};
+
+async function pollOutfitJob(jobId: string): Promise<OutfitsResponse> {
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline) {
+    const delay = Math.min(1_500, deadline - Date.now());
+    await new Promise(resolve => window.setTimeout(resolve, delay));
+    if (Date.now() >= deadline) break;
+    const job = await req<OutfitJobResponse>(
+      `/api/outfits/jobs/${encodeURIComponent(jobId)}`,
+    );
+    if (job.status === "done" && job.result) return job.result;
+    if (job.status === "error" && job.error) {
+      throw apiErrorFromDetail(job.error.detail, job.error.status_code);
+    }
+  }
+  throw new ApiError("Outfits are still being made", 504);
+}
 
 export const api = {
   invite: (token: string) => post<{ token: string; user: User }>("/api/auth/invite", { token }),
@@ -118,8 +145,13 @@ export const api = {
     post<TasteVersion>("/api/taste/update", board_id ? { board_id } : undefined),
   taste: (board_id?: string) =>
     req<TasteState>(`/api/taste${board_id ? `?board_id=${encodeURIComponent(board_id)}` : ""}`),
-  outfits: (count: number, locked_ids: string[] = [], exclude_ids: string[] = [], board_id?: string) =>
-    post<OutfitsResponse>("/api/outfits", { count, locked_ids, exclude_ids, board_id }),
+  outfits: async (count: number, locked_ids: string[] = [], exclude_ids: string[] = [], board_id?: string) => {
+    const job = await post<{ job_id: string; status: string }>(
+      "/api/outfits/jobs",
+      { count, locked_ids, exclude_ids, board_id },
+    );
+    return pollOutfitJob(job.job_id);
+  },
   swap: (outfitId: string, item_id: string, exclude_ids: string[] = [], board_id?: string) =>
     post<Outfit | { outfit: Outfit }>(`/api/outfits/${outfitId}/swap`, { item_id, exclude_ids, board_id }).then(r => ("outfit" in r ? r.outfit : r)),
   verdict: (outfitId: string, verdict: "like" | "reject", reason?: string, board_id?: string) =>

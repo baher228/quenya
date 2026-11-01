@@ -453,7 +453,7 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
         return result, SimpleNamespace(request_id=f"mreq-{len(calls)}")
 
     monkeypatch.setattr(phase2_api, "call_task", fake_call_task)
-    response = phase2_api.outfits(OutfitRequest(count=1))
+    response = phase2_api.generate_outfits(OutfitRequest(count=1))
 
     assert len(calls) == 2
     assert calls[0][3] == calls[1][3][0]["content"]
@@ -693,7 +693,9 @@ def test_outfits_board_id_uses_owned_non_active_profile(monkeypatch):
         ),
     )
 
-    result = phase2_api.outfits(OutfitRequest(count=1, board_id="board-b"))
+    result = phase2_api.generate_outfits(
+        OutfitRequest(count=1, board_id="board-b")
+    )
 
     assert result["outfits"][0]["id"] == "outfit-b"
     assert saved_profile_ids == ["board-b"]
@@ -914,7 +916,7 @@ def test_outfits_exclude_disliked_items_and_lookalikes_but_keep_likes(
     monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
 
     with pytest.raises(HTTPException) as exc:
-        phase2_api.outfits(
+        phase2_api.generate_outfits(
             OutfitRequest(board_id="board-a", locked_ids=["disliked"])
         )
 
@@ -944,7 +946,7 @@ def test_outfits_keep_locked_piece_even_when_size_does_not_fit(
     monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
 
     with pytest.raises(HTTPException) as exc:
-        phase2_api.outfits(
+        phase2_api.generate_outfits(
             OutfitRequest(
                 board_id="board-a",
                 locked_ids=["locked-wrong-size"],
