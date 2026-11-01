@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Iterable
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -205,6 +206,25 @@ def order_outfit_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return _CANONICAL_SLOT_ORDER.get(slot, 8)
 
     return sorted(pieces, key=order)
+
+
+def build_pool_batches(
+    batches: Iterable[list[dict[str, Any]]],
+    brief: dict[str, Any],
+    profile: dict[str, Any],
+    locked_ids: list[str],
+    exclude_ids: list[str],
+    *,
+    core_profile: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    pool = []
+    for batch in batches:
+        # Each quota retains its best items; discarded candidates cannot win later.
+        pool = build_pool(
+            [*pool, *batch], brief, profile, locked_ids, exclude_ids,
+            core_profile=core_profile,
+        )
+    return pool
 
 
 def build_pool(

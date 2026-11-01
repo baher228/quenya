@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -240,7 +241,7 @@ def _run_swap(
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api.db, "get_outfit", lambda _outfit_id: outfit)
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue", lambda: candidates
+        phase2_api.db, "live_catalogue_batches", lambda: nullcontext([candidates])
     )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
@@ -487,14 +488,14 @@ def test_outfits_saves_and_returns_piece_ids_in_canonical_order(monkeypatch):
             "profile": {"price_ceiling_gbp": 1000},
         },
     )
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: pieces)
+    monkeypatch.setattr(phase2_api.db, "live_catalogue_batches", lambda: nullcontext([pieces]))
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
     )
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
     monkeypatch.setattr(
-        phase2_api, "build_pool", lambda *_args, **_kwargs: pieces
+        phase2_api, "build_pool_batches", lambda *_args, **_kwargs: pieces
     )
     monkeypatch.setattr(
         phase2_api, "stylist_user_content", lambda *_args, **_kwargs: "pool"

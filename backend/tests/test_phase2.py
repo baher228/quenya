@@ -1,4 +1,5 @@
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -434,7 +435,8 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
         lambda _profile_id: {"version": 1, "profile": profile},
     )
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue", lambda: [items[0], items[1], replacement_shoes]
+        phase2_api.db, "live_catalogue_batches",
+        lambda: nullcontext([[items[0], items[1], replacement_shoes]])
     )
     monkeypatch.setattr(phase2_api.db, "save_outfit", lambda *_args, **_kwargs: "outfit-1")
     calls = []
@@ -652,12 +654,12 @@ def test_outfits_board_id_uses_owned_non_active_profile(monkeypatch):
             or {"version": 1, "profile": taste_profile}
         ),
     )
-    monkeypatch.setattr(db, "live_catalogue", lambda: pool)
+    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext([pool]))
     monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
     monkeypatch.setattr(db, "swipe_history", lambda _profile_id: {})
     monkeypatch.setattr(
         phase2_api,
-        "build_pool",
+        "build_pool_batches",
         lambda *_args, **_kwargs: pool,
     )
     monkeypatch.setattr(
@@ -907,17 +909,18 @@ def test_outfits_exclude_disliked_items_and_lookalikes_but_keep_likes(
     db.insert_swipe("board-a", "disliked", False)
     seen = {}
 
-    def capture_pool(items, _brief_arg, _profile, _locked, exclude_ids, **_kwargs):
+    def capture_pool(batches, _brief_arg, _profile, _locked, exclude_ids, **_kwargs):
+        items = [item for batch in batches for item in batch]
         seen["ids"] = {item["id"] for item in items}
         seen["exclude_ids"] = set(exclude_ids)
         return []
 
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
-    monkeypatch.setattr(db, "live_catalogue", lambda: [
+    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext([[
         liked, disliked, product_lookalike, image_lookalike, other
-    ])
-    monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
+    ]]))
+    monkeypatch.setattr(phase2_api, "build_pool_batches", capture_pool)
 
     with pytest.raises(HTTPException) as exc:
         phase2_api.generate_outfits(
@@ -940,14 +943,15 @@ def test_outfits_keep_locked_piece_even_when_size_does_not_fit(
     wrong_size["size"] = "S"
     seen = {}
 
-    def capture_pool(items, _brief_arg, _profile, _locked, _exclude, **_kwargs):
+    def capture_pool(batches, _brief_arg, _profile, _locked, _exclude, **_kwargs):
+        items = [item for batch in batches for item in batch]
         seen["ids"] = {item["id"] for item in items}
         return []
 
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
-    monkeypatch.setattr(db, "live_catalogue", lambda: [wrong_size])
-    monkeypatch.setattr(phase2_api, "build_pool", capture_pool)
+    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext([[wrong_size]]))
+    monkeypatch.setattr(phase2_api, "build_pool_batches", capture_pool)
 
     with pytest.raises(HTTPException) as exc:
         phase2_api.generate_outfits(
@@ -1098,7 +1102,7 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
         lambda _kind: {"id": "board-a", "brief": _brief()},
     )
     monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: outfit)
-    monkeypatch.setattr(db, "live_catalogue", lambda: [old, replacement])
+    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext([[old, replacement]]))
     monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
     monkeypatch.setattr(
         db,

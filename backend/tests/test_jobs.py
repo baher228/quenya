@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime, timedelta
 from threading import Thread
 
@@ -318,12 +318,12 @@ def test_inline_runner_and_legacy_endpoint_return_generation_result(
             type("Meta", (), {"request_id": "stylist-request"})(),
         )
 
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: [item])
+    monkeypatch.setattr(phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[item]]))
     monkeypatch.setattr(phase2_api.db, "profile_swipe_items", lambda _profile: [])
     monkeypatch.setattr(phase2_api, "_fitting_sizes", lambda items, _brief: items)
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_core", lambda: {"rules": []})
-    monkeypatch.setattr(phase2_api, "build_pool", lambda *_args, **_kwargs: [item])
+    monkeypatch.setattr(phase2_api, "build_pool_batches", lambda *_args, **_kwargs: [item])
     monkeypatch.setattr(phase2_api, "stylist_user_content", lambda *_args, **_kwargs: "prompt")
     monkeypatch.setattr(phase2_api, "style_notes", lambda _brief: [])
     monkeypatch.setattr(phase2_api.db, "swipe_history", lambda _profile: {})

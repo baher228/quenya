@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import pytest
 from fastapi import HTTPException
 
@@ -539,7 +541,7 @@ def test_swap_keeps_the_replaced_layer_role(monkeypatch):
         lambda item_id: items_by_id.get(item_id),
     )
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue", lambda: [wrong_role, same_role]
+        phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[wrong_role, same_role]])
     )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
@@ -594,7 +596,7 @@ def test_swap_rejects_coat_and_outerwear_slot_overshirt(monkeypatch):
         "get_item_with_tags",
         lambda item_id: items_by_id.get(item_id),
     )
-    monkeypatch.setattr(phase2_api.db, "live_catalogue", lambda: [overshirt])
+    monkeypatch.setattr(phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[overshirt]]))
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
     )
@@ -648,7 +650,7 @@ def test_swap_rejects_shell_replacement_that_makes_two_shells(monkeypatch):
         lambda item_id: items_by_id.get(item_id),
     )
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue", lambda: [replacement]
+        phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[replacement]])
     )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
