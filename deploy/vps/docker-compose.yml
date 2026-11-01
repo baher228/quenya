@@ -2,7 +2,7 @@ name: quenya
 
 services:
   quenya-api:
-    image: quenya-quenya-api
+    image: quenya-quenya-api:${QUENYA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: deploy/vps/Dockerfile
@@ -10,6 +10,7 @@ services:
       - /etc/quenya/quenya.env
     environment:
       QUENYA_JOB_RUNNER: worker
+      QUENYA_RELEASE: ${QUENYA_IMAGE_TAG:-latest}
     ports:
       - "127.0.0.1:8100:8000"
     mem_limit: 3g
@@ -29,13 +30,15 @@ services:
       start_period: 120s
 
   quenya-worker:
-    image: quenya-quenya-api
+    image: quenya-quenya-api:${QUENYA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: deploy/vps/Dockerfile
     command: python -m app.worker
     env_file:
       - /etc/quenya/quenya.env
+    environment:
+      QUENYA_RELEASE: ${QUENYA_IMAGE_TAG:-latest}
     mem_limit: 2g
     cpus: 1.0
     restart: unless-stopped
