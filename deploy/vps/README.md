@@ -18,15 +18,24 @@ Display images continue to use Supabase by default. To use R2, create the `queny
 
    Keep the env file as plain `KEY=value` lines without quotes; Docker's `env_file` parser preserves quote characters. The example already sets the CLIP text ONNX URL and SHA-256. The image sets `TMPDIR=/cache/tmp` and `HF_HOME=/cache/hf`, so downloaded model/cache files persist in the named volume.
 
-2. Install the Nginx site, start the API, then request the TLS certificate:
+2. Install the Nginx site, deploy the API with the migration runner, then request the TLS certificate:
 
    ```sh
    sudo install -m 644 deploy/vps/nginx-quenya-api.conf /etc/nginx/sites-available/quenya-api
    sudo ln -s /etc/nginx/sites-available/quenya-api /etc/nginx/sites-enabled/quenya-api
    sudo nginx -t && sudo systemctl reload nginx
-   docker compose -f deploy/vps/docker-compose.yml up -d --build
+   sh deploy/vps/deploy.sh
    sudo certbot --nginx -d srv948389.hstgr.cloud
    ```
+
+   The deploy script builds the image, applies pending migrations in a one-off
+   container, then replaces the API and waits for `/api/health`. The old API
+   continues serving while migrations run, so migrations must remain backward
+   compatible and additive.
+
+   To add a migration, append a new ordered `("000N_name", function)` entry to
+   `MIGRATIONS` in `backend/app/migrate.py`. Never edit a migration that has
+   already been applied.
 
 3. Check `https://srv948389.hstgr.cloud/health` and confirm `llm_provider` is `cursor` and `llm_ready` is `true`. `QUENYA_CORS_ORIGINS` is a comma-separated exact-origin allowlist; add each Vercel preview origin explicitly if needed.
 
@@ -71,11 +80,11 @@ run (about 300 per day maximum). Product-page requests are separated by
 
 ## Update, logs and rollback
 
-Sync the approved branch/revision to the host, then rebuild and replace the service:
+Sync the approved branch/revision to the host, then run the deploy script:
 
 ```sh
-docker compose -f deploy/vps/docker-compose.yml up -d --build
+sh deploy/vps/deploy.sh
 docker compose -f deploy/vps/docker-compose.yml logs -f quenya-api
 ```
 
-To roll back, check out the previously deployed revision and run the same `up -d --build` command. Do not remove the `quenya-cache` volume during an update or rollback.
+To roll back, check out the previously deployed revision and run the same deploy script. Do not remove the `quenya-cache` volume during an update or rollback.

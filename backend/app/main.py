@@ -182,6 +182,7 @@ def health() -> dict:
         "prompt_version": PROMPT_VERSION,
         "items_total": total,
         "items_tagged": tagged,
+        "schema": db.schema_migration_status(),
     }
 
 
