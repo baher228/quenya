@@ -1,8 +1,9 @@
 import io
 
 import numpy as np
-from app import db, embed
 from PIL import Image
+
+from app import db, embed
 
 
 def test_image_source_uses_r2_public_url_when_enabled(monkeypatch):

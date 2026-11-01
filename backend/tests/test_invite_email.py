@@ -1,9 +1,10 @@
 import smtplib
 
 import pytest
+from fastapi.testclient import TestClient
+
 from app import accounts, config, db, mailer, main
 from app.waitlist import reset_rate_limit
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture
