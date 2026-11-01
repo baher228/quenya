@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request
 
-from app import accounts, db
+from app import accounts, db, jobs
 from app.accounts import AdminUser, CurrentUser
 from app.accounts import router as accounts_router
 from app.config import (
@@ -166,6 +166,11 @@ def health() -> dict:
         else bool(QUENYA_LLM_API_KEY) if provider == "openai"
         else False
     )
+    try:
+        job_stats = jobs.stats()
+    except Exception:
+        logger.exception("Failed to load job health stats")
+        job_stats = None
     return {
         "ok": True,
         "llm_provider": provider,
@@ -182,6 +187,7 @@ def health() -> dict:
         "prompt_version": PROMPT_VERSION,
         "items_total": total,
         "items_tagged": tagged,
+        "jobs": job_stats,
         "schema": db.schema_migration_status(),
     }
 

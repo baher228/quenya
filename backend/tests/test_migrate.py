@@ -166,7 +166,13 @@ def test_cli_check_exit_codes(monkeypatch, capsys):
     [
         (False, set(), None, False),
         (True, set(), None, False),
-        (True, {"0001_baseline"}, "0001_baseline", True),
+        (True, {"0001_baseline"}, "0001_baseline", False),
+        (
+            True,
+            {"0001_baseline", "0002_jobs"},
+            "0002_jobs",
+            True,
+        ),
     ],
 )
 def test_init_db_without_auto_migrate_only_checks_schema_versions(
@@ -240,3 +246,33 @@ def test_terminate_flag_terminates_only_stale_idle_sessions_then_retries(
     assert state["applied"] == {"0001_first"}
     assert state["blocker_queries"] == [(60,), (300,)]
     assert state["termination_queries"] == [(123,)]
+
+
+def test_jobs_migration_creates_additive_table_and_indexes():
+    statements = []
+
+    class Connection:
+        def execute(self, statement, _params=()):
+            statements.append(statement)
+
+    migrate._jobs(Connection())
+
+    assert statements[0].startswith("CREATE TABLE IF NOT EXISTS jobs")
+    assert "payload_json TEXT NOT NULL" in statements[0]
+    assert "attempts INTEGER NOT NULL DEFAULT 0" in statements[0]
+    assert "idx_jobs_status_created" in statements[1]
+    assert "idx_jobs_owner_created" in statements[2]
+
+
+def test_jobs_migration_creates_table_and_indexes():
+    statements = []
+
+    class Connection:
+        def execute(self, statement, _params=()):
+            statements.append(statement)
+
+    migrate._jobs(Connection())
+
+    assert "CREATE TABLE IF NOT EXISTS jobs" in statements[0]
+    assert "idx_jobs_status_created" in statements[1]
+    assert "idx_jobs_owner_created" in statements[2]

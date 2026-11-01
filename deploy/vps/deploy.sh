@@ -6,7 +6,7 @@ cd /opt/quenya
 docker compose -f deploy/vps/docker-compose.yml build quenya-api
 docker compose -f deploy/vps/docker-compose.yml run --rm --no-deps quenya-api \
     python -m app.migrate "$@"
-docker compose -f deploy/vps/docker-compose.yml up -d quenya-api
+docker compose -f deploy/vps/docker-compose.yml up -d quenya-api quenya-worker
 
 deadline=$(( $(date +%s) + 180 ))
 last_health=

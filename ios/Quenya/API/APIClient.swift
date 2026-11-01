@@ -100,14 +100,62 @@ final class APIClient {
         excludeIds: [String] = [],
         boardId: String? = nil
     ) async throws -> OutfitsResponse {
-        try await post(
-            "/api/outfits",
+        let acceptedData = try await postData(
+            "/api/outfits/jobs",
             body: OutfitRequestBody(
                 count: count,
                 lockedIds: lockedIds,
                 excludeIds: excludeIds,
                 boardId: boardId
             )
+        )
+        guard
+            let accepted = try JSONSerialization.jsonObject(with: acceptedData) as? [String: Any],
+            let jobId = accepted["job_id"] as? String
+        else {
+            throw APIError(status: 502, message: "Invalid outfit job response.", requestIds: [])
+        }
+
+        let deadline = Date().addingTimeInterval(5 * 60)
+        while Date() < deadline {
+            let delay = min(1.5, deadline.timeIntervalSinceNow)
+            guard delay > 0 else { break }
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard Date() < deadline else { break }
+            let statusData = try await request(
+                path: "/api/outfits/jobs/\(escaped(jobId))",
+                method: "GET"
+            )
+            guard let status = try JSONSerialization.jsonObject(with: statusData) as? [String: Any] else {
+                throw APIError(status: 502, message: "Invalid outfit job response.", requestIds: [])
+            }
+            switch status["status"] as? String {
+            case "done":
+                guard let result = status["result"] else {
+                    throw APIError(status: 502, message: "Invalid outfit job result.", requestIds: [])
+                }
+                let resultData = try JSONSerialization.data(
+                    withJSONObject: result,
+                    options: [.fragmentsAllowed]
+                )
+                return try decoder.decode(OutfitsResponse.self, from: resultData)
+            case "error":
+                let error = status["error"] as? [String: Any] ?? [:]
+                let statusCode = error["status_code"] as? Int ?? 500
+                let detail = error["detail"] ?? "Outfit generation failed"
+                let errorData = try JSONSerialization.data(
+                    withJSONObject: ["detail": detail],
+                    options: [.fragmentsAllowed]
+                )
+                throw apiError(data: errorData, status: statusCode)
+            default:
+                continue
+            }
+        }
+        throw APIError(
+            status: 504,
+            message: "Outfits are still being made",
+            requestIds: []
         )
     }
 

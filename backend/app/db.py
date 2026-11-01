@@ -102,6 +102,24 @@ CREATE TABLE IF NOT EXISTS fetch_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_fetch_jobs_profile_updated
 ON fetch_jobs(profile_id, updated_at);
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    owner_id TEXT,
+    profile_id TEXT,
+    status TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    result_json TEXT,
+    error_json TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    worker_id TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TEXT,
+    heartbeat_at TEXT,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_owner_created ON jobs(owner_id, created_at);
 CREATE TABLE IF NOT EXISTS item_embeddings (
     item_id TEXT PRIMARY KEY, model TEXT NOT NULL, img BLOB, txt BLOB,
     mix BLOB NOT NULL, updated_at TEXT NOT NULL

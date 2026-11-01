@@ -84,7 +84,12 @@ Sync the approved branch/revision to the host, then run the deploy script:
 
 ```sh
 sh deploy/vps/deploy.sh
-docker compose -f deploy/vps/docker-compose.yml logs -f quenya-api
+docker compose -f deploy/vps/docker-compose.yml logs -f quenya-api quenya-worker
 ```
+
+Outfit generation runs in the `quenya-worker` container; the API enqueues
+requests and keeps the synchronous endpoint available for existing iPhone
+builds. The worker claims jobs independently and finishes active jobs before
+exiting on SIGTERM.
 
 To roll back, check out the previously deployed revision and run the same deploy script. Do not remove the `quenya-cache` volume during an update or rollback.
