@@ -91,7 +91,7 @@ def test_live_and_ready_do_not_need_catalogue_counts(monkeypatch):
     client = TestClient(main.app)
     assert client.get("/api/live").json() == {"ok": True}
     assert client.get("/api/ready").json() == {"ok": True}
-    assert calls == ["SELECT 1"]
+    assert calls == ["SELECT 1 FROM profiles LIMIT 1"]
 
 
 def test_ready_fails_closed_without_database_or_migrations(monkeypatch):
@@ -119,5 +119,16 @@ def test_ready_fails_closed_without_database_or_migrations(monkeypatch):
         yield Connection()
 
     monkeypatch.setattr(main.db, "db_connection", available)
+    monkeypatch.setenv("QUENYA_DATABASE_URL", "postgresql://unused")
     monkeypatch.setattr(main.db, "schema_migration_status", lambda: {"ok": False})
     assert client.get("/api/ready").status_code == 503
+
+
+def test_sqlite_readiness_checks_the_actual_schema(monkeypatch, tmp_path):
+    monkeypatch.delenv("QUENYA_DATABASE_URL", raising=False)
+    monkeypatch.setattr(main.db, "DB_PATH", tmp_path / "ready.sqlite")
+    monkeypatch.setitem(main.db._POSTGRES_SCHEMA_STATUS, "ok", False)
+    client = TestClient(main.app)
+    assert client.get("/api/ready").status_code == 503
+    main.db.init_db()
+    assert client.get("/api/ready").json() == {"ok": True}

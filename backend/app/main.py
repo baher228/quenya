@@ -167,8 +167,8 @@ def live() -> dict:
 def ready() -> dict:
     try:
         with db.db_connection() as connection:
-            connection.execute("SELECT 1").fetchone()
-        if not db.schema_migration_status()["ok"]:
+            connection.execute("SELECT 1 FROM profiles LIMIT 1").fetchone()
+        if os.getenv("QUENYA_DATABASE_URL") and not db.schema_migration_status()["ok"]:
             raise RuntimeError("Schema is not ready")
     except Exception as exc:
         logger.warning("Readiness probe failed")
