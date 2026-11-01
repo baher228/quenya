@@ -14,6 +14,7 @@ from time import monotonic
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from app import db
 from app.config import QUENYA_APP_URL
@@ -255,7 +256,7 @@ def invite_url(token: str) -> str:
 
 async def current_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = authorization.removeprefix("Bearer ").strip() if authorization else ""
-    user = user_for_session(token)
+    user = await run_in_threadpool(user_for_session, token)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in with your invite link")
     _user_context.set(user)
