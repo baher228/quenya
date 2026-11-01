@@ -265,27 +265,29 @@ DECK_SECONDHAND_LIMIT = 2000
 
 
 def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    clothing = [
-        item for item in items
-        if not is_accessory_slot(tags_for(item).get("slot"))
-    ]
-    extras = [
-        item for item in items
-        if is_accessory_slot(tags_for(item).get("slot"))
-    ]
     secondhand = []
     new = []
-    for item in clothing:
-        if _is_secondhand(item):
-            secondhand.append(item)
-        else:
+    extras = []
+    for item in items:
+        if is_accessory_slot(tags_for(item).get("slot")):
+            if len(extras) < DECK_ACCESSORY_LIMIT:
+                extras.append(item)
+        elif _is_secondhand(item):
+            if len(secondhand) < DECK_SECONDHAND_LIMIT:
+                secondhand.append(item)
+        elif len(new) < DECK_CANDIDATE_LIMIT:
             new.append(item)
-    secondhand_taken = secondhand[:DECK_SECONDHAND_LIMIT]
-    new_taken = new[:DECK_CANDIDATE_LIMIT - len(secondhand_taken)]
+        if (
+            len(secondhand) == DECK_SECONDHAND_LIMIT
+            and len(new) >= DECK_CANDIDATE_LIMIT - len(secondhand)
+            and len(extras) == DECK_ACCESSORY_LIMIT
+        ):
+            break
+    new_taken = new[:DECK_CANDIDATE_LIMIT - len(secondhand)]
     return (
-        secondhand_taken
+        secondhand
         + new_taken
-        + extras[:DECK_ACCESSORY_LIMIT]
+        + extras
     )
 
 
@@ -1061,8 +1063,7 @@ def deck(
         ).fetchall()
     swiped = {row[0] for row in swipe_rows}
     swipe_count = len(swipe_rows)
-    # Full catalogue makes the deck ~2x slower until ranking is optimised.
-    candidates = _deck_candidates(db.live_catalogue())
+    candidates = db.live_catalogue(select=_deck_candidates)
     profile_live_items = _fitting_sizes(
         db.profile_live_items(active["id"]), active["brief"]
     )

@@ -296,7 +296,10 @@ def _run_deck(
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(db, "db_connection", lambda: nullcontext(_Connection(swiped)))
-    monkeypatch.setattr(db, "live_catalogue", lambda: list(cached_items))
+    monkeypatch.setattr(
+        db, "live_catalogue",
+        lambda *, select=None: select(cached_items) if select else list(cached_items),
+    )
     monkeypatch.setattr(
         db, "profile_live_items", lambda _profile_id: list(live_items)
     )

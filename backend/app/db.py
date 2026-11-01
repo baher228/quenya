@@ -6,6 +6,7 @@ import re
 import statistics
 import uuid
 from collections import Counter, OrderedDict
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
@@ -1095,7 +1096,10 @@ def invalidate_live_catalogue() -> None:
         _LIVE_CATALOGUE_GENERATION += 1
 
 
-def live_catalogue() -> list[dict[str, Any]]:
+def live_catalogue(
+    *, select: Callable[[list[dict[str, Any]]], list[dict[str, Any]]] | None = None
+) -> list[dict[str, Any]]:
+    """Return shallow copies; selectors must not mutate the cached snapshot."""
     global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
     init_db()
     with _LIVE_CATALOGUE_LOCK:
@@ -1105,14 +1109,15 @@ def live_catalogue() -> list[dict[str, Any]]:
             _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
                 monotonic() + QUENYA_CATALOGUE_TTL_S
             )
-            return [dict(item) for item in catalogue]
-
-        if (
+        elif (
             monotonic() >= _LIVE_CATALOGUE_CACHE_EXPIRES_AT
             and not _LIVE_CATALOGUE_REFRESHING
         ):
             _start_live_catalogue_refresh_locked()
-        return [dict(item) for item in _LIVE_CATALOGUE_CACHE]
+        selected = (
+            select(_LIVE_CATALOGUE_CACHE) if select is not None else _LIVE_CATALOGUE_CACHE
+        )
+        return [dict(item) for item in selected]
 
 
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:
