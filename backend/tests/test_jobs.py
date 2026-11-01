@@ -230,6 +230,57 @@ def test_job_status_requires_auth_and_blocks_browser_testers(isolated_jobs_db):
     assert browser.json() == {"detail": accounts.APP_ONLY_DETAIL}
 
 
+def test_worker_job_pins_active_board_before_it_runs(isolated_jobs_db, monkeypatch):
+    owner, token = _user_and_profile("Pinned board")
+    original_profile = f"profile-{owner['id']}"
+    switched_profile = f"switched-{owner['id']}"
+    brief = {
+        "text": "Relaxed workwear",
+        "gender": "womenswear",
+        "looking_for": "outfits",
+        "pieces": [],
+    }
+    db.create_profile(
+        switched_profile,
+        brief,
+        active=False,
+        owner_id=owner["id"],
+    )
+    db.activate_profile(original_profile, owner_id=owner["id"])
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/outfits/jobs",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"count": 1},
+        )
+
+    assert response.status_code == 202, response.text
+    job_id = response.json()["job_id"]
+    queued = jobs.get(job_id, owner["id"])
+    assert queued["profile_id"] == original_profile
+    assert queued["payload"]["board_id"] == original_profile
+
+    db.activate_profile(switched_profile, owner_id=owner["id"])
+    saved_profile_ids = []
+    monkeypatch.setattr(
+        phase2_api.db,
+        "save_outfit",
+        lambda profile_id, *_args: saved_profile_ids.append(profile_id) or "outfit",
+    )
+
+    def generate(body):
+        phase2_api.db.save_outfit(body.board_id, None, None, None, None, None)
+        return {"outfits": []}
+
+    monkeypatch.setattr(phase2_api, "generate_outfits", generate)
+
+    claimed = jobs.claim(job_id, "worker")
+    jobs.run_job(claimed)
+
+    assert saved_profile_ids == [original_profile]
+
+
 def test_inline_runner_and_legacy_endpoint_return_generation_result(
     isolated_jobs_db, monkeypatch
 ):

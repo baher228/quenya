@@ -1402,11 +1402,12 @@ def _enqueue_outfit_job(body: OutfitRequest) -> str:
     runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
     if runner not in {"inline", "worker"}:
         raise ValueError("QUENYA_JOB_RUNNER must be inline or worker")
+    payload = body.model_dump() | {"board_id": active["id"]}
     job_id = jobs.enqueue(
         "outfits",
         owner_id,
         active["id"],
-        body.model_dump(),
+        payload,
     )
     if runner == "inline":
         Thread(
@@ -1455,7 +1456,7 @@ def outfits(body: OutfitRequest) -> dict[str, Any] | JSONResponse:
                 status_code=error.get("status_code", 500),
                 detail=error.get("detail", "Outfit generation failed"),
             )
-        sleep(0.5)
+        sleep(1.0)
     return JSONResponse(
         status_code=504,
         content={"error": "Outfits are still being made", "job_id": job_id},

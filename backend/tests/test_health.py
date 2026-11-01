@@ -1,3 +1,5 @@
+from fastapi.testclient import TestClient
+
 from app import main
 
 
@@ -35,3 +37,24 @@ def test_health_reports_llm_provider_readiness(monkeypatch):
         "ok": True,
     }
     assert any(route.path == "/health" for route in main.app.routes)
+
+
+def test_health_survives_job_stats_failure(monkeypatch):
+    monkeypatch.setattr(main.db, "total_counts", lambda: (12, 8))
+    monkeypatch.setattr(
+        main.jobs,
+        "stats",
+        lambda: (_ for _ in ()).throw(RuntimeError("jobs table missing")),
+    )
+    monkeypatch.setattr(
+        main.db,
+        "schema_migration_status",
+        lambda: {"version": "0001_baseline", "latest": "0001_baseline", "ok": True},
+    )
+
+    with TestClient(main.app) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["jobs"] is None
