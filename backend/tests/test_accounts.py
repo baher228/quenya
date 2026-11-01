@@ -3,11 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import APIRouter, HTTPException
-from fastapi.testclient import TestClient
-
 from app import accounts, db, main, phase2_api
 from app.schemas import ProfileBrief, RouteOut
+from fastapi import APIRouter, HTTPException
+from fastapi.testclient import TestClient
 
 
 def _profile(owner_id: str, profile_id: str, *, active: bool = True) -> None:
@@ -44,6 +43,97 @@ def test_authentication_required_but_health_stays_public(isolated_accounts_db):
             assert response.status_code == 401
             assert response.json() == {"detail": "Sign in with your invite link"}
         assert client.get("/api/health").status_code == 200
+
+
+def test_browser_tester_invite_is_rejected_without_creating_a_session(
+    isolated_accounts_db,
+):
+    _user, invite = accounts.create_user("Tester")
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/auth/invite",
+            json={"token": invite},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    assert response.status_code == 403
+    assert response.json() == {"detail": accounts.APP_ONLY_DETAIL}
+    with db.db_connection() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM auth_sessions").fetchone()[0] == 0
+    with TestClient(main.app) as client:
+        native_response = client.post(
+            "/api/auth/invite",
+            json={"token": invite},
+            headers={
+                "User-Agent": "Quenya/202610301057 CFNetwork/1568.100.1 Darwin/24.0.0"
+            },
+        )
+    assert native_response.status_code == 200, native_response.text
+
+
+def test_native_tester_and_browser_admin_invites_are_allowed(isolated_accounts_db):
+    tester, tester_invite = accounts.create_user("Tester")
+    admin, admin_invite = accounts.create_user("Admin", "admin")
+    with TestClient(main.app) as client:
+        tester_response = client.post(
+            "/api/auth/invite",
+            json={"token": tester_invite},
+            headers={
+                "User-Agent": "Quenya/202610301057 CFNetwork/1568.100.1 Darwin/24.0.0"
+            },
+        )
+        admin_response = client.post(
+            "/api/auth/invite",
+            json={"token": admin_invite},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    assert tester_response.status_code == 200, tester_response.text
+    assert tester_response.json()["user"]["id"] == tester["id"]
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json()["user"]["id"] == admin["id"]
+
+
+def test_invite_url_uses_open_route(isolated_accounts_db):
+    assert accounts.invite_url("token") == f"{accounts.QUENYA_APP_URL}/open?invite=token"
+
+
+def test_browser_testers_cannot_use_sessions_but_admins_can(
+    isolated_accounts_db,
+):
+    _tester, tester_token = _user_and_session("Tester")
+    _admin, admin_token = _user_and_session("Admin", role="admin")
+    browser = {"User-Agent": "Mozilla/5.0"}
+    native = {"User-Agent": "Quenya/202610301057 CFNetwork/1568.100.1 Darwin/24.0.0"}
+    with TestClient(main.app) as client:
+        tester_headers = {"Authorization": f"Bearer {tester_token}"}
+        browser_tester = client.get(
+            "/api/me",
+            headers={**tester_headers, **browser},
+        )
+        native_tester = client.get(
+            "/api/me",
+            headers={**tester_headers, **native},
+        )
+        default_user_agent_tester = client.get("/api/me", headers=tester_headers)
+        empty_user_agent_tester = client.get(
+            "/api/me",
+            headers={**tester_headers, "User-Agent": ""},
+        )
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        browser_admin_me = client.get(
+            "/api/me",
+            headers={**admin_headers, **browser},
+        )
+        browser_admin_endpoint = client.get(
+            "/api/admin/users",
+            headers={**admin_headers, **browser},
+        )
+    assert browser_tester.status_code == 403
+    assert browser_tester.json() == {"detail": accounts.APP_ONLY_DETAIL}
+    assert native_tester.status_code == 200
+    assert default_user_agent_tester.status_code == 200
+    assert empty_user_agent_tester.status_code == 200
+    assert browser_admin_me.status_code == 200
+    assert browser_admin_endpoint.status_code == 200
 
 
 def test_owner_lookup_fails_closed_inside_unauthenticated_http_request(

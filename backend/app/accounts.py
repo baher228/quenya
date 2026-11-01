@@ -21,11 +21,20 @@ from app.config import QUENYA_APP_URL
 _user_context: ContextVar[dict[str, Any] | None] = ContextVar("user_context", default=None)
 _in_request: ContextVar[bool] = ContextVar("in_request", default=False)
 router = APIRouter()
+APP_ONLY_DETAIL = "Quenya is on iPhone only. Open your invite in the Quenya app."
 _LOGIN_RATE_WINDOW_S = 15 * 60
 _LOGIN_RATE_LIMIT = 5
 _login_rate_lock = Lock()
 _login_failures_by_ip: dict[str, deque[float]] = {}
 _login_failures_by_name: dict[str, deque[float]] = {}
+
+
+def is_browser(user_agent: str | None) -> bool:
+    return "mozilla/" in (user_agent or "").lower()
+
+
+class TesterInviteNotAllowed(ValueError):
+    pass
 
 
 def _hash(token: str) -> str:
@@ -184,7 +193,7 @@ def _new_session(user_id: str) -> str:
     return session
 
 
-def redeem_invite(token: str) -> str:
+def redeem_invite(token: str, *, allow_tester: bool = True) -> str:
     db.init_db()
     with db.db_connection() as connection:
         row = connection.execute(
@@ -192,6 +201,8 @@ def redeem_invite(token: str) -> str:
         ).fetchone()
         if not row:
             raise ValueError("invalid invite")
+        if row["role"] == "tester" and not allow_tester:
+            raise TesterInviteNotAllowed("tester invites can only be opened in the app")
         user_id = row["id"]
     return _new_session(user_id)
 
@@ -250,14 +261,19 @@ def revoke_user(user_id: str) -> None:
 
 
 def invite_url(token: str) -> str:
-    return f"{QUENYA_APP_URL}/?invite={token}"
+    return f"{QUENYA_APP_URL}/open?invite={token}"
 
 
-async def current_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def current_user(
+    authorization: str | None = Header(default=None),
+    user_agent: str | None = Header(default=None, alias="User-Agent"),
+) -> dict[str, Any]:
     token = authorization.removeprefix("Bearer ").strip() if authorization else ""
     user = user_for_session(token)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in with your invite link")
+    if user["role"] != "admin" and is_browser(user_agent):
+        raise HTTPException(status_code=403, detail=APP_ONLY_DETAIL)
     _user_context.set(user)
     return user
 
@@ -287,9 +303,14 @@ def clear_context() -> None:
 
 
 @router.post("/api/auth/invite")
-def redeem(body: dict[str, str]) -> dict[str, Any]:
+def redeem(
+    body: dict[str, str],
+    user_agent: str | None = Header(default=None, alias="User-Agent"),
+) -> dict[str, Any]:
     try:
-        token = redeem_invite(body["token"])
+        token = redeem_invite(body["token"], allow_tester=not is_browser(user_agent))
+    except TesterInviteNotAllowed as exc:
+        raise HTTPException(status_code=403, detail=APP_ONLY_DETAIL) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="Invalid invite") from exc
     user = user_for_session(token)

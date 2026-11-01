@@ -270,8 +270,15 @@ def email_waitlist_invite(
             detail="Waitlist entry is not approved",
         )
 
-    prefix = f"{QUENYA_APP_URL}/?invite="
-    if not payload.invite_url.startswith(prefix):
+    prefixes = (
+        f"{QUENYA_APP_URL}/open?invite=",
+        f"{QUENYA_APP_URL}/?invite=",
+    )
+    prefix = next(
+        (prefix for prefix in prefixes if payload.invite_url.startswith(prefix)),
+        None,
+    )
+    if prefix is None:
         raise HTTPException(status_code=400, detail="Invalid invite link")
     token = payload.invite_url[len(prefix):]
     if not _INVITE_TOKEN_RE.fullmatch(token):

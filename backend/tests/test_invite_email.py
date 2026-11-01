@@ -107,7 +107,7 @@ def test_approved_invite_is_sent_over_smtp(isolated_invite_email_db, monkeypatch
     assert message["To"] == "ada@example.com"
     assert "hello@quenya.co.uk" in message["From"]
     assert message["Subject"] == "Your Quenya invite: how to get the iPhone app"
-    token = invite_url.removeprefix(f"{config.QUENYA_APP_URL}/?invite=")
+    token = invite_url.removeprefix(f"{config.QUENYA_APP_URL}/open?invite=")
     open_url = f"{config.QUENYA_APP_URL}/open?invite={token}"
     text = message.get_body(preferencelist=("plain",)).get_content()
     html_body = message.get_body(preferencelist=("html",)).get_content()
@@ -123,8 +123,23 @@ def test_approved_invite_is_sent_over_smtp(isolated_invite_email_db, monkeypatch
         assert "Accept" in body
         assert "Install" in body
     assert "<ol" in html_body
-    assert invite_url not in text
-    assert invite_url not in html_body
+
+
+def test_legacy_invite_url_is_accepted_for_waitlist_email(
+    isolated_invite_email_db,
+    monkeypatch,
+):
+    headers = _admin_headers()
+    _install_smtp(monkeypatch)
+    with TestClient(main.app) as client:
+        waitlist_id, invite_url = _approve(client, headers)
+        legacy_url = invite_url.replace("/open?invite=", "/?invite=", 1)
+        response = client.post(
+            f"/api/admin/waitlist/{waitlist_id}/email-invite",
+            headers=headers,
+            json={"invite_url": legacy_url},
+        )
+    assert response.status_code == 200, response.text
 
 
 def test_missing_smtp_password_returns_503_without_connecting(
