@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app import db
+from app import db, migrate
 
 
 def _reset_postgres_pool(monkeypatch):
@@ -132,49 +132,28 @@ def test_postgres_connect_disables_prepared_statements_and_sets_search_path(
     connection.close()
 
 
-def test_postgres_init_db_takes_advisory_lock_as_first_statement(monkeypatch):
-    statements = []
-    commits = []
-
-    class FakeCursor:
-        def fetchone(self):
-            return (1,)
-
-    class FakeConnection:
-        def execute(self, sql, params=None):
-            statements.append((sql, params))
-            if "information_schema.columns" in sql:
-                return FakeCursor()
-
-        def commit(self):
-            commits.append(len(statements))
-
-        def rollback(self):
-            pass
-
-        def close(self):
-            pass
-
-    fake_connection = FakeConnection()
-    monkeypatch.setattr(
-        db,
-        "connect_postgres",
-        lambda url, **kwargs: fake_connection,
-    )
+def test_postgres_init_db_uses_explicit_migration_runner(monkeypatch):
+    calls = []
     monkeypatch.setenv("QUENYA_DATABASE_URL", "postgresql://test/database")
-    monkeypatch.setenv("QUENYA_DB_POOL", "0")
+    monkeypatch.delenv("QUENYA_AUTO_MIGRATE", raising=False)
     monkeypatch.delenv("QUENYA_SKIP_DB_INIT", raising=False)
     monkeypatch.setattr(db, "_INITIALIZED_DATABASES", set())
+    monkeypatch.setattr(migrate, "run", lambda: calls.append("run"))
+    monkeypatch.setattr(
+        db,
+        "_check_postgres_schema_status",
+        lambda: db._set_postgres_schema_status(
+            "0001_baseline",
+            "0001_baseline",
+            True,
+        ),
+    )
 
     db.init_db()
 
-    assert statements[0] == (
-        "SELECT pg_advisory_xact_lock(%s)",
-        (db._POSTGRES_INIT_ADVISORY_LOCK_KEY,),
-    )
-    assert statements[1] == ("SET LOCAL search_path TO quenya, extensions", None)
-    assert statements[2] == ("SET LOCAL lock_timeout = '5s'", None)
-    assert commits == [len(statements)]
+    assert calls == ["run"]
+    assert "postgres:postgresql://test/database" in db._INITIALIZED_DATABASES
+    assert db.schema_migration_status()["ok"] is True
 
 
 def test_postgres_connect_redacts_password_from_malformed_dsn_error(monkeypatch):

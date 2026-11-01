@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    QUENYA_AUTO_MIGRATE=0 \
     HF_HOME=/cache/hf \
     TMPDIR=/cache/tmp \
     PATH=/home/quenya/.local/bin:${PATH}

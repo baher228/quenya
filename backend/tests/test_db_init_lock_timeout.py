@@ -1,158 +1,111 @@
 import logging
 
-import pytest
 from psycopg.errors import LockNotAvailable
 
-from app import db
+from app import db, migrate
 
 
-class _FakeCursor:
-    def __init__(self, row=None):
+class _Cursor:
+    def __init__(self, row=None, rows=None):
         self.row = row
+        self.rows = rows or []
 
     def fetchone(self):
         return self.row
 
+    def fetchall(self):
+        return self.rows
 
-class _FakeConnection:
-    def __init__(self, state=None, *, existing_columns=True):
-        self.state = state or {}
-        self.existing_columns = existing_columns
-        self.statements = []
-        self.commit_count = 0
-        self.rollback_count = 0
-        self.close_count = 0
+
+class _Connection:
+    def __init__(self, state):
+        self.state = state
 
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             self.commit()
         else:
             self.rollback()
-        self.close()
         return False
 
-    def acquire_advisory_xact_lock(self, key):
-        self.statements.append(("advisory_lock", key))
+    def acquire_advisory_xact_lock(self, _key):
+        if self.state["lock_timeout"]:
+            raise LockNotAvailable("lock timeout")
 
     def execute(self, statement, params=()):
-        self.statements.append((statement, params))
-        if statement == "CREATE SCHEMA IF NOT EXISTS quenya":
-            if self.state.get("always_fail"):
-                self.state["lock_failures"] += 1
-                raise LockNotAvailable("lock timeout")
-            if self.state.get("failures_remaining", 0):
-                self.state["failures_remaining"] -= 1
-                self.state["lock_failures"] += 1
-                raise LockNotAvailable("lock timeout")
-        if "information_schema.columns" in statement:
-            row = (1,) if self.existing_columns else None
-            return _FakeCursor(row)
-        if "to_regclass('items')" in statement:
-            return _FakeCursor((self.state.get("items_exists", True),))
-        return _FakeCursor()
+        self.state["statements"].append((statement, params))
+        if "to_regclass('schema_migrations')" in statement:
+            return _Cursor(("schema_migrations",) if self.state["tracking"] else (None,))
+        if statement == "SELECT version FROM schema_migrations":
+            return _Cursor(rows=[(version,) for version in self.state["applied"]])
+        if "CREATE TABLE IF NOT EXISTS schema_migrations" in statement:
+            self.state["tracking"] = True
+        if "SELECT 1 FROM schema_migrations WHERE version = ?" in statement:
+            return _Cursor((1,) if params[0] in self.state["applied"] else None)
+        if "INSERT INTO schema_migrations" in statement:
+            self.state["applied"].add(params[0])
+        if "pg_stat_activity" in statement:
+            self.state["blocker_queries"].append(params)
+            return _Cursor(rows=self.state["blockers"])
+        return _Cursor()
 
     def commit(self):
-        self.commit_count += 1
+        pass
 
     def rollback(self):
-        self.rollback_count += 1
+        pass
 
     def close(self):
-        self.close_count += 1
+        pass
 
 
-def test_pg_add_column_if_missing_skips_existing_column():
-    connection = _FakeConnection(existing_columns=True)
-
-    db._pg_add_column_if_missing(connection, "items", "image_preview", "TEXT")
-
-    assert len(connection.statements) == 1
-    assert "information_schema.columns" in connection.statements[0][0]
-    assert connection.statements[0][1] == ("items", "image_preview")
-
-
-def test_pg_add_column_if_missing_alters_missing_column():
-    connection = _FakeConnection(existing_columns=False)
-
-    db._pg_add_column_if_missing(connection, "items", "image_preview", "TEXT")
-
-    assert connection.statements[-1][0] == (
-        "ALTER TABLE items ADD COLUMN IF NOT EXISTS image_preview TEXT"
-    )
-
-
-def _configure_init_db(monkeypatch, state, sleeps):
+def test_migration_lock_timeout_logs_blockers_and_cli_exits_nonzero(
+    monkeypatch, caplog
+):
+    state = {
+        "applied": set(),
+        "blockers": [
+            {
+                "pid": 123,
+                "usename": "quenya",
+                "application_name": "orphaned-worker",
+                "state": "idle in transaction",
+                "xact_age": "0:02:00",
+                "query": "SELECT * FROM items",
+            }
+        ],
+        "blocker_queries": [],
+        "lock_timeout": True,
+        "statements": [],
+        "termination_queries": [],
+        "tracking": False,
+    }
     connections = []
-    monkeypatch.setenv("QUENYA_DATABASE_URL", "postgresql://test/database")
-    monkeypatch.delenv("QUENYA_SKIP_DB_INIT", raising=False)
-    monkeypatch.setattr(db, "_INITIALIZED_DATABASES", set())
-    monkeypatch.setattr(db, "POSTGRES_SCHEMA", "")
-    monkeypatch.setattr(db, "sleep", sleeps.append)
 
     def connection_factory():
-        connection = _FakeConnection(state)
+        connection = _Connection(state)
         connections.append(connection)
         return connection
 
     monkeypatch.setattr(db, "db_connection", connection_factory)
-    return connections
-
-
-def test_postgres_init_retries_lock_not_available_then_succeeds(
-    monkeypatch, caplog
-):
-    state = {"failures_remaining": 2, "lock_failures": 0, "items_exists": True}
-    sleeps = []
-    connections = _configure_init_db(monkeypatch, state, sleeps)
-
-    with caplog.at_level(logging.WARNING):
-        db.init_db()
-
-    assert state["lock_failures"] == 2
-    assert sleeps == [2, 4]
-    assert len(connections) == 3
-    assert [connection.rollback_count for connection in connections] == [1, 1, 0]
-    assert connections[-1].commit_count == 1
-    assert connections[-1].statements[:2] == [
-        ("advisory_lock", db._POSTGRES_INIT_ADVISORY_LOCK_KEY),
-        ("SET LOCAL lock_timeout = '5s'", ()),
-    ]
-    assert "CREATE SCHEMA IF NOT EXISTS quenya" in caplog.text
-    assert "retrying in 2s" in caplog.text
-    assert "postgres:postgresql://test/database" in db._INITIALIZED_DATABASES
-
-
-def test_postgres_init_persistent_lock_with_items_table_marks_initialized(
-    monkeypatch, caplog
-):
-    state = {"always_fail": True, "lock_failures": 0, "items_exists": True}
-    sleeps = []
-    connections = _configure_init_db(monkeypatch, state, sleeps)
+    monkeypatch.setattr(
+        migrate,
+        "MIGRATIONS",
+        [("0001_test", lambda _connection: None)],
+    )
+    monkeypatch.setattr(migrate, "LATEST_VERSION", "0001_test")
 
     with caplog.at_level(logging.ERROR):
-        db.init_db()
+        exit_code = migrate.main([])
 
-    assert state["lock_failures"] == 4
-    assert sleeps == [2, 4, 8]
-    assert len(connections) == 5
-    assert all(connection.rollback_count == 1 for connection in connections[:4])
-    assert connections[-1].commit_count == 1
-    assert "items table exists" in caplog.text
-    assert "postgres:postgresql://test/database" in db._INITIALIZED_DATABASES
-
-
-def test_postgres_init_persistent_lock_without_items_table_raises(monkeypatch):
-    state = {"always_fail": True, "lock_failures": 0, "items_exists": False}
-    sleeps = []
-    connections = _configure_init_db(monkeypatch, state, sleeps)
-
-    with pytest.raises(LockNotAvailable):
-        db.init_db()
-
-    assert state["lock_failures"] == 4
-    assert sleeps == [2, 4, 8]
-    assert len(connections) == 5
-    assert "postgres:postgresql://test/database" not in db._INITIALIZED_DATABASES
+    assert exit_code == 1
+    assert state["blocker_queries"] == [(60,)]
+    assert "Migration lock blocker" in caplog.text
+    assert "application_name=orphaned-worker" in caplog.text
+    assert "SELECT * FROM items" in caplog.text
+    assert state["applied"] == set()
+    assert state["termination_queries"] == []
+    assert len(connections) == 3
