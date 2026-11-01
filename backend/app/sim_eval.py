@@ -329,6 +329,12 @@ def _selector(context: Context, raw_fn: Callable, *, diversity: str, rng):
                     float(penalties.max()), 1e-9)
             else:
                 values -= penalties * float(values.std())
+        if selected:
+            vectors = np.asarray([context.vector(item["id"]) for item in pool])
+            chosen = np.asarray([context.vector(item["id"]) for item in selected])
+            allowed = np.flatnonzero((vectors @ chosen.T).max(axis=1) < LIKE_COS)
+            if len(allowed):
+                return pool[int(allowed[np.argmax(values[allowed])])]
         return pool[int(np.argmax(values))]
 
     return select
