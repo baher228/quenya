@@ -5,10 +5,11 @@ from threading import Barrier, get_ident
 from types import SimpleNamespace
 
 import pytest
-from app import accounts, db, main, phase2_api
-from app.schemas import ProfileBrief, RouteOut
 from fastapi import APIRouter, HTTPException
 from fastapi.testclient import TestClient
+
+from app import accounts, db, main, phase2_api
+from app.schemas import ProfileBrief, RouteOut
 
 
 def _profile(owner_id: str, profile_id: str, *, active: bool = True) -> None:
