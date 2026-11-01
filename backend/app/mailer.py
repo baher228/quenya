@@ -6,6 +6,8 @@ from html import escape
 
 from app import config
 
+TESTFLIGHT_APP_STORE_URL = "https://apps.apple.com/app/testflight/id899247664"
+
 
 class MailNotConfigured(RuntimeError):
     pass
@@ -42,28 +44,36 @@ def invite_email(
     testflight_url: str,
 ) -> tuple[str, str, str]:
     greeting = f"Hi {name}," if name else "Hi,"
-    subject = "Your Quenya tester invite"
-    intro = "You're in. Quenya runs as an iPhone app in beta:"
-    install = (
-        f"1. Install it with TestFlight: {testflight_url} "
-        "(this opens Apple's TestFlight app; install that first if asked)."
+    subject = "Your Quenya invite: how to get the iPhone app"
+    intro = (
+        "You're in! Quenya is an iPhone app in beta, so it's installed through "
+        "Apple's TestFlight app rather than the App Store. It takes about 2 minutes. "
+        "Open this email on your iPhone (iOS 17 or later) and follow these steps:"
     )
-    sign_in = (
-        "2. Back on your iPhone, open your personal sign-in link: "
-        f"{open_url}"
+    privacy = (
+        "Your link is just for you, so please don't forward it. "
+        "Questions? Just reply to this email."
     )
-    privacy = "The link is just for you, so please don't forward it."
     text = (
         f"{greeting}\n\n"
-        f"{intro}\n"
-        f"{install}\n"
-        f"{sign_in}\n\n"
+        f"{intro}\n\n"
+        "1. Get TestFlight. It's Apple's free app for beta apps. If you don't have it yet, "
+        "install it from the App Store: "
+        f"{TESTFLIGHT_APP_STORE_URL}\n\n"
+        f"2. Install Quenya. Tap this link: {testflight_url}\n"
+        '   It opens TestFlight. Tap "Accept", then "Install".\n\n'
+        f"3. Sign in. Come back to this email and tap your personal link: {open_url}\n"
+        '   Then tap "Open in the app" and Quenya signs you in.\n'
+        '   If that doesn\'t work, open Quenya and paste the same link into '
+        'the "Invite link" box.\n\n'
         f"{privacy}\n\n"
         "Quenya\n"
         "hello@quenya.co.uk"
     )
     html_greeting = escape(greeting)
     html_intro = escape(intro)
+    html_app_store_url = escape(TESTFLIGHT_APP_STORE_URL)
+    html_app_store_href = escape(TESTFLIGHT_APP_STORE_URL, quote=True)
     html_testflight_url = escape(testflight_url)
     html_testflight_href = escape(testflight_url, quote=True)
     html_open_url = escape(open_url)
@@ -73,13 +83,21 @@ def invite_email(
         '<div style="font-family:Arial,sans-serif;color:#24211f;line-height:1.6">'
         f'<p style="margin:0 0 16px">{html_greeting}</p>'
         f'<p style="margin:0 0 12px">{html_intro}</p>'
-        '<p style="margin:0 0 12px">1. Install it with TestFlight: '
+        '<ol style="margin:0 0 16px;padding-left:24px">'
+        '<li style="margin:0 0 12px">Get TestFlight. It\'s Apple\'s free app for beta apps. '
+        "If you don't have it yet, install it from the App Store: "
+        f'<a href="{html_app_store_href}" style="color:#68744f">'
+        f"{html_app_store_url}</a></li>"
+        '<li style="margin:0 0 12px">Install Quenya. Tap this link: '
         f'<a href="{html_testflight_href}" style="color:#68744f">'
-        f'{html_testflight_url}</a> '
-        "(this opens Apple's TestFlight app; install that first if asked).</p>"
-        '<p style="margin:0 0 16px">2. Back on your iPhone, open your personal '
-        f'sign-in link: <a href="{html_open_href}" style="color:#68744f">'
-        f'{html_open_url}</a></p>'
+        f'{html_testflight_url}</a><br>'
+        'It opens TestFlight. Tap "Accept", then "Install".</li>'
+        '<li style="margin:0 0 12px">Sign in. Come back to this email and tap your personal '
+        f'link: <a href="{html_open_href}" style="color:#68744f">'
+        f'{html_open_url}</a><br>'
+        'Then tap "Open in the app" and Quenya signs you in.<br>'
+        'If that doesn\'t work, open Quenya and paste the same link into the "Invite link" box.'
+        "</li></ol>"
         f'<p style="margin:0 0 16px">{html_privacy}</p>'
         f'<p style="margin:0">{escape("Quenya")}<br>'
         f'{escape("hello@quenya.co.uk")}</p>'
