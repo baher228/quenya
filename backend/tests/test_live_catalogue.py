@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from threading import Thread
 
+import pytest
+
 from app import db, phase2_api
 
 
@@ -65,8 +67,9 @@ def test_live_catalogue_filters_and_returns_all_eligible_items(
     assert all(isinstance(item["tags"], dict) for item in catalogue)
 
 
+@pytest.mark.parametrize("select", [None, lambda items: items[:1]])
 def test_live_catalogue_cache_ttl_invalidation_and_copy(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, select
 ):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "cache.sqlite")
     monkeypatch.delenv("QUENYA_CLIP_TEXT_PATH", raising=False)
@@ -96,21 +99,21 @@ def test_live_catalogue_cache_ttl_invalidation_and_copy(
         return thread
 
     monkeypatch.setattr(db, "Thread", tracking_thread)
-    first = db.live_catalogue()
+    first = db.live_catalogue(select=select)
     assert calls == 1
     first[0]["title"] = "mutated copy"
-    assert db.live_catalogue()[0]["title"] == "cached"
+    assert db.live_catalogue(select=select)[0]["title"] == "cached"
     assert calls == 1
 
     clock[0] = 15.0
-    assert db.live_catalogue()[0]["title"] == "cached"
+    assert db.live_catalogue(select=select)[0]["title"] == "cached"
     assert len(refresh_threads) == 1
     refresh_threads[0].join(timeout=2)
     assert not refresh_threads[0].is_alive()
     assert calls == 2
 
     db.invalidate_live_catalogue()
-    assert db.live_catalogue()[0]["title"] == "cached"
+    assert db.live_catalogue(select=select)[0]["title"] == "cached"
     assert calls == 3
 
 

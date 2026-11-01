@@ -20,6 +20,10 @@ from app.schemas import (
 )
 
 
+def _catalogue(items):
+    return lambda: phase2_api._deck_candidates(items)
+
+
 def _brief(**overrides):
     return {
         "text": "Relaxed workwear with muted colours",
@@ -800,7 +804,7 @@ def test_deck_board_id_filters_swipes_and_records_events_for_target(
     monkeypatch.setenv("QUENYA_RANKER", "tags")
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
-    monkeypatch.setattr(db, "live_catalogue", lambda: [item_a, item_b])
+    monkeypatch.setattr(db, "deck_catalogue", _catalogue([item_a, item_b]))
     monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
 
     targeted = phase2_api.deck(n=10, board_id="board-b")
@@ -830,7 +834,7 @@ def test_deck_filters_wrong_size_vinted_but_keeps_retailer(
     monkeypatch.setenv("QUENYA_RANKER", "tags")
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
-    monkeypatch.setattr(db, "live_catalogue", lambda: [wrong_size, retailer])
+    monkeypatch.setattr(db, "deck_catalogue", _catalogue([wrong_size, retailer]))
     monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
 
     items = phase2_api.deck(n=10, board_id="board-a")
@@ -865,7 +869,7 @@ def test_deck_hides_disliked_product_only_from_its_own_profile(
     monkeypatch.setenv("QUENYA_RANKER", "tags")
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
-    monkeypatch.setattr(db, "live_catalogue", lambda: [lookalike, other])
+    monkeypatch.setattr(db, "deck_catalogue", _catalogue([lookalike, other]))
     monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
 
     board_a = phase2_api.deck(n=10, board_id="board-a")
@@ -1170,7 +1174,7 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
         ),
     ):
         mismatch = dict(verdict_outfit, profile_id="board-a")
-        monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: mismatch)
+        monkeypatch.setattr(db, "get_outfit", lambda _outfit_id, mismatch=mismatch: mismatch)
         with pytest.raises(HTTPException) as exc:
             handler()
         assert exc.value.status_code == 404

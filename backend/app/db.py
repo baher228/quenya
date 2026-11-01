@@ -6,6 +6,7 @@ import re
 import statistics
 import uuid
 from collections import Counter, OrderedDict
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
@@ -13,7 +14,13 @@ from time import monotonic
 from typing import Any
 
 from app.config import DB_PATH, QUENYA_CATALOGUE_TTL_S
-from app.rank import tags_for, tokens
+from app.rank import (
+    DECK_ACCESSORY_LIMIT,
+    DECK_CANDIDATE_LIMIT,
+    DECK_SECONDHAND_LIMIT,
+    tags_for,
+    tokens,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -170,11 +177,6 @@ _POSTGRES_POOL_PID: int | None = None
 _POSTGRES_POOL_DSN: str | None = None
 _POSTGRES_POOL_MAX_SIZE: int | None = None
 _POSTGRES_CONNECTION_CLASS: Any | None = None
-_LIVE_CATALOGUE_LOCK = Lock()
-_LIVE_CATALOGUE_CACHE: list[dict[str, Any]] | None = None
-_LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
-_LIVE_CATALOGUE_REFRESHING = False
-_LIVE_CATALOGUE_GENERATION = 0
 logger = logging.getLogger(__name__)
 
 
@@ -866,67 +868,128 @@ def profile_live_items(profile_id: str) -> list[dict[str, Any]]:
     return _live_catalogue_items(f"live:{profile_id}")
 
 
-def _refresh_live_catalogue(generation: int) -> None:
-    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
-    global _LIVE_CATALOGUE_REFRESHING
-    try:
-        catalogue = _load_live_catalogue()
-    except Exception:
-        logger.exception("Failed to refresh live catalogue")
+def _load_deck_catalogue() -> list[dict[str, Any]]:
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+    if postgres:
+        slot = "tags_json::jsonb ->> 'slot'"
+        condition = "tags_json::jsonb -> 'condition'"
+        secondhand = f"""{condition} = '"second-hand"'::jsonb OR (
+            source='vinted' AND COALESCE({condition}, 'null'::jsonb)
+            IN ('null'::jsonb, '""'::jsonb, 'false'::jsonb, '0'::jsonb,
+                '[]'::jsonb, '{{}}'::jsonb))"""
+        collation = '"C"'
     else:
-        with _LIVE_CATALOGUE_LOCK:
-            if generation == _LIVE_CATALOGUE_GENERATION:
-                _LIVE_CATALOGUE_CACHE = catalogue
-                _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
-                    monotonic() + QUENYA_CATALOGUE_TTL_S
-                )
-    finally:
-        with _LIVE_CATALOGUE_LOCK:
-            _LIVE_CATALOGUE_REFRESHING = False
+        slot = "json_extract(tags_json, '$.slot')"
+        condition = "json_extract(tags_json, '$.condition')"
+        secondhand = f"""{condition} = 'second-hand' OR (source='vinted' AND (
+            {condition} IS NULL
+            OR (json_type(tags_json, '$.condition') = 'text' AND {condition} = '')
+            OR (json_type(tags_json, '$.condition') IN ('false', 'integer', 'real')
+                AND {condition} = 0)
+            OR (json_type(tags_json, '$.condition') IN ('array', 'object')
+                AND NOT EXISTS (SELECT 1 FROM json_each(tags_json, '$.condition')))))"""
+        collation = "BINARY"
+    order = f"fetched_at DESC, id COLLATE {collation} ASC"
+    columns = ", ".join(f"i.{column.strip()}" for column in _LIVE_CATALOGUE_COLUMNS.split(","))
+    with db_connection() as connection:
+        rows = connection.execute(
+            f"""WITH classified AS MATERIALIZED (
+                SELECT id, fetched_at, CASE
+                    WHEN {slot} IN ('bag', 'accessory') THEN 2
+                    WHEN {secondhand} THEN 0 ELSE 1 END AS bucket
+                FROM items WHERE {_LIVE_CATALOGUE_FILTER}
+            ), secondhand AS (
+                SELECT * FROM classified WHERE bucket=0 ORDER BY {order} LIMIT ?
+            ), new AS (
+                SELECT * FROM classified WHERE bucket=1 ORDER BY {order}
+                LIMIT (SELECT ? - COUNT(*) FROM secondhand)
+            ), extras AS (
+                SELECT * FROM classified WHERE bucket=2 ORDER BY {order} LIMIT ?
+            ), selected AS (
+                SELECT * FROM secondhand UNION ALL SELECT * FROM new
+                UNION ALL SELECT * FROM extras
+            )
+            SELECT {columns} FROM selected s JOIN items i ON i.id=s.id
+            ORDER BY s.bucket, s.fetched_at DESC, s.id COLLATE {collation} ASC""",
+            (DECK_SECONDHAND_LIMIT, DECK_CANDIDATE_LIMIT, DECK_ACCESSORY_LIMIT),
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["tags"] = json.loads(item["tags_json"])
+        result.append(item)
+    return result
 
 
-def _start_live_catalogue_refresh_locked() -> None:
-    global _LIVE_CATALOGUE_REFRESHING
-    _LIVE_CATALOGUE_REFRESHING = True
-    try:
-        Thread(
-            target=_refresh_live_catalogue,
-            args=(_LIVE_CATALOGUE_GENERATION,),
-            daemon=True,
-            name="live-catalogue-refresh",
-        ).start()
-    except Exception:
-        _LIVE_CATALOGUE_REFRESHING = False
-        logger.exception("Failed to start live catalogue refresh")
+class _CatalogueCache:
+    def __init__(self, name: str):
+        self.name = name
+        self.lock = Lock()
+        self.items: list[dict[str, Any]] | None = None
+        self.expires_at = 0.0
+        self.refreshing = False
+        self.generation = 0
+
+    def _refresh(self, load: Callable, generation: int) -> None:
+        try:
+            items = load()
+        except Exception:
+            logger.exception("Failed to refresh %s", self.name)
+        else:
+            with self.lock:
+                if generation == self.generation:
+                    self.items = items
+                    self.expires_at = monotonic() + QUENYA_CATALOGUE_TTL_S
+        finally:
+            with self.lock:
+                self.refreshing = False
+
+    def invalidate(self) -> None:
+        with self.lock:
+            self.items = None
+            self.expires_at = 0.0
+            self.generation += 1
+
+    def get(self, load: Callable, select: Callable | None = None) -> list[dict[str, Any]]:
+        init_db()
+        with self.lock:
+            if self.items is None:
+                self.items = load()
+                self.expires_at = monotonic() + QUENYA_CATALOGUE_TTL_S
+            elif monotonic() >= self.expires_at and not self.refreshing:
+                self.refreshing = True
+                try:
+                    Thread(
+                        target=self._refresh,
+                        args=(load, self.generation),
+                        daemon=True,
+                        name=f"{self.name.replace(' ', '-')}-refresh",
+                    ).start()
+                except Exception:
+                    self.refreshing = False
+                    logger.exception("Failed to start %s refresh", self.name)
+            selected = select(self.items) if select is not None else self.items
+            return [dict(item) for item in selected]
+
+
+_LIVE_CATALOGUE = _CatalogueCache("live catalogue")
+_DECK_CATALOGUE = _CatalogueCache("deck catalogue")
 
 
 def invalidate_live_catalogue() -> None:
-    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
-    global _LIVE_CATALOGUE_GENERATION
-    with _LIVE_CATALOGUE_LOCK:
-        _LIVE_CATALOGUE_CACHE = None
-        _LIVE_CATALOGUE_CACHE_EXPIRES_AT = 0.0
-        _LIVE_CATALOGUE_GENERATION += 1
+    _LIVE_CATALOGUE.invalidate()
+    _DECK_CATALOGUE.invalidate()
 
 
-def live_catalogue() -> list[dict[str, Any]]:
-    global _LIVE_CATALOGUE_CACHE, _LIVE_CATALOGUE_CACHE_EXPIRES_AT
-    init_db()
-    with _LIVE_CATALOGUE_LOCK:
-        if _LIVE_CATALOGUE_CACHE is None:
-            catalogue = _load_live_catalogue()
-            _LIVE_CATALOGUE_CACHE = catalogue
-            _LIVE_CATALOGUE_CACHE_EXPIRES_AT = (
-                monotonic() + QUENYA_CATALOGUE_TTL_S
-            )
-            return [dict(item) for item in catalogue]
+def live_catalogue(
+    *, select: Callable[[list[dict[str, Any]]], list[dict[str, Any]]] | None = None
+) -> list[dict[str, Any]]:
+    """Return shallow copies; selectors must not mutate the cached snapshot."""
+    return _LIVE_CATALOGUE.get(_load_live_catalogue, select)
 
-        if (
-            monotonic() >= _LIVE_CATALOGUE_CACHE_EXPIRES_AT
-            and not _LIVE_CATALOGUE_REFRESHING
-        ):
-            _start_live_catalogue_refresh_locked()
-        return [dict(item) for item in _LIVE_CATALOGUE_CACHE]
+
+def deck_catalogue() -> list[dict[str, Any]]:
+    return _DECK_CATALOGUE.get(_load_deck_catalogue)
 
 
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:
