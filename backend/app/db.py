@@ -244,12 +244,19 @@ class _PostgresConnection:
                 sql = statement + " ON CONFLICT DO NOTHING"
         return sql
 
-    def execute(self, sql: str, params=()):
+    def _start_transaction(self):
         # SET LOCAL keeps search_path inside this transaction, so it never leaks to
         # other apps sharing a pooled Supabase backend.
         if not self._in_transaction:
             self._connection.execute("SET LOCAL search_path TO quenya, extensions")
             self._in_transaction = True
+
+    def server_cursor(self):
+        self._start_transaction()
+        return self._connection.cursor(name=f"catalogue_{uuid.uuid4().hex}")
+
+    def execute(self, sql: str, params=()):
+        self._start_transaction()
         return self._connection.execute(self._translate(sql, params), params or None)
 
     def commit(self):
@@ -844,6 +851,35 @@ _LIVE_CATALOGUE_FILTER = """tags_json IS NOT NULL
 
 def _load_live_catalogue() -> list[dict[str, Any]]:
     return _live_catalogue_items()
+
+
+@contextmanager
+def live_catalogue_batches(batch_size: int = 2000):
+    """Stream one catalogue snapshot, closing the transaction before model work."""
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    init_db()
+    sql = f"SELECT {_LIVE_CATALOGUE_COLUMNS} FROM items WHERE {_LIVE_CATALOGUE_FILTER}"
+    with db_connection() as connection:
+        if isinstance(connection, _PostgresConnection):
+            cursor = connection.server_cursor()
+        else:
+            cursor = connection.cursor()
+        try:
+            cursor.execute(sql)
+
+            def batches():
+                while rows := cursor.fetchmany(batch_size):
+                    items = []
+                    for row in rows:
+                        item = dict(row)
+                        item["tags"] = json.loads(item["tags_json"])
+                        items.append(item)
+                    yield items
+
+            yield batches()
+        finally:
+            cursor.close()
 
 
 def _live_catalogue_items(query: str | None = None) -> list[dict[str, Any]]:

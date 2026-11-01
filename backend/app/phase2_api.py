@@ -30,7 +30,7 @@ from app.embedding_ranker import (
 from app.llm import TaskError, call_task
 from app.outfits import (
     base_layer_subtype,
-    build_pool,
+    build_pool_batches,
     is_outfit_eligible,
     layer_role,
     order_outfit_pieces,
@@ -1018,10 +1018,9 @@ def _ensure_live_vinted_items(
     return deck
 
 
-def _without_disliked_lookalikes(
-    items: list[dict[str, Any]],
+def _disliked_lookalike_filter(
     swiped_items: list[tuple[dict[str, Any], bool]],
-) -> list[dict[str, Any]]:
+):
     disliked_items = [
         item for item, liked in swiped_items if not liked
     ]
@@ -1030,13 +1029,19 @@ def _without_disliked_lookalikes(
     disliked_images = {
         key for item in disliked_items if (key := image_key(item)) is not None
     }
-    return [
-        item
-        for item in items
-        if item["id"] not in disliked_ids
+    return lambda item: (
+        item["id"] not in disliked_ids
         and product_key(item) not in disliked_products
         and image_key(item) not in disliked_images
-    ]
+    )
+
+
+def _without_disliked_lookalikes(
+    items: list[dict[str, Any]],
+    swiped_items: list[tuple[dict[str, Any], bool]],
+) -> list[dict[str, Any]]:
+    keep = _disliked_lookalike_filter(swiped_items)
+    return [item for item in items if keep(item)]
 
 
 def _fitting_sizes(
@@ -1257,30 +1262,29 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
     active = _board_profile(body.board_id)
     current = db.latest_taste(active["id"])
     profile = current["profile"]
-    items = db.live_catalogue()
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
-    items = _without_disliked_lookalikes(items, swiped_items)
-    fitting_items = _fitting_sizes(items, active["brief"])
-    fitting_ids = {item["id"] for item in fitting_items}
-    items = [
-        *fitting_items,
-        *(
-            item
-            for item in items
-            if item["id"] in body.locked_ids and item["id"] not in fitting_ids
-        ),
-    ]
+    keep = _disliked_lookalike_filter(swiped_items)
+    locked_ids = set(body.locked_ids)
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
-    pool = build_pool(
-        items,
-        active["brief"],
-        profile,
-        body.locked_ids,
-        list(dict.fromkeys([*body.exclude_ids, *disliked_ids])),
-        core_profile=core_profile,
-    )
+    with db.live_catalogue_batches() as batches:
+        def eligible_batches():
+            for batch in batches:
+                batch = [item for item in batch if keep(item)]
+                fitting = _fitting_sizes(batch, active["brief"])
+                fitting_ids = {item["id"] for item in fitting}
+                yield [
+                    *fitting,
+                    *(item for item in batch
+                      if item["id"] in locked_ids and item["id"] not in fitting_ids),
+                ]
+
+        pool = build_pool_batches(
+            eligible_batches(), active["brief"], profile, body.locked_ids,
+            list(dict.fromkeys([*body.exclude_ids, *disliked_ids])),
+            core_profile=core_profile,
+        )
     if not pool:
         raise HTTPException(status_code=409, detail="No eligible tagged items")
     content = stylist_user_content(
@@ -1485,11 +1489,9 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     outfit = db.get_outfit(outfit_id)
     if not outfit or outfit["profile_id"] != active["id"]:
         raise HTTPException(status_code=404, detail="Outfit not found")
-    items = db.live_catalogue()
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
-    items = _without_disliked_lookalikes(items, swiped_items)
-    items = _fitting_sizes(items, active["brief"])
+    keep = _disliked_lookalike_filter(swiped_items)
     existing = [db.get_item_with_tags(item_id) for item_id in outfit["piece_ids"]]
     replaced = next((item for item in existing if item and item["id"] == body.item_id), None)
     if not replaced:
@@ -1497,6 +1499,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     slot = tags_for(replaced).get("slot")
     current = _taste(active["id"])
     core = _core()
+    core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     excluded_ids = {*body.exclude_ids, *disliked_ids}
     include_shoes = active["brief"].get("include_shoes", True)
     before = set(
@@ -1505,37 +1508,48 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     other_pieces = [
         item for item in existing if item and item["id"] != body.item_id
     ]
-    candidates = []
-    for item in rank_items(
-        items,
-        active["brief"],
-        current,
-        core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
-    ):
+    def valid_candidate(item):
         if (
             tags_for(item).get("slot") != slot
             or layer_role(item) != layer_role(replaced)
             or not is_outfit_eligible(item)
             or item["id"] in outfit["piece_ids"]
         ):
-            continue
+            return False
         total = (
             float(outfit["total_gbp"])
             - float(replaced.get("price_gbp") or 0)
             + float(item.get("price_gbp") or 0)
         )
         if total > float(current["price_ceiling_gbp"]):
-            continue
+            return False
         candidate_errors = set(
             outfit_errors([*other_pieces, item], include_shoes)
         )
-        if (
+        return not (
             "two jackets or coats" in candidate_errors
             or "more than two jackets or coats" in candidate_errors
             or candidate_errors - before
-        ):
-            continue
-        candidates.append(item)
+        )
+
+    candidates = []
+    # At most this many excluded pieces can precede the next usable candidate.
+    retain = len(set(body.exclude_ids)) + 1
+    with db.live_catalogue_batches() as batches:
+        for batch in batches:
+            items = _fitting_sizes([item for item in batch if keep(item)], active["brief"])
+            ranked = rank_items(
+                [*candidates, *items], active["brief"], current, core_profile=core_profile,
+            )
+            candidates = []
+            counts = {}
+            for item in ranked:
+                if not valid_candidate(item):
+                    continue
+                subtype = base_layer_subtype(item) if layer_role(replaced) == "base" else "all"
+                if counts.get(subtype, 0) < retain:
+                    candidates.append(item)
+                    counts[subtype] = counts.get(subtype, 0) + 1
     if layer_role(replaced) == "base":
         candidates = _interleave_base_candidates(candidates)
     replacement = next(
@@ -1620,22 +1634,23 @@ def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dic
     active = _user_profile()
     current = _taste(active["id"])
     needle = q.strip().lower()
-    matches = [
-        item for item in db.live_catalogue()
-        if needle in " ".join(
-            [item["title"], str(tags_for(item).get("category", ""))]
-            + list(tags_for(item).get("aesthetics", []))
-        ).lower()
-        and (slot is None or tags_for(item).get("slot") == slot)
-    ]
     core = _core()
-    ranked = rank_items(
-        matches,
-        active["brief"],
-        current,
-        core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
-    )
-    return [_public_item(item) for item in ranked[:max(1, min(limit, 100))]]
+    core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
+    ranked = []
+    with db.live_catalogue_batches() as batches:
+        for batch in batches:
+            matches = [
+                item for item in batch
+                if needle in " ".join(
+                    [item["title"], str(tags_for(item).get("category", ""))]
+                    + list(tags_for(item).get("aesthetics", []))
+                ).lower()
+                and (slot is None or tags_for(item).get("slot") == slot)
+            ]
+            ranked = rank_items(
+                [*ranked, *matches], active["brief"], current, core_profile=core_profile,
+            )[:max(1, min(limit, 100))]
+    return [_public_item(item) for item in ranked]
 
 
 @router.post("/api/uploads")

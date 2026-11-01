@@ -68,8 +68,7 @@ def run_worker(concurrency: int) -> None:
     init_sentry("worker")
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
-    logger.info("Warming live catalogue")
-    db.live_catalogue()
+    db.init_db()
 
     worker_id = (
         f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
