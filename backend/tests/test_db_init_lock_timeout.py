@@ -71,7 +71,7 @@ def test_pg_add_column_if_missing_skips_existing_column():
 
     assert len(connection.statements) == 1
     assert "information_schema.columns" in connection.statements[0][0]
-    assert connection.statements[0][1] == ("quenya", "items", "image_preview")
+    assert connection.statements[0][1] == ("items", "image_preview")
 
 
 def test_pg_add_column_if_missing_alters_missing_column():
@@ -80,7 +80,7 @@ def test_pg_add_column_if_missing_alters_missing_column():
     db._pg_add_column_if_missing(connection, "items", "image_preview", "TEXT")
 
     assert connection.statements[-1][0] == (
-        "ALTER TABLE items ADD COLUMN image_preview TEXT"
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS image_preview TEXT"
     )
 
 

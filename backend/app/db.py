@@ -555,13 +555,13 @@ def _pg_add_column_if_missing(connection, table, column, definition):
     existing = _pg_execute_init_statement(
         connection,
         "SELECT 1 FROM information_schema.columns "
-        "WHERE table_schema = ? AND table_name = ? AND column_name = ?",
-        ("quenya", table, column),
+        "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+        (table, column),
     ).fetchone()
     if existing is None:
         _pg_execute_init_statement(
             connection,
-            f"ALTER TABLE {table} ADD COLUMN {column} {definition}",
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}",
         )
 
 
