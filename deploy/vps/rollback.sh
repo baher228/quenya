@@ -83,6 +83,7 @@ if wait_for_health; then
     printf '%s\n' "$target" > "$current_file.tmp.$$"
     mv "$current_file.tmp.$$" "$current_file"
     printf '%s\n' "$target" >> "$history_file"
+    docker image tag "quenya-quenya-api:$target" quenya-quenya-api:latest
     printf 'Rolled back to %s (previous: %s)\n' "$target" "$previous_current"
     exit 0
 fi

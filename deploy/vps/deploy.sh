@@ -51,6 +51,7 @@ QUENYA_IMAGE_TAG=$tag docker compose -f "$compose_file" run --rm --no-deps \
 QUENYA_IMAGE_TAG=$tag docker compose -f "$compose_file" up -d quenya-api quenya-worker
 
 if wait_for_health; then
+    docker image tag "quenya-quenya-api:$tag" quenya-quenya-api:latest
     if [ "$bootstrap_previous" -eq 1 ]; then
         printf '%s\n' "$prev" >> "$history_file"
     fi
@@ -90,6 +91,7 @@ if [ -n "$prev" ]; then
         printf 'Could not start rollback release %s.\n' "$prev" >&2
     fi
     if wait_for_health; then
+        docker image tag "quenya-quenya-api:$prev" quenya-quenya-api:latest
         printf 'Rollback to %s is healthy; deployment %s remains failed.\n' "$prev" "$tag" >&2
     else
         printf 'Rollback to %s did not become healthy.\n' "$prev" >&2

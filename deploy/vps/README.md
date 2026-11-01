@@ -33,6 +33,7 @@ Display images continue to use Supabase by default. To use R2, create the `queny
    `/api/health`. If the new release does not become healthy, it restores the
    previous image. Migrations must remain backward compatible and additive
    because the old API continues serving while migrations run.
+   The `:latest` image tag always points at the current healthy release.
 
    To add a migration, append a new ordered `("000N_name", function)` entry to
    `MIGRATIONS` in `backend/app/migrate.py`. Never edit a migration that has

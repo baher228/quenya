@@ -50,7 +50,13 @@ exit 0
 printf 'curl\\t%s\\t' "${QUENYA_IMAGE_TAG-}" >> "$FAKE_LOG"
 printf '%s ' "$@" >> "$FAKE_LOG"
 printf '\\n' >> "$FAKE_LOG"
-printf '%s\\n' "${FAKE_CURL_HEALTH}"
+health=${FAKE_CURL_HEALTH}
+case " ${FAKE_UNHEALTHY_TAGS-} " in
+    *" ${QUENYA_IMAGE_TAG-} "*)
+        health=${FAKE_UNHEALTHY_HEALTH}
+        ;;
+esac
+printf '%s\\n' "$health"
 """
     )
     curl.chmod(0o755)
@@ -65,6 +71,8 @@ printf '%s\\n' "${FAKE_CURL_HEALTH}"
             "QUENYA_HEALTH_TIMEOUT_S": "1",
             "QUENYA_HEALTH_POLL_INTERVAL_S": "0",
             "FAKE_CURL_HEALTH": HEALTHY,
+            "FAKE_UNHEALTHY_HEALTH": UNHEALTHY,
+            "FAKE_UNHEALTHY_TAGS": "",
             "FAKE_IMAGES": "",
             "FAKE_IMAGE_LIST": "",
             "FAKE_LOG": str(log_file),
@@ -137,6 +145,10 @@ def test_healthy_deploy_records_release_and_passes_image_tag(tmp_path):
         tag == "new-release" and " up -d quenya-api quenya-worker" in args
         for tag, args in calls
     )
+    assert any(
+        "image tag quenya-quenya-api:new-release quenya-quenya-api:latest" in args
+        for _tag, args in calls
+    )
 
 
 def test_failed_migration_never_replaces_running_containers(tmp_path):
@@ -171,7 +183,7 @@ def test_unhealthy_deploy_rolls_back_and_leaves_current_unchanged(tmp_path):
         overrides={
             "QUENYA_RELEASE": "new-release",
             "FAKE_IMAGES": "quenya-quenya-api:old-release",
-            "FAKE_CURL_HEALTH": UNHEALTHY,
+            "FAKE_UNHEALTHY_TAGS": "new-release old-release",
         },
     )
 
@@ -187,6 +199,32 @@ def test_unhealthy_deploy_rolls_back_and_leaves_current_unchanged(tmp_path):
     ]
     assert up_tags == ["new-release", "old-release"]
     assert "rolling back to old-release" in result.stderr
+    assert not any(
+        "image tag quenya-quenya-api:" in args
+        and " quenya-quenya-api:latest" in args
+        for _tag, args in _docker_calls(log_file)
+    )
+
+
+def test_healthy_auto_rollback_retags_previous_release_as_latest(tmp_path):
+    _, host_dir, _log_file = _setup(tmp_path)
+    _seed_release(host_dir, "old-release", ["old-release"])
+    result, _host_dir, log_file = _run(
+        tmp_path,
+        "deploy.sh",
+        overrides={
+            "QUENYA_RELEASE": "new-release",
+            "FAKE_IMAGES": "quenya-quenya-api:old-release",
+            "FAKE_UNHEALTHY_TAGS": "new-release",
+        },
+    )
+
+    assert result.returncode == 1
+    assert (host_dir / ".releases" / "current").read_text() == "old-release\n"
+    assert any(
+        "image tag quenya-quenya-api:old-release quenya-quenya-api:latest" in args
+        for _tag, args in _docker_calls(log_file)
+    )
 
 
 def test_first_deploy_retags_latest_as_previous_release(tmp_path):
@@ -235,6 +273,10 @@ def test_rollback_without_arguments_selects_previous_history_entry(tmp_path):
     assert any(
         tag == "old-release" and " up -d quenya-api quenya-worker" in args
         for tag, args in _docker_calls(log_file)
+    )
+    assert any(
+        "image tag quenya-quenya-api:old-release quenya-quenya-api:latest" in args
+        for _tag, args in _docker_calls(log_file)
     )
 
 

@@ -26,5 +26,5 @@ exec flock -n "/run/quenya-ingest-$source.lock" \
     -w /app/backend \
     -e PYTHONPATH=/app/backend \
     -v quenya_quenya-cache:/cache \
-    quenya-quenya-api \
+    quenya-quenya-api:latest \
     python -m app.ingest --source "$source" "$@"
