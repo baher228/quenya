@@ -352,7 +352,7 @@ def logout(
 
 @router.get("/api/me")
 def me(user: CurrentUser) -> dict[str, Any]:
-    count = len(db.profile_boards("user", user["id"]))
+    count = db.profile_count("user", user["id"])
     return {
         **_public(user),
         "max_styles": 1 if user["role"] == "tester" else None,

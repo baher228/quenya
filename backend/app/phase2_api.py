@@ -165,7 +165,7 @@ def _board_profile(board_id: str | None) -> dict[str, Any]:
 
 def _ensure_can_create_style(user: dict[str, Any] | None = None) -> None:
     user = user or context_user()
-    if user and user.get("role") == "tester" and db.profile_boards("user", user["id"]):
+    if user and user.get("role") == "tester" and db.profile_count("user", user["id"]):
         raise HTTPException(status_code=403, detail="Tester accounts have one style")
 
 
@@ -669,7 +669,7 @@ def create_profile(
 
 @router.get("/api/boards")
 def boards() -> list[dict[str, Any]]:
-    return [_board_summary(board) for board in _user_boards()]
+    return db.profile_board_summaries("user", _owner_id())
 
 
 @router.put("/api/boards/{board_id}/brief")
