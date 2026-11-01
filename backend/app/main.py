@@ -40,6 +40,7 @@ from app.prompts import (
     TAGGER_MODEL,
     TASTE_MODEL,
 )
+from app.request_timing import RequestTimingMiddleware
 from app.tagging import tag_item
 from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
@@ -58,6 +59,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestTimingMiddleware)
 
 
 @app.middleware("http")
@@ -154,6 +156,24 @@ def _warm_caches() -> None:
             warm()
         except Exception:
             logger.exception("Failed to warm %s cache", cache_name)
+
+
+@app.get("/api/live", include_in_schema=False)
+def live() -> dict:
+    return {"ok": True}
+
+
+@app.get("/api/ready", include_in_schema=False)
+def ready() -> dict:
+    try:
+        with db.db_connection() as connection:
+            connection.execute("SELECT 1").fetchone()
+        if not db.schema_migration_status()["ok"]:
+            raise RuntimeError("Schema is not ready")
+    except Exception as exc:
+        logger.warning("Readiness probe failed")
+        raise HTTPException(status_code=503, detail="Service unavailable") from exc
+    return {"ok": True}
 
 
 @app.get("/health", include_in_schema=False)
