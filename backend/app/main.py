@@ -1,9 +1,10 @@
 import json
 import logging
+import os
 from threading import Thread
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -40,13 +41,13 @@ from app.prompts import (
     TAGGER_MODEL,
     TASTE_MODEL,
 )
-from app.request_timing import RequestTimingMiddleware
+from app.request_timing import TimedFastAPI
 from app.tagging import tag_item
 from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
 from app.waitlist import router as waitlist_router
 
-app = FastAPI(title="Quenya API")
+app = TimedFastAPI(title="Quenya API")
 logger = logging.getLogger(__name__)
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +60,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestTimingMiddleware)
 
 
 @app.middleware("http")

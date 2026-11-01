@@ -1,6 +1,8 @@
 import logging
 from time import monotonic
 
+from fastapi import FastAPI
+
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -46,3 +48,8 @@ class RequestTimingMiddleware:
             await self.app(scope, receive, timed_send)
         finally:
             finish(False)
+
+
+class TimedFastAPI(FastAPI):
+    def build_middleware_stack(self):
+        return RequestTimingMiddleware(super().build_middleware_stack())

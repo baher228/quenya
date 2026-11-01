@@ -2,17 +2,15 @@ import logging
 import re
 from contextlib import contextmanager
 
-from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
 from app import main
-from app.request_timing import RequestTimingMiddleware
+from app.request_timing import TimedFastAPI
 
 
 def test_route_timings_use_templates_and_never_log_user_data(caplog):
-    app = FastAPI()
-    app.add_middleware(RequestTimingMiddleware)
+    app = TimedFastAPI()
 
     @app.post("/boards/{board_id}/outfits")
     def outfits(board_id: str):
@@ -33,8 +31,7 @@ def test_route_timings_use_templates_and_never_log_user_data(caplog):
 
 
 def test_timing_records_failed_and_unmatched_requests_without_raw_paths(caplog):
-    app = FastAPI()
-    app.add_middleware(RequestTimingMiddleware)
+    app = TimedFastAPI()
 
     @app.get("/broken/{board_id}")
     def broken(board_id: str):
@@ -42,10 +39,13 @@ def test_timing_records_failed_and_unmatched_requests_without_raw_paths(caplog):
 
     with caplog.at_level(logging.INFO, logger="uvicorn.error"):
         client = TestClient(app, raise_server_exceptions=False)
-        assert client.get("/broken/private-board").status_code == 500
+        response = client.get("/broken/private-board")
+        assert response.status_code == 500
+        assert response.text == "Internal Server Error"
+        assert "server-timing" in response.headers
         assert client.get("/private-path").status_code == 404
     assert "status=500" in caplog.text
-    assert "complete=False" in caplog.text
+    assert "complete=True" in caplog.text
     assert "route=unmatched status=404" in caplog.text
     assert "private-board" not in caplog.text
     assert "private-path" not in caplog.text
@@ -53,8 +53,7 @@ def test_timing_records_failed_and_unmatched_requests_without_raw_paths(caplog):
 
 
 def test_streaming_timings_include_body_completion(caplog):
-    app = FastAPI()
-    app.add_middleware(RequestTimingMiddleware)
+    app = TimedFastAPI()
 
     @app.get("/stream")
     def stream():
