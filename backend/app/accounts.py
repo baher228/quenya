@@ -14,6 +14,7 @@ from time import monotonic
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from app import db
 from app.config import QUENYA_APP_URL
@@ -30,7 +31,7 @@ _login_failures_by_name: dict[str, deque[float]] = {}
 
 
 def is_browser(user_agent: str | None) -> bool:
-    return "mozilla/" in (user_agent or "").lower()
+    return isinstance(user_agent, str) and "mozilla/" in user_agent.lower()
 
 
 class TesterInviteNotAllowed(ValueError):
@@ -269,7 +270,7 @@ async def current_user(
     user_agent: str | None = Header(default=None, alias="User-Agent"),
 ) -> dict[str, Any]:
     token = authorization.removeprefix("Bearer ").strip() if authorization else ""
-    user = user_for_session(token)
+    user = await run_in_threadpool(user_for_session, token)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in with your invite link")
     if user["role"] != "admin" and is_browser(user_agent):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from threading import Barrier, get_ident
 from types import SimpleNamespace
 
 import pytest
@@ -134,6 +136,60 @@ def test_browser_testers_cannot_use_sessions_but_admins_can(
     assert empty_user_agent_tester.status_code == 200
     assert browser_admin_me.status_code == 200
     assert browser_admin_endpoint.status_code == 200
+
+
+def test_session_lookup_runs_off_the_event_loop(monkeypatch):
+    event_loop_thread = get_ident()
+    user = {"id": "owner", "role": "tester"}
+
+    def lookup(token):
+        assert get_ident() != event_loop_thread
+        assert token == "session"
+        assert accounts.in_request()
+        return user
+
+    monkeypatch.setattr(accounts, "user_for_session", lookup)
+
+    async def authenticate():
+        request_context = accounts._in_request.set(True)
+        try:
+            assert await accounts.current_user("Bearer session") == user
+            assert accounts.context_user() == user
+        finally:
+            accounts._in_request.reset(request_context)
+
+    asyncio.run(authenticate())
+
+
+def test_parallel_session_lookups_keep_request_owners_separate(monkeypatch):
+    both_lookups = Barrier(2, timeout=5)
+
+    def lookup(token):
+        both_lookups.wait()
+        return {"id": token, "role": "tester"}
+
+    monkeypatch.setattr(accounts, "user_for_session", lookup)
+
+    async def authenticate(owner):
+        user = await accounts.current_user(f"Bearer {owner}")
+        await asyncio.sleep(0)
+        assert user["id"] == owner
+        assert accounts.context_user()["id"] == owner
+        assert phase2_api._owner_id() == owner
+
+    async def authenticate_both():
+        await asyncio.gather(authenticate("first-owner"), authenticate("second-owner"))
+
+    asyncio.run(authenticate_both())
+
+
+@pytest.mark.parametrize("authorization", [None, "Bearer invalid", ""])
+def test_offloaded_session_lookup_still_rejects_invalid_sessions(monkeypatch, authorization):
+    monkeypatch.setattr(accounts, "user_for_session", lambda _token: None)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(accounts.current_user(authorization))
+    assert error.value.status_code == 401
+    assert error.value.detail == "Sign in with your invite link"
 
 
 def test_owner_lookup_fails_closed_inside_unauthenticated_http_request(
