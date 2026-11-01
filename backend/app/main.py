@@ -92,7 +92,11 @@ async def http_error_handler(_request: Request, exc: HTTPException) -> JSONRespo
         and detail == "Waitlist entry is not approved"
     ) or (
         exc.status_code == 403
-        and detail == "Tester accounts have one style"
+        and isinstance(detail, str)
+        and detail in {
+            "Tester accounts have one style",
+            accounts.APP_ONLY_DETAIL,
+        }
     ):
         return JSONResponse(
             status_code=exc.status_code,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errText, gbp, type User } from "./api";
+import { api, ApiError, errText, gbp, type User } from "./api";
 import { BriefScreen, DEFAULT_BRIEF } from "./Brief";
 import { cacheKey, clearAll as clearCache, get as getCache, remove as removeCache, set as setCache } from "./cache";
 import { DeckScreen } from "./Deck";
@@ -8,6 +8,7 @@ import { ItemImage } from "./ItemImage";
 import { OutfitsScreen, REASONS } from "./Outfits";
 import { TasteScreen } from "./Taste";
 import { ErrorBox, Loading, Provenance } from "./ui";
+import { APP_ONLY_DETAIL, TESTFLIGHT_URL } from "./constants";
 import type { Board, Brief, Checkout, Item, Outfit, Route, TasteState, TasteVersion, UploadResult } from "./types";
 
 type Tab = "brief" | "swipe" | "outfits" | "find" | "taste";
@@ -49,6 +50,7 @@ export default function App() {
   const [briefKey, setBriefKey] = useState(0);
   const [picking, setPicking] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [iphoneOnly, setIphoneOnly] = useState(false);
   const [inviteOnly, setInviteOnly] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const bodyRef = useRef<HTMLElement>(null);
@@ -65,36 +67,35 @@ export default function App() {
   }, [tab, picking, activeBoard?.id]);
   const refreshBoards = useCallback(() => { api.boards().then(setBoards).catch(() => undefined); }, []);
   useEffect(() => {
+    const inviteParams = new URLSearchParams(window.location.search);
+    if (window.location.pathname === "/" && inviteParams.has("invite")) {
+      const invite = inviteParams.get("invite") ?? "";
+      window.location.replace(`/open?invite=${encodeURIComponent(invite)}`);
+      return;
+    }
     if (window.location.pathname === "/open") {
       setAuthLoading(false);
       return;
     }
     const start = async () => {
+      if (!window.localStorage.getItem("quenya.token")) {
+        setIphoneOnly(true);
+        setAuthLoading(false);
+        return;
+      }
       try {
-        const invite = new URLSearchParams(window.location.search).get("invite");
-        if (invite) {
-          const hadPreviousToken = !!window.localStorage.getItem("quenya.token");
-          let previousUserId: string | null = null;
-          if (hadPreviousToken) {
-            try { previousUserId = (await api.me()).id; } catch { /* invite redemption may replace an expired session */ }
-          }
-          const result = await api.invite(invite);
-          if (!hadPreviousToken || previousUserId !== result.user.id) {
-            clearCache();
-            setBoards([]);
-            setOutfits([]);
-            setOutfitLocks({});
-            setOutfitsCacheReadyKey(null);
-          }
-          window.localStorage.setItem("quenya.token", result.token);
-          window.history.replaceState({}, "", window.location.pathname);
-          setUser(result.user);
-        } else {
-          setUser(await api.me());
-        }
+        setUser(await api.me());
         setInviteOnly(false);
-      } catch {
-        setInviteOnly(true);
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          (error.status === 401 ||
+            (error.status === 403 && error.message === APP_ONLY_DETAIL))
+        ) {
+          setIphoneOnly(true);
+        } else {
+          setInviteOnly(true);
+        }
       } finally {
         setAuthLoading(false);
       }
@@ -109,7 +110,8 @@ export default function App() {
       setOutfits([]);
       setOutfitLocks({});
       setOutfitsCacheReadyKey(null);
-      setInviteOnly(true);
+      setIphoneOnly(true);
+      setInviteOnly(false);
     };
     window.addEventListener("quenya:unauthorized", unauthorized);
     return () => window.removeEventListener("quenya:unauthorized", unauthorized);
@@ -337,6 +339,21 @@ export default function App() {
 
   const hasProfile = !!taste?.current;
   if (authLoading) return <Loading>Checking invite…</Loading>;
+  if (iphoneOnly) {
+    return (
+      <div className="stage"><div className="phone"><main className="body">
+        <section className="screen empty">
+          <h1 className="h3">Quenya is on iPhone</h1>
+          <p className="muted">
+            Install Quenya from TestFlight, then open your invite link on your iPhone.
+          </p>
+          <a className="btn primary wide center" href={TESTFLIGHT_URL}>
+            Install Quenya from TestFlight
+          </a>
+        </section>
+      </main></div></div>
+    );
+  }
   if (inviteOnly || !user) {
     return (
       <div className="stage"><div className="phone"><main className="body">

@@ -2,6 +2,7 @@ import type {
   Board, Core, Route, UploadResult,
   Brief, Checkout, FetchJob, Item, Outfit, OutfitsResponse, TaskStats, TasteState, TasteVersion,
 } from "./types";
+import { APP_ONLY_DETAIL } from "./constants";
 
 export class ApiError extends Error {
   status: number;
@@ -52,11 +53,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     body = text;
   }
   if (!res.ok) {
-    if (res.status === 401) {
+    const detail = (body as { detail?: unknown })?.detail ?? body;
+    if (
+      res.status === 401 ||
+      (res.status === 403 && detail === APP_ONLY_DETAIL)
+    ) {
       window.localStorage.removeItem("quenya.token");
       window.dispatchEvent(new Event("quenya:unauthorized"));
     }
-    const detail = (body as { detail?: unknown })?.detail ?? body;
     let message = `Request failed (${res.status})`;
     let ids: string[] = [];
     if (typeof detail === "string") message = detail;

@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { TESTFLIGHT_URL } from "./constants";
 
-const TESTFLIGHT_URL = "https://testflight.apple.com/join/DNNd7Naj";
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,}$/;
 
 export default function OpenInvitePage() {
@@ -15,7 +15,6 @@ export default function OpenInvitePage() {
   const appUrl = token
     ? `quenya://invite?token=${encodeURIComponent(token)}`
     : "";
-  const webUrl = token ? `/?invite=${encodeURIComponent(token)}` : "";
 
   const copyInvite = async () => {
     try {
@@ -35,7 +34,7 @@ export default function OpenInvitePage() {
         </header>
         <main className="body invite-landing-body">
           <div className="invite-landing-content">
-            <p className="eyebrow">TestFlight beta</p>
+            <p className="eyebrow">iPhone app</p>
             <h1 className="h1">Open Quenya on your iPhone</h1>
             {token ? (
               <>
@@ -62,9 +61,6 @@ export default function OpenInvitePage() {
                     </p>
                   )}
                 </section>
-                <a className="invite-web-link" href={webUrl}>
-                  Use Quenya on the web instead
-                </a>
               </>
             ) : (
               <p className="invite-incomplete">This link is incomplete.</p>
