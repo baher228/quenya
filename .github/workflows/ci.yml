@@ -47,6 +47,8 @@ jobs:
       - name: Run backend tests
         run: pytest -q
         working-directory: backend
+      - name: Run scraper tests
+        run: pytest -q scraper/tests
       - name: Run Ruff
         run: ruff check .
         working-directory: backend
@@ -128,5 +130,10 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.directory }}/package-lock.json
       - name: Install dependencies and build
-        run: npm ci && npm run build
+        run: |
+          npm ci
+          if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.test?0:1)"; then
+            npm test
+          fi
+          npm run build
         working-directory: ${{ matrix.directory }}
