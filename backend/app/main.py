@@ -46,6 +46,7 @@ from app.prompts import (
     TASTE_MODEL,
 )
 from app.request_timing import TimedFastAPI
+from app.security import SecurityHeadersMiddleware
 from app.tagging import tag_item
 from app.taste import update_taste
 from app.vinted_proxy import router as vinted_proxy_router
@@ -65,6 +66,7 @@ if not access_logger.handlers:
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -140,6 +142,7 @@ async def http_error_handler(_request: Request, exc: HTTPException) -> JSONRespo
             "Invite link doesn't belong to this tester",
             "Couldn't send the email",
             "Email isn't set up on the server",
+            "Too many requests, try again later",
         }
     ) or (
         exc.status_code == 404

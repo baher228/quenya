@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from app.security import enforce_user_rate_limit, proxy_rate_limit
 from app.sources import vinted
 
 router = APIRouter()
@@ -24,6 +25,7 @@ def search_vinted(
     provided_key = (proxy_key or "").encode("utf-8")
     if not hmac.compare_digest(provided_key, expected_key.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    enforce_user_rate_limit("proxy", "vinted-search", limit=proxy_rate_limit())
     try:
         items = vinted.search_direct(q, gender, per_page, page)
     except Exception as exc:

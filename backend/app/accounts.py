@@ -11,10 +11,12 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from app import db, rate_limit
 from app.config import QUENYA_APP_URL
+from app.security import enforce_user_rate_limit, invite_rate_limit
 
 _user_context: ContextVar[dict[str, Any] | None] = ContextVar("user_context", default=None)
 _in_request: ContextVar[bool] = ContextVar("in_request", default=False)
@@ -281,16 +283,27 @@ def clear_context() -> None:
     _user_context.set(None)
 
 
+class InviteRedeemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=8, max_length=256)
+
+
 @router.post("/api/auth/invite")
 def redeem(
-    body: dict[str, str],
+    body: InviteRedeemRequest,
+    request: Request,
     user_agent: str | None = Header(default=None, alias="User-Agent"),
 ) -> dict[str, Any]:
+    enforce_user_rate_limit(
+        f"ip:{_client_ip(request)}",
+        "invite",
+        limit=invite_rate_limit(),
+    )
     try:
-        token = redeem_invite(body["token"], allow_tester=not is_browser(user_agent))
+        token = redeem_invite(body.token, allow_tester=not is_browser(user_agent))
     except TesterInviteNotAllowed as exc:
         raise HTTPException(status_code=403, detail=APP_ONLY_DETAIL) from exc
-    except (KeyError, ValueError) as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=401, detail="Invalid invite") from exc
     user = user_for_session(token)
     return {"token": token, "user": _public(user or {})}

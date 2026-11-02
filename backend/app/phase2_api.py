@@ -73,6 +73,12 @@ from app.schemas import (
     UploadAssignRequest,
     VerdictRequest,
 )
+from app.security import (
+    deck_rate_limit,
+    enforce_user_rate_limit,
+    outfits_rate_limit,
+    search_rate_limit,
+)
 from app.sizes import fits_brief
 from app.sources import catalog, retail, sport, vinted
 from app.styles import decode_brief, style_notes, style_queries
@@ -1149,6 +1155,7 @@ def deck(
 ) -> list[dict[str, Any]]:
     if n < 1 or n > 50:
         raise HTTPException(status_code=422, detail="n must be between 1 and 50")
+    enforce_user_rate_limit(_owner_id(), "deck", limit=deck_rate_limit())
     background_tasks = background_tasks or BackgroundTasks()
     active = _board_profile(board_id)
     taste = _taste(active["id"])
@@ -1501,6 +1508,7 @@ def _enqueue_outfit_job(body: OutfitRequest) -> str:
 
 @router.post("/api/outfits/jobs", status_code=202)
 def enqueue_outfit_job(body: OutfitRequest) -> dict[str, str]:
+    enforce_user_rate_limit(_owner_id(), "outfits", limit=outfits_rate_limit())
     job_id = _enqueue_outfit_job(body)
     return {"job_id": job_id, "status": "queued"}
 
@@ -1520,6 +1528,7 @@ def get_outfit_job(job_id: str) -> dict[str, Any]:
 
 @router.post("/api/outfits", response_model=None)
 def outfits(body: OutfitRequest) -> dict[str, Any] | JSONResponse:
+    enforce_user_rate_limit(_owner_id(), "outfits", limit=outfits_rate_limit())
     job_id = _enqueue_outfit_job(body)
     owner_id = _owner_id()
     wait_s = max(0.0, float(os.getenv("QUENYA_OUTFIT_SYNC_WAIT_S", "100")))
@@ -1709,11 +1718,16 @@ def checkout(body: CheckoutRequest) -> dict[str, Any]:
 
 @router.get("/api/search")
 def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    enforce_user_rate_limit(_owner_id(), "search", limit=search_rate_limit())
     active = _user_profile()
     current = _taste(active["id"])
     needle = q.strip().lower()
     if not needle:
         return []
+    if len(q) > 200:
+        raise HTTPException(status_code=422, detail="q too long")
+    if slot is not None and len(slot) > 64:
+        raise HTTPException(status_code=422, detail="slot too long")
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     ranked = []
@@ -1907,6 +1921,7 @@ def assign_upload(upload_id: str, body: UploadAssignRequest) -> dict[str, Any]:
 
 @router.post("/api/search/live")
 def live_search(body: LiveSearchRequest) -> dict[str, Any]:
+    enforce_user_rate_limit(_owner_id(), "search", limit=search_rate_limit())
     active = _user_profile()
     gender = _gender_code(active["brief"]["gender"])
     try:

@@ -7,7 +7,7 @@ import { FindScreen } from "./Find";
 import { ItemImage } from "./ItemImage";
 import { OutfitsScreen, REASONS } from "./Outfits";
 import { TasteScreen } from "./Taste";
-import { ErrorBox, Loading, Provenance } from "./ui";
+import { ErrorBox, Loading, Provenance, ShopDisclosure } from "./ui";
 import { APP_ONLY_DETAIL, TESTFLIGHT_URL } from "./constants";
 import type { Board, Brief, Checkout, Item, Outfit, Route, TasteState, TasteVersion, UploadResult } from "./types";
 
@@ -598,6 +598,7 @@ function ItemSheet({ item, onClose, onCorrected }: { item: Item; onClose: () => 
       {rid && <p className="small muted mono">Re-tagged with your correction · {rid}</p>}
       {err !== null && <ErrorBox error={err} />}
       <a className="btn primary wide center" href={item.source_url} target="_blank" rel="noreferrer">View listing on {item.source === "vinted" ? "Vinted" : new URL(item.source_url).hostname.replace("www.", "")}</a>
+      <ShopDisclosure />
       <button className="close" onClick={onClose}>Close</button>
     </>
   );
@@ -613,6 +614,7 @@ function CheckoutSheet({ s, onClose }: { s: Extract<Sheet, { kind: "checkout" }>
         <>
           <p className="badge">Demo checkout · no payment taken · {s.result.order_ref}</p>
           <p className="small muted">For real orders we'd buy each piece from its shop and ship the bundle to you. For now, here's every listing.</p>
+          <ShopDisclosure />
           <ul className="lines">
             {s.result.lines.map(l => (
               <li key={l.source_url}><a href={l.source_url} target="_blank" rel="noreferrer">{l.title}</a><span>{l.source} · {gbp(l.price_gbp)}</span></li>
