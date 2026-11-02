@@ -12,7 +12,7 @@ type ItemImageProps = {
 export function ItemImage({
   item,
   alt,
-  loading,
+  loading = "lazy",
   draggable,
 }: ItemImageProps) {
   const source = img(item);
@@ -29,17 +29,18 @@ export function ItemImage({
   const failed = failedSource === source;
 
   return (
-    <div className="item-image" aria-busy={!loaded && !failed}>
-      {item.image_preview && (
+    <div className={"item-image" + (failed ? " failed" : "")} aria-busy={!loaded && !failed}>
+      {item.image_preview && !failed && (
         <img
           className="item-image-preview"
           src={item.image_preview}
           alt=""
           aria-hidden="true"
           draggable={false}
+          decoding="async"
         />
       )}
-      {source && (
+      {source && !failed && (
         <img
           ref={imageRef}
           className={
@@ -50,12 +51,15 @@ export function ItemImage({
           src={source}
           alt={alt}
           loading={loading}
+          decoding="async"
+          referrerPolicy="no-referrer"
           draggable={draggable}
           onLoad={() => setLoadedSource(source)}
           onError={() => setFailedSource(source)}
         />
       )}
       {!loaded && !failed && <span className="item-image-spinner" aria-hidden="true" />}
+      {failed && <span className="item-image-missing" aria-hidden="true" />}
     </div>
   );
 }

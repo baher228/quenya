@@ -833,16 +833,28 @@ def vinted_items_for_retention(
     older_than_iso: str,
     limit: int = 5000,
 ) -> list[dict[str, Any]]:
-    """Vinted rows past retention age and/or marked sold/unavailable."""
+    """Vinted rows past retention age and/or marked sold/unavailable.
+
+    Uses two index-friendly probes instead of one OR that defeats
+    idx_items_source_fetched on Postgres.
+    """
     init_db()
-    query = """
-        SELECT id, source, image_url, image_path, image_preview, fetched_at,
-               availability
-        FROM items
+    columns = (
+        "id, source, image_url, image_path, image_preview, fetched_at, "
+        "availability"
+    )
+    aged_sql = f"""
+        SELECT {columns} FROM items
+        WHERE source=? AND (fetched_at IS NULL OR fetched_at < ?)
+        ORDER BY fetched_at
+        LIMIT ?
+    """
+    sold_sql = f"""
+        SELECT {columns} FROM items
         WHERE source=?
+          AND fetched_at IS NOT NULL AND fetched_at >= ?
           AND (
-            fetched_at IS NULL OR fetched_at < ?
-            OR availability LIKE '%SoldOut%'
+            availability LIKE '%SoldOut%'
             OR availability LIKE '%OutOfStock%'
             OR availability LIKE '%Discontinued%'
           )
@@ -850,10 +862,27 @@ def vinted_items_for_retention(
         LIMIT ?
     """
     with db_connection() as connection:
-        rows = connection.execute(
-            query, ("vinted", older_than_iso, limit)
-        ).fetchall()
-    return [dict(row) for row in rows]
+        aged = [
+            dict(row)
+            for row in connection.execute(
+                aged_sql, ("vinted", older_than_iso, limit)
+            ).fetchall()
+        ]
+        remaining = max(0, limit - len(aged))
+        sold = (
+            [
+                dict(row)
+                for row in connection.execute(
+                    sold_sql, ("vinted", older_than_iso, remaining)
+                ).fetchall()
+            ]
+            if remaining
+            else []
+        )
+    merged: dict[str, dict[str, Any]] = {}
+    for row in aged + sold:
+        merged[row["id"]] = row
+    return list(merged.values())[:limit]
 
 
 def clear_vinted_raw_json() -> int:

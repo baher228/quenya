@@ -252,6 +252,8 @@ input:not([type]),input[type=text]{background:var(--surf2);border:1px solid var(
 .item-image-full.loaded{opacity:1}
 .item-image-full.cached{transition:none}
 .item-image-spinner{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid rgba(255,255,255,.72);border-right-color:transparent;border-radius:50%;animation:item-image-spin .75s linear infinite}
+.item-image.failed{background:linear-gradient(135deg,var(--surf2),var(--surf))}
+.item-image-missing{position:absolute;inset:18% 22%;border:1px dashed rgba(255,255,255,.28);border-radius:12px;opacity:.7}
 @keyframes item-image-spin{to{transform:rotate(360deg)}}
 .tile .item-image{height:auto;aspect-ratio:3/4}
 .item-head .item-image{width:96px;height:128px;border-radius:14px}

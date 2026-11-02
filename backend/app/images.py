@@ -151,6 +151,25 @@ def _image_headers(url: str, referer: str | None = None) -> dict[str, str]:
     return headers
 
 
+_shared_http_client: httpx.Client | None = None
+
+
+def _http_client() -> httpx.Client:
+    """Shared client so ingest/tagging reuse TCP connections to CDNs."""
+    global _shared_http_client
+    if _shared_http_client is None:
+        _shared_http_client = httpx.Client(
+            timeout=httpx.Timeout(12.0, connect=5.0),
+            follow_redirects=True,
+            limits=httpx.Limits(
+                max_connections=16,
+                max_keepalive_connections=8,
+                keepalive_expiry=30.0,
+            ),
+        )
+    return _shared_http_client
+
+
 def download_image_candidate(
     url: str,
     *,
@@ -162,12 +181,7 @@ def download_image_candidate(
     is_asos_image = (urlsplit(normalized_url).hostname or "").lower() == ASOS_IMAGE_HOST
     for attempt in range(2 if is_asos_image else 1):
         try:
-            response = httpx.get(
-                normalized_url,
-                headers=headers,
-                timeout=15,
-                follow_redirects=True,
-            )
+            response = _http_client().get(normalized_url, headers=headers)
             response.raise_for_status()
             content = response.content
             if len(content) < minimum_bytes:
