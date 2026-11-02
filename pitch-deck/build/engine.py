@@ -239,7 +239,7 @@ def _html_el(el) -> str:
                 runs.append(f'<span style="{css}">{text}</span>')
             gap = f"margin-top:{el.pgap}px;" if index else ""
             paras.append(
-                f'<p style="{gap}line-height:{el.size * el.lh}px;text-align:{el.align}">{"".join(runs) or "&nbsp;"}</p>'
+                f'<p style="{gap}font-size:{el.size}px;line-height:{el.size * el.lh}px;text-align:{el.align}">{"".join(runs) or "&nbsp;"}</p>'
             )
         justify = {"top": "flex-start", "middle": "center", "bottom": "flex-end"}[el.valign]
         return (
@@ -290,6 +290,12 @@ def _set_round(shape, radius: float, w: float, h: float) -> None:
     shape.adjustments[0] = min(0.5, radius / min(w, h))
 
 
+def _drop_theme_style(shape) -> None:
+    style = shape._element.find(qn("p:style"))
+    if style is not None:
+        shape._element.remove(style)
+
+
 def _pptx_el(slide, el) -> None:
     shapes = slide.shapes
     if isinstance(el, Rect):
@@ -313,7 +319,7 @@ def _pptx_el(slide, el) -> None:
                 shape.line.dash_style = MSO_LINE_DASH_STYLE.DASH
         else:
             shape.line.fill.background()
-        shape.shadow.inherit = False
+        _drop_theme_style(shape)
         if el.name:
             shape.name = el.name
         return
@@ -327,6 +333,7 @@ def _pptx_el(slide, el) -> None:
             from pptx.enum.dml import MSO_LINE_DASH_STYLE
 
             line.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+        _drop_theme_style(line)
         return
     if isinstance(el, Img):
         with PILImage.open(el.src) as image:
