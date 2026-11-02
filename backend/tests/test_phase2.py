@@ -2,6 +2,7 @@ import json
 from contextlib import nullcontext
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from fastapi import HTTPException
 
@@ -881,6 +882,76 @@ def test_deck_hides_disliked_product_only_from_its_own_profile(
     monkeypatch.setattr(phase2_api, "_owner_id", lambda: "owner-b")
     board_b = phase2_api.deck(n=10, board_id="board-b")
     assert "lookalike" in {item["id"] for item in board_b}
+
+
+def test_embed_deck_drops_swiped_lookalike_beyond_tag_vector_window(
+    monkeypatch, tmp_path
+):
+    _create_board_pair(monkeypatch, tmp_path)
+    swiped = _item("swiped", "outerwear")
+    swiped.update(
+        source="shop-a.example",
+        source_url="https://shop-a.example/items/swiped",
+        title="Canvas Field Jacket",
+    )
+    head = _item("head", "outerwear")
+    relist = _item("relist", "outerwear")
+    relist.update(
+        source="shop-b.example",
+        source_url="https://shop-b.example/items/relist",
+        title="Vintage Wool Coat",
+    )
+    other = _item("other", "outerwear")
+    _insert_tagged_items(swiped, head, relist, other)
+    db.insert_swipe("board-a", "swiped", True)
+    db.store_item_embedding(
+        "swiped",
+        "clip32",
+        np.asarray([1.0, 0.0], dtype=np.float32),
+        np.asarray([1.0, 0.0], dtype=np.float32),
+        np.asarray([1.0, 0.0], dtype=np.float32),
+    )
+    db.store_item_embedding(
+        "head",
+        "clip32",
+        np.asarray([0.0, 1.0], dtype=np.float32),
+        np.asarray([0.0, 1.0], dtype=np.float32),
+        np.asarray([0.0, 1.0], dtype=np.float32),
+    )
+    relist_vector = np.asarray([0.99, np.sqrt(1 - 0.99**2)], dtype=np.float32)
+    db.store_item_embedding(
+        "relist", "clip32", relist_vector, relist_vector, relist_vector
+    )
+    other_vector = np.asarray([-1.0, 0.0], dtype=np.float32)
+    db.store_item_embedding("other", "clip32", other_vector, other_vector, other_vector)
+
+    def ranked_in_order(items, _brief, _taste, *, exclude_ids=None, **_kwargs):
+        by_id = {item["id"]: item for item in items}
+        return [
+            by_id[item_id]
+            for item_id in ("head", "relist", "other")
+            if item_id in by_id and item_id not in (exclude_ids or set())
+        ]
+
+    monkeypatch.setenv("QUENYA_RANKER", "embed")
+    monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
+    monkeypatch.setattr(phase2_api, "secondhand_share", lambda *_args: 0.0)
+    monkeypatch.setattr(phase2_api, "LOOKALIKE_VECTOR_WINDOW", 1)
+    monkeypatch.setattr(phase2_api, "rank_items", ranked_in_order)
+    monkeypatch.setattr(
+        phase2_api,
+        "catalogue_sample",
+        lambda: np.asarray(
+            [[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]],
+            dtype=np.float32,
+        ),
+    )
+    monkeypatch.setattr(db, "live_catalogue", lambda: [head, relist, other])
+    monkeypatch.setattr(db, "profile_live_items", lambda _profile_id: [])
+
+    deck = phase2_api.deck(n=10, board_id="board-a")
+
+    assert "relist" not in {item["id"] for item in deck}
 
 
 def test_outfits_exclude_disliked_items_and_lookalikes_but_keep_likes(

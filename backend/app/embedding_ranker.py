@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from app.rank import score_item
+from app.rank import DISLIKE_LOOKALIKE_COS, LIKE_LOOKALIKE_COS, score_item
 
 BLEND_K = 8.0
 PRODUCTION_WEIGHT = 0.5
@@ -16,6 +16,19 @@ _catalogue_cache_lock = Lock()
 _catalogue_refresh_in_flight = False
 _catalogue_cache: tuple[float, np.ndarray] | None = None
 logger = logging.getLogger(__name__)
+
+
+def _unit_mix(value: Any) -> np.ndarray | None:
+    if value is None:
+        return None
+    try:
+        vector = np.asarray(value, dtype=np.float32).reshape(-1)
+    except (TypeError, ValueError):
+        return None
+    if not vector.size or not np.isfinite(vector).all():
+        return None
+    norm = float(np.linalg.norm(vector))
+    return vector / norm if norm > 0 else None
 
 
 def fallback_arm(profile_id: str, mode: str | None = None) -> str:
@@ -191,10 +204,59 @@ def rank_candidates(
         ]
     candidates = {item["id"]: item for item in ranked_tags[:100]}
     candidates.update({item["id"]: item for item in vector_candidates[:400]})
+    has_mix_vectors = any(
+        (embeddings.get(item_id) or {}).get("mix") is not None
+        for item_id in candidates
+    )
+    candidate_vectors: dict[int, list[tuple[str, np.ndarray]]] = {}
+    for item_id in candidates:
+        vector = _unit_mix((embeddings.get(item_id) or {}).get("mix"))
+        if vector is not None:
+            candidate_vectors.setdefault(vector.size, []).append((item_id, vector))
+
+    swiped_vectors: dict[bool, dict[int, list[np.ndarray]]] = {
+        True: {},
+        False: {},
+    }
+    for swipe in swipes:
+        vector = _unit_mix(
+            (embeddings.get(swipe["item_id"]) or {}).get("mix")
+        )
+        if vector is not None:
+            swiped_vectors[bool(swipe["liked"])].setdefault(
+                vector.size, []
+            ).append(vector)
+
+    excluded_ids = set()
+    for liked, threshold in (
+        (True, LIKE_LOOKALIKE_COS),
+        (False, DISLIKE_LOOKALIKE_COS),
+    ):
+        for dimension, group in swiped_vectors[liked].items():
+            group_candidates = candidate_vectors.get(dimension)
+            if not group_candidates:
+                continue
+            similarities = (
+                np.asarray([vector for _item_id, vector in group_candidates])
+                @ np.asarray(group).T
+            )
+            excluded_ids.update(
+                item_id
+                for (item_id, _vector), row in zip(
+                    group_candidates, similarities, strict=True
+                )
+                if np.any(row >= threshold)
+            )
+    for item_id in excluded_ids:
+        candidates.pop(item_id, None)
+
     ordered = sorted(
         candidates.values(), key=lambda item: scores[item["id"]], reverse=True
     )
-    if not any((embeddings.get(item["id"]) or {}).get("mix") is not None for item in ordered):
+    if not has_mix_vectors and not any(
+        (embeddings.get(item["id"]) or {}).get("mix") is not None
+        for item in ordered
+    ):
         ordered = ranked_tags
     return ordered, scores, history
 
@@ -274,4 +336,33 @@ def choose_bootdiv(
                 ], dtype=np.float32),
             )
         values -= penalties * float(values.std())
-    return candidates[int(np.argmax(values))]
+
+    candidate_vectors: dict[int, list[tuple[int, np.ndarray]]] = {}
+    for index, item in enumerate(candidates):
+        vector = _unit_mix((embeddings.get(item["id"]) or {}).get("mix"))
+        if vector is not None:
+            candidate_vectors.setdefault(vector.size, []).append((index, vector))
+    selected_vectors: dict[int, list[np.ndarray]] = {}
+    for item in selected:
+        vector = _unit_mix((embeddings.get(item["id"]) or {}).get("mix"))
+        if vector is not None:
+            selected_vectors.setdefault(vector.size, []).append(vector)
+
+    excluded = np.zeros(len(candidates), dtype=bool)
+    for dimension, group in selected_vectors.items():
+        group_candidates = candidate_vectors.get(dimension)
+        if not group_candidates:
+            continue
+        similarities = (
+            np.asarray([vector for _index, vector in group_candidates])
+            @ np.asarray(group).T
+        )
+        excluded[
+            [index for index, _vector in group_candidates]
+        ] = np.any(similarities >= LIKE_LOOKALIKE_COS, axis=1)
+    allowed = np.flatnonzero(~excluded)
+    if excluded.any() and len(allowed):
+        best = allowed[int(np.argmax(values[allowed]))]
+    else:
+        best = int(np.argmax(values))
+    return candidates[best]
