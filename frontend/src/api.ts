@@ -134,6 +134,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ brief }),
     }),
+  brands: (q = "", limit = 40) =>
+    req<{ brands: string[] }>(
+      `/api/brands?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ).then(result => result.brands),
   fetchJob: (id: string) => req<FetchJob>(`/api/fetch/${id}`),
   deck: (n = 10, board_id?: string) =>
     req<Item[] | { items: Item[] }>(

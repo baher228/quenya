@@ -1192,6 +1192,7 @@ def deck(
         taste,
         exclude_ids=swiped,
         core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
+        swipe_count=swipe_count,
     )
     swipes = db.profile_swipes(active["id"])
     swiped_items = db.profile_swipe_items(active["id"])
@@ -1714,6 +1715,17 @@ def checkout(body: CheckoutRequest) -> dict[str, Any]:
         ],
         "simulated": True,
     }
+
+
+@router.get("/api/brands")
+def list_brands(q: str = "", limit: int = 40) -> dict[str, list[str]]:
+    """Catalogue brands for preferred-brand typeahead (auth required)."""
+    _user_profile()
+    if len(q) > 64:
+        raise HTTPException(status_code=422, detail="q too long")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
+    return {"brands": db.catalogue_brands(query=q or None, limit=limit)}
 
 
 @router.get("/api/search")

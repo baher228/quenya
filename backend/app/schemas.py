@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Slot = Literal["outerwear", "top", "knitwear", "bottom", "dress", "shoes", "bag", "accessory"]
 Gender = Literal["menswear", "womenswear", "unisex"]
@@ -33,6 +33,25 @@ class ProfileBrief(StrictModel):
     niche: float = Field(ge=0, le=1)
     budget_gbp: float = Field(gt=0)
     sizes: SizeProfile = Field(default_factory=SizeProfile)
+    preferred_brands: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("preferred_brands")
+    @classmethod
+    def _clean_preferred_brands(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            brand = " ".join(str(raw).split()).strip()
+            if not brand or len(brand) > 64:
+                continue
+            key = brand.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(brand)
+            if len(cleaned) >= 20:
+                break
+        return cleaned
 
 
 class ProfileCreateRequest(StrictModel):

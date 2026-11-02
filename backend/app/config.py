@@ -52,6 +52,15 @@ QUENYA_WARM_CACHES = os.getenv("QUENYA_WARM_CACHES", "1").strip().lower() not in
 }
 QUENYA_IMAGE_MAX_SIDE = int(os.getenv("QUENYA_IMAGE_MAX_SIDE", "1280"))
 QUENYA_IMAGE_QUALITY = int(os.getenv("QUENYA_IMAGE_QUALITY", "80"))
+# Soft score boost for items matching a style's preferred_brands (not a filter).
+QUENYA_PREFERRED_BRAND_BOOST = float(os.getenv("QUENYA_PREFERRED_BRAND_BOOST", "0.85"))
+# Stronger boost while a style has few swipes (cold start).
+QUENYA_PREFERRED_BRAND_COLD_BOOST = float(
+    os.getenv("QUENYA_PREFERRED_BRAND_COLD_BOOST", "1.4")
+)
+QUENYA_PREFERRED_BRAND_COLD_SWIPES = int(
+    os.getenv("QUENYA_PREFERRED_BRAND_COLD_SWIPES", "8")
+)
 QUENYA_IMAGE_STORE = os.getenv("QUENYA_IMAGE_STORE", "supabase").strip().lower()
 QUENYA_R2_ACCOUNT_ID = os.getenv("QUENYA_R2_ACCOUNT_ID", "")
 QUENYA_R2_ACCESS_KEY_ID = os.getenv("QUENYA_R2_ACCESS_KEY_ID", "")

@@ -8,6 +8,11 @@ from urllib.parse import urlsplit
 import numpy as np
 
 from app.accessories import accessory_cap, is_accessory_slot
+from app.config import (
+    QUENYA_PREFERRED_BRAND_BOOST,
+    QUENYA_PREFERRED_BRAND_COLD_BOOST,
+    QUENYA_PREFERRED_BRAND_COLD_SWIPES,
+)
 from app.gender_rules import text_gender
 from app.images import ASOS_IMAGE_HOST, normalize_image_url
 
@@ -384,6 +389,48 @@ def _is_secondhand(item: dict[str, Any]) -> bool:
     )
 
 
+def preferred_brand_keys(brief: dict[str, Any] | None) -> frozenset[str]:
+    if not brief:
+        return frozenset()
+    return frozenset(
+        " ".join(str(brand).split()).strip().casefold()
+        for brand in (brief.get("preferred_brands") or [])
+        if str(brand).strip()
+    )
+
+
+def item_brand_key(item: dict[str, Any]) -> str:
+    brand = item.get("brand")
+    if brand and str(brand).strip():
+        return " ".join(str(brand).split()).strip().casefold()
+    source = str(item.get("source") or "").strip().casefold()
+    if source and source not in {"vinted", "retail", "sport"}:
+        return source
+    return ""
+
+
+def preferred_brand_boost(
+    item: dict[str, Any],
+    brief: dict[str, Any] | None,
+    *,
+    swipe_count: int | None = None,
+) -> float:
+    keys = preferred_brand_keys(brief)
+    if not keys:
+        return 0.0
+    brand_key = item_brand_key(item)
+    if not brand_key or brand_key not in keys:
+        return 0.0
+    cold = (
+        swipe_count is not None
+        and swipe_count < QUENYA_PREFERRED_BRAND_COLD_SWIPES
+    )
+    boost = (
+        QUENYA_PREFERRED_BRAND_COLD_BOOST if cold else QUENYA_PREFERRED_BRAND_BOOST
+    )
+    return max(0.0, float(boost))
+
+
 def rank_items(
     items: list[dict[str, Any]],
     brief: dict[str, Any],
@@ -391,9 +438,11 @@ def rank_items(
     *,
     exclude_ids: set[str] | None = None,
     core_profile: dict[str, Any] | None = None,
+    swipe_count: int | None = None,
 ) -> list[dict[str, Any]]:
     weights = _profile_weights(profile)
     core_weights = _profile_weights(core_profile) if core_profile else None
+    preferred_keys = preferred_brand_keys(brief)
     ranked = []
     for item in items:
         tags = tags_for(item)
@@ -403,6 +452,10 @@ def rank_items(
         score = _score_item(item, profile, tags, item_tokens, weights)
         if core_profile and core_weights:
             score += 0.3 * _score_item(item, core_profile, tags, item_tokens, core_weights)
+        if preferred_keys:
+            score += preferred_brand_boost(
+                item, brief, swipe_count=swipe_count
+            )
         ranked.append((score, item))
     ranked.sort(
         key=lambda entry: (
@@ -506,6 +559,21 @@ def make_deck(
             ]
             if distinct:
                 choice_pool = distinct
+        # Soft brand diversity so preferred-brand boost cannot monopolize the deck.
+        brand_counts: dict[str, int] = {}
+        for deck_item in deck:
+            key = item_brand_key(deck_item)
+            if key:
+                brand_counts[key] = brand_counts.get(key, 0) + 1
+        brand_cap = max(1, int(0.45 * (len(deck) + 1)))
+        brand_diverse = [
+            item
+            for item in choice_pool
+            if not item_brand_key(item)
+            or brand_counts.get(item_brand_key(item), 0) < brand_cap
+        ]
+        if brand_diverse:
+            choice_pool = brand_diverse
         chosen = selector(choice_pool, deck) if selector else choice_pool[0]
         remaining.remove(chosen)
         deck.append(chosen)

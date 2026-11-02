@@ -10,6 +10,7 @@ export interface Brief {
   niche: number;
   budget_gbp: number;
   sizes: { tops: string; waist: string; shoes: string };
+  preferred_brands?: string[];
 }
 
 export interface ItemTags {
