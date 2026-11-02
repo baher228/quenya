@@ -338,6 +338,11 @@ def model_stats(_user: CurrentUser) -> list[dict]:
     return db.model_stats()
 
 
+_IMG_CACHE_HEADERS = {
+    "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+}
+
+
 @app.get("/img/{filename}")
 def get_image(filename: str):
     if not filename.endswith(".jpg"):
@@ -351,15 +356,21 @@ def get_image(filename: str):
         return RedirectResponse(
             r2_public_url(f"{key}.jpg"),
             status_code=302,
+            headers=_IMG_CACHE_HEADERS,
         )
     if storage_enabled():
         return RedirectResponse(
             storage_public_url(f"{key}.jpg"),
             status_code=302,
+            headers=_IMG_CACHE_HEADERS,
         )
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers=_IMG_CACHE_HEADERS,
+    )
 
 
 app.include_router(phase2_router)

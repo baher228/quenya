@@ -19,7 +19,7 @@ def test_encode_display_jpeg_downscales_and_preserves_smaller_dimensions():
 
     with Image.open(BytesIO(large)) as encoded_large:
         assert encoded_large.format == "JPEG"
-        assert encoded_large.size == (1200, 1600)
+        assert encoded_large.size == (960, 1280)
     with Image.open(BytesIO(small)) as encoded_small:
         assert encoded_small.format == "JPEG"
         assert encoded_small.size == (800, 1000)
@@ -212,11 +212,13 @@ def test_storage_requires_explicit_mode_and_img_route_redirects(
         "https://project.example/storage/v1/object/public/"
         f"quenya-img/{key}.jpg"
     )
+    assert "max-age=86400" in response.headers.get("cache-control", "")
     monkeypatch.setenv("QUENYA_IMAGE_STORE", "r2")
     monkeypatch.setenv("QUENYA_R2_PUBLIC_URL", "https://pub.example/")
     response = get_image(f"{key}.jpg")
     assert response.status_code == 302
     assert response.headers["location"] == f"https://pub.example/{key}.jpg"
+    assert "max-age=86400" in response.headers.get("cache-control", "")
 
 
 def test_r2_upload_uses_configured_bucket_and_cache_headers(monkeypatch):

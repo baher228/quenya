@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
 from time import monotonic
+from time import time as wall_time
 from typing import Any
 
 from app.config import DB_PATH, QUENYA_CATALOGUE_TTL_S
@@ -905,6 +906,18 @@ def clear_vinted_raw_json() -> int:
         return cursor.rowcount
 
 
+def clear_vinted_image_previews() -> int:
+    """Drop blur-up data URLs for hotlinked Vinted rows. Returns rows touched."""
+    init_db()
+    with db_connection() as connection:
+        cursor = connection.execute(
+            "UPDATE items SET image_preview=NULL "
+            "WHERE source=? AND image_preview IS NOT NULL",
+            ("vinted",),
+        )
+        return cursor.rowcount
+
+
 def total_counts() -> tuple[int, int]:
     init_db()
     with db_connection() as connection:
@@ -960,9 +973,11 @@ def list_items(
     return result
 
 
+# Ranking/API catalogue payload: omit unused fat columns (description, image_path,
+# tagging metadata) to cut Postgres IO and JSON response size.
 _LIVE_CATALOGUE_COLUMNS = """id, source, source_url, title, brand, price_gbp, size,
-    description, image_url, image_path, image_preview, gender_hint, condition_hint,
-    availability, query, fetched_at, tags_json, tags_request_id, tagged_at, tag_error"""
+    image_url, image_preview, gender_hint, condition_hint,
+    availability, query, fetched_at, tags_json"""
 _LIVE_CATALOGUE_FILTER = """tags_json IS NOT NULL
     AND (availability IS NULL OR
          (availability NOT LIKE '%OutOfStock'
@@ -1221,36 +1236,106 @@ def items_missing_embeddings(limit: int) -> list[dict[str, Any]]:
 
 
 def model_stats() -> list[dict[str, Any]]:
+    """Aggregate llm_calls in SQL; only fetch recent request ids per task."""
     init_db()
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
     with db_connection() as connection:
-        rows = connection.execute(
-            "SELECT * FROM llm_calls ORDER BY created_at DESC"
-        ).fetchall()
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        grouped.setdefault(row["task"], []).append(dict(row))
-    stats = []
-    for task, calls in grouped.items():
-        latencies = sorted(call["latency_ms"] for call in calls)
-        total_tokens = sum(
-            (call["prompt_tokens"] or 0) + (call["completion_tokens"] or 0)
-            for call in calls
-        )
-        stats.append(
+        if postgres:
+            summary_rows = connection.execute(
+                """SELECT task,
+                          COUNT(*)::int AS calls,
+                          SUM(CASE WHEN ok THEN 1 ELSE 0 END)::int AS ok,
+                          SUM(CASE WHEN NOT ok THEN 1 ELSE 0 END)::int AS failed,
+                          COALESCE(SUM(COALESCE(prompt_tokens, 0)
+                                       + COALESCE(completion_tokens, 0)), 0)::int
+                              AS total_tokens,
+                          percentile_cont(0.5) WITHIN GROUP
+                              (ORDER BY latency_ms) AS p50_latency_ms,
+                          percentile_cont(0.95) WITHIN GROUP
+                              (ORDER BY latency_ms) AS p95_latency_ms
+                   FROM llm_calls
+                   GROUP BY task
+                   ORDER BY task"""
+            ).fetchall()
+            recent_rows = connection.execute(
+                """SELECT task, request_id FROM (
+                       SELECT task, request_id, created_at,
+                              ROW_NUMBER() OVER (
+                                  PARTITION BY task ORDER BY created_at DESC
+                              ) AS rn
+                       FROM llm_calls
+                   ) ranked
+                   WHERE rn <= 5
+                   ORDER BY task, rn"""
+            ).fetchall()
+        else:
+            summary_rows = connection.execute(
+                """SELECT task,
+                          COUNT(*) AS calls,
+                          SUM(CASE WHEN ok THEN 1 ELSE 0 END) AS ok,
+                          SUM(CASE WHEN NOT ok THEN 1 ELSE 0 END) AS failed,
+                          COALESCE(SUM(COALESCE(prompt_tokens, 0)
+                                       + COALESCE(completion_tokens, 0)), 0)
+                              AS total_tokens
+                   FROM llm_calls
+                   GROUP BY task
+                   ORDER BY task"""
+            ).fetchall()
+            # SQLite has no percentile_cont; sample latencies per task cheaply.
+            latency_rows = connection.execute(
+                "SELECT task, latency_ms FROM llm_calls ORDER BY task, created_at DESC"
+            ).fetchall()
+            recent_rows = connection.execute(
+                """SELECT task, request_id FROM llm_calls
+                   ORDER BY created_at DESC"""
+            ).fetchall()
+
+    recent_by_task: dict[str, list[str]] = {}
+    for row in recent_rows:
+        bucket = recent_by_task.setdefault(row["task"], [])
+        if len(bucket) < 5:
+            bucket.append(row["request_id"])
+
+    if postgres:
+        return [
             {
-                "task": task,
-                "calls": len(calls),
-                "ok": sum(call["ok"] for call in calls),
-                "failed": sum(not call["ok"] for call in calls),
-                "p50_latency_ms": _percentile(latencies, 0.5),
-                "p95_latency_ms": _percentile(latencies, 0.95),
-                "total_tokens": total_tokens,
-                "calls_toward_training": sum(call["ok"] for call in calls),
+                "task": row["task"],
+                "calls": int(row["calls"]),
+                "ok": int(row["ok"] or 0),
+                "failed": int(row["failed"] or 0),
+                "p50_latency_ms": int(round(row["p50_latency_ms"] or 0)),
+                "p95_latency_ms": int(round(row["p95_latency_ms"] or 0)),
+                "total_tokens": int(row["total_tokens"] or 0),
+                "calls_toward_training": int(row["ok"] or 0),
                 "first_training_at": 25,
-                "last_request_ids": [call["request_id"] for call in calls[:5]],
+                "last_request_ids": recent_by_task.get(row["task"], []),
             }
-        )
-    return stats
+            for row in summary_rows
+        ]
+
+    latencies_by_task: dict[str, list[int]] = {}
+    for row in latency_rows:
+        latencies_by_task.setdefault(row["task"], []).append(int(row["latency_ms"]))
+
+    return [
+        {
+            "task": row["task"],
+            "calls": int(row["calls"]),
+            "ok": int(row["ok"] or 0),
+            "failed": int(row["failed"] or 0),
+            "p50_latency_ms": _percentile(
+                sorted(latencies_by_task.get(row["task"], [])), 0.5
+            ),
+            "p95_latency_ms": _percentile(
+                sorted(latencies_by_task.get(row["task"], [])), 0.95
+            ),
+            "total_tokens": int(row["total_tokens"] or 0),
+            "calls_toward_training": int(row["ok"] or 0),
+            "first_training_at": 25,
+            "last_request_ids": recent_by_task.get(row["task"], []),
+        }
+        for row in summary_rows
+    ]
 
 
 def _percentile(values: list[int], quantile: float) -> int:
@@ -1540,17 +1625,42 @@ def nearest_item_mix(
 
 
 def random_item_mix_vectors(limit: int = 3000):
+    """Sample mix vectors without a full-table ORDER BY random() on Postgres."""
     init_db()
-    order = "RANDOM()" if not os.getenv("QUENYA_DATABASE_URL") else "random()"
     with db_connection() as connection:
-        rows = connection.execute(
-            f"SELECT mix::text AS mix FROM item_embeddings WHERE model='clip32' "
-            f"AND mix IS NOT NULL ORDER BY {order} LIMIT ?"
-            if os.getenv("QUENYA_DATABASE_URL")
-            else "SELECT mix FROM item_embeddings WHERE model='clip32' "
-            "AND mix IS NOT NULL ORDER BY RANDOM() LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if os.getenv("QUENYA_DATABASE_URL"):
+            # Rotate a stable window hourly so the sample refreshes without
+            # sorting the whole embedding table by random().
+            total = connection.execute(
+                "SELECT COUNT(*) FROM item_embeddings "
+                "WHERE model='clip32' AND mix IS NOT NULL"
+            ).fetchone()[0]
+            if not total:
+                return []
+            hour = int(wall_time() // 3600)
+            start = (hour * 7919) % max(1, int(total))
+            rows = connection.execute(
+                """SELECT mix::text AS mix FROM item_embeddings
+                   WHERE model='clip32' AND mix IS NOT NULL
+                   ORDER BY item_id
+                   OFFSET ? LIMIT ?""",
+                (start, limit),
+            ).fetchall()
+            if len(rows) < limit and start > 0:
+                extra = connection.execute(
+                    """SELECT mix::text AS mix FROM item_embeddings
+                       WHERE model='clip32' AND mix IS NOT NULL
+                       ORDER BY item_id
+                       LIMIT ?""",
+                    (limit - len(rows),),
+                ).fetchall()
+                rows = list(rows) + list(extra)
+        else:
+            rows = connection.execute(
+                "SELECT mix FROM item_embeddings WHERE model='clip32' "
+                "AND mix IS NOT NULL ORDER BY RANDOM() LIMIT ?",
+                (limit,),
+            ).fetchall()
     return [_vector_value(row["mix"]) for row in rows if row["mix"] is not None]
 
 
@@ -2170,10 +2280,9 @@ def explicit_history_lines(profile_id: str) -> list[str]:
 
     lines = []
     for outfit in outfit_rows:
-        pieces = [
-            get_item_with_tags(item_id)
-            for item_id in json.loads(outfit["piece_ids_json"])
-        ]
+        piece_ids = json.loads(outfit["piece_ids_json"])
+        pieces_by_id = get_items_with_tags(piece_ids)
+        pieces = [pieces_by_id.get(item_id) for item_id in piece_ids]
         categories = [
             (item.get("tags") or {}).get("category", item["title"])
             for item in pieces
@@ -2460,6 +2569,28 @@ def get_item_with_tags(item_id: str) -> dict[str, Any] | None:
     if item and item.get("tags_json"):
         item["tags"] = json.loads(item["tags_json"])
     return item
+
+
+def get_items_with_tags(item_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Batch-fetch items by id; returns a map (missing ids omitted)."""
+    if not item_ids:
+        return {}
+    init_db()
+    found: dict[str, dict[str, Any]] = {}
+    with db_connection() as connection:
+        for start in range(0, len(item_ids), 200):
+            batch = item_ids[start : start + 200]
+            placeholders = ",".join("?" for _ in batch)
+            rows = connection.execute(
+                f"SELECT * FROM items WHERE id IN ({placeholders})",
+                batch,
+            ).fetchall()
+            for row in rows:
+                item = dict(row)
+                if item.get("tags_json"):
+                    item["tags"] = json.loads(item["tags_json"])
+                found[item["id"]] = item
+    return found
 
 
 def update_outfit_verdict(

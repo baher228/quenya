@@ -50,8 +50,8 @@ QUENYA_WARM_CACHES = os.getenv("QUENYA_WARM_CACHES", "1").strip().lower() not in
     "no",
     "off",
 }
-QUENYA_IMAGE_MAX_SIDE = int(os.getenv("QUENYA_IMAGE_MAX_SIDE", "1600"))
-QUENYA_IMAGE_QUALITY = int(os.getenv("QUENYA_IMAGE_QUALITY", "85"))
+QUENYA_IMAGE_MAX_SIDE = int(os.getenv("QUENYA_IMAGE_MAX_SIDE", "1280"))
+QUENYA_IMAGE_QUALITY = int(os.getenv("QUENYA_IMAGE_QUALITY", "80"))
 QUENYA_IMAGE_STORE = os.getenv("QUENYA_IMAGE_STORE", "supabase").strip().lower()
 QUENYA_R2_ACCOUNT_ID = os.getenv("QUENYA_R2_ACCOUNT_ID", "")
 QUENYA_R2_ACCESS_KEY_ID = os.getenv("QUENYA_R2_ACCESS_KEY_ID", "")

@@ -78,11 +78,13 @@ def test_public_item_hotlinks_vinted_source_url():
         "id": "vinted:2",
         "source": "vinted",
         "image_url": "https://images1.vinted.net/t/hotlink.jpg",
+        "image_preview": "data:image/jpeg;base64,abc",
         "tags": {"slot": "top"},
     }
     public = phase2_api._public_item(item)
     assert public["image"] == "https://images1.vinted.net/t/hotlink.jpg"
     assert public["image_url"] == "https://images1.vinted.net/t/hotlink.jpg"
+    assert public["image_preview"] is None
     assert "/img/" not in public["image"]
 
 
@@ -257,6 +259,30 @@ def test_clear_vinted_raw_json(monkeypatch, tmp_path):
     assert cleared == 1
     stored = db.get_item("vinted:raw")["raw_json"]
     assert stored in {None, "{}"}
+
+
+def test_clear_vinted_image_previews(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "preview.sqlite")
+    db._INITIALIZED_DATABASES.clear()
+    db.init_db()
+    with db.db_connection() as connection:
+        connection.execute(
+            """INSERT INTO items (
+                   id, source, source_url, title, price_gbp, image_url,
+                   fetched_at, image_preview, raw_json
+               ) VALUES (?, 'vinted', ?, 'Tee', 10, ?, ?, ?, NULL)""",
+            (
+                "vinted:preview",
+                "https://www.vinted.co.uk/items/preview",
+                "https://images1.vinted.net/t/preview.jpg",
+                datetime.now(UTC).isoformat(),
+                "data:image/jpeg;base64,abc",
+            ),
+        )
+    assert db.clear_vinted_image_previews() == 1
+    assert db.get_item("vinted:preview")["image_preview"] is None
+    result = run_retention(days=14, dry_run=True, clear_previews=True)
+    assert result["image_previews_cleared"] == 0
 
 
 def test_purge_vinted_images_dry_run_default(monkeypatch, tmp_path):

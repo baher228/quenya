@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Quenya Vinted retention daily
+
+[Timer]
+OnCalendar=*-*-* 05:30:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=quenya-vinted-retention.service
+
+[Install]
+WantedBy=timers.target

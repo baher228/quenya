@@ -279,11 +279,26 @@ def _vinted_privacy(connection) -> None:
     )
 
 
+def _cost_indexes(connection) -> None:
+    """Additive indexes for catalogue scans and retention sold probes."""
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS idx_items_tagged_fetched
+           ON items(fetched_at DESC)
+           WHERE tags_json IS NOT NULL"""
+    )
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS idx_items_source_availability
+           ON items(source, availability)
+           WHERE availability IS NOT NULL"""
+    )
+
+
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
     ("0002_jobs", _jobs),
     ("0003_rate_limits", _rate_limits),
     ("0004_vinted_privacy", _vinted_privacy),
+    ("0005_cost_indexes", _cost_indexes),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 

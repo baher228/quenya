@@ -1182,6 +1182,15 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
     )
     monkeypatch.setattr(
         db,
+        "get_items_with_tags",
+        lambda item_ids: {
+            item_id: item
+            for item_id, item in {"old": old, "replacement": replacement}.items()
+            if item_id in item_ids
+        },
+    )
+    monkeypatch.setattr(
+        db,
         "update_outfit_pieces",
         lambda _outfit_id, piece_ids, total: outfit.update(
             piece_ids=piece_ids, total_gbp=total

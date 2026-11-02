@@ -281,6 +281,13 @@ def test_streamed_swap_matches_full_rank_and_subtype_interleave(monkeypatch, siz
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(db, "get_outfit", lambda _id: outfit)
     monkeypatch.setattr(db, "get_item_with_tags", by_id.get)
+    monkeypatch.setattr(
+        db,
+        "get_items_with_tags",
+        lambda item_ids: {
+            item_id: by_id[item_id] for item_id in item_ids if item_id in by_id
+        },
+    )
     monkeypatch.setattr(db, "profile_swipe_items", lambda _id: [])
     monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext(
         items[offset:offset + size] for offset in range(0, len(items), size)
