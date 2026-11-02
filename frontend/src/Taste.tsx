@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { PRIVACY_URL } from "./constants";
 import { ErrorBox, gbpText, Loading, pretty, uniqueTasteEntries } from "./ui";
 import type { Board, TaskStats, TasteState } from "./types";
 
@@ -106,6 +107,9 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset, onDelete
       </div>
 
       {isAdmin && <a className="admin-entry" href="/admin">Admin dashboard <span>→</span></a>}
+      <a className="admin-entry" href={PRIVACY_URL} target="_blank" rel="noreferrer">
+        Privacy notice <span>→</span>
+      </a>
       <button className="btn ghost wide danger" onClick={onReset}>Reset all boards</button>
       {onDeleteAccount && (
         <button className="btn ghost wide danger" onClick={onDeleteAccount}>Delete account</button>

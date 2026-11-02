@@ -45,6 +45,16 @@ export function Provenance({ source, condition }: { source: string; condition?: 
   );
 }
 
+/** ASA-friendly commercial relationship note for shop outbound links. */
+export function ShopDisclosure() {
+  return (
+    <p className="small muted shop-disclosure">
+      Shop links open the retailer&apos;s own listing. Quenya is not the seller.
+      If we earn a commission from a shop partnership, we&apos;ll disclose it here.
+    </p>
+  );
+}
+
 export function pretty(k: string) {
   const value = k
     .replace(/^(colou?rs?|aesthetics?|styles?|categor(?:y|ies)|materials?|patterns?|fits?|eras?|brands?|slots?)[_:]/i, "")

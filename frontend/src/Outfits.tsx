@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { api, gbp } from "./api";
 import { ItemImage } from "./ItemImage";
-import { ErrorBox, Loading, Provenance } from "./ui";
+import { ErrorBox, Loading, Provenance, ShopDisclosure } from "./ui";
 import type { Item, Outfit } from "./types";
 
 export const REASONS = ["Too generic", "Colours don't work together", "Too expensive", "Wrong fit for me", "Too costume-y"];
@@ -135,6 +135,7 @@ export function OutfitsScreen({ boardId, outfits, locked, setLocked, loading, er
               <ul className="srcs">{o.pieces.map(p => (
                 <li key={p.id}><a href={p.source_url} target="_blank" rel="noreferrer">{p.title}</a><Provenance source={p.source} /></li>
               ))}</ul>
+              <ShopDisclosure />
               {!!rowErr[o.id] && <div className="pad"><ErrorBox error={rowErr[o.id]} /></div>}
               <footer>
                 <button className="btn ghost" onClick={() => { if (boardId) onReject(o, boardId); }} disabled={!!busy}>Not for me</button>

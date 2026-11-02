@@ -280,7 +280,7 @@ def _vinted_privacy(connection) -> None:
 
 
 def _cost_indexes(connection) -> None:
-    """Additive indexes for catalogue scans and retention sold probes."""
+    """Additive indexes for catalogue scans and retention/availability probes."""
     connection.execute(
         """CREATE INDEX IF NOT EXISTS idx_items_tagged_fetched
            ON items(fetched_at DESC)
