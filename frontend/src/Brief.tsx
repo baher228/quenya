@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { BrandPicker } from "./BrandPicker";
 import { Seg } from "./ui";
 import type { Brief, Slot } from "./types";
 
@@ -37,6 +38,7 @@ export const DEFAULT_BRIEF: Brief = {
   niche: 0.7,
   budget_gbp: 300,
   sizes: { tops: "M", waist: "32", shoes: "9" },
+  preferred_brands: [],
 };
 
 export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew, allowNew = true }: {
@@ -109,6 +111,11 @@ export function BriefScreen({ initial, busy, onSubmit, mode, boardLabel, onNew, 
               <input value={b.sizes[k]} maxLength={8} onChange={e => set("sizes", { ...b.sizes, [k]: e.target.value })} /></label>
           ))}
         </div></div>
+
+      <BrandPicker
+        value={b.preferred_brands ?? []}
+        onChange={brands => set("preferred_brands", brands)}
+      />
 
       <div className="group"><span className="lbl">Inspiration photos <em>optional</em></span>
         <div className="insp">

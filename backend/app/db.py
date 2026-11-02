@@ -1204,6 +1204,39 @@ def search_catalogue(
     return catalogue
 
 
+def catalogue_brands(*, query: str | None = None, limit: int = 40) -> list[str]:
+    """Distinct non-empty brands from the live tagged catalogue (typeahead)."""
+    init_db()
+    limit = max(1, min(int(limit), 100))
+    needle = (query or "").strip().lower()
+    params: list[Any] = []
+    where = (
+        f"{_LIVE_CATALOGUE_FILTER} AND brand IS NOT NULL AND TRIM(brand) != ''"
+    )
+    if needle:
+        where += " AND LOWER(brand) LIKE ?"
+        params.append(f"%{needle}%")
+    params.append(limit)
+    order = (
+        "ORDER BY LOWER(brand) ASC"
+        if os.getenv("QUENYA_DATABASE_URL")
+        else "ORDER BY brand COLLATE NOCASE ASC"
+    )
+    sql = f"SELECT DISTINCT brand FROM items WHERE {where} {order} LIMIT ?"
+    with db_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+    brands: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        brand = " ".join(str(row["brand"]).split()).strip()
+        key = brand.casefold()
+        if not brand or key in seen:
+            continue
+        seen.add(key)
+        brands.append(brand)
+    return brands
+
+
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:
     init_db()
     with db_connection() as connection:

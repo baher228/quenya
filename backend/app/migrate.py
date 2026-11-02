@@ -293,12 +293,24 @@ def _cost_indexes(connection) -> None:
     )
 
 
+def _preferred_brands(connection) -> None:
+    """Index catalogue brands for style preferred-brand typeahead.
+
+    Preferred brands themselves live in profiles.brief_json (no column change).
+    """
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_items_brand ON items(brand) "
+        "WHERE brand IS NOT NULL AND brand != ''"
+    )
+
+
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
     ("0002_jobs", _jobs),
     ("0003_rate_limits", _rate_limits),
     ("0004_vinted_privacy", _vinted_privacy),
     ("0005_cost_indexes", _cost_indexes),
+    ("0006_preferred_brands", _preferred_brands),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 
