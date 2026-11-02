@@ -171,6 +171,12 @@ def test_cli_check_exit_codes(monkeypatch, capsys):
             True,
             {"0001_baseline", "0002_jobs"},
             "0002_jobs",
+            False,
+        ),
+        (
+            True,
+            {"0001_baseline", "0002_jobs", "0003_rate_limits"},
+            "0003_rate_limits",
             True,
         ),
     ],

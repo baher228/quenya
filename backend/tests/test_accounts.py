@@ -478,6 +478,29 @@ def test_reset_deletes_only_callers_data(isolated_accounts_db):
         ).fetchone()[0] == 1
 
 
+def test_delete_account_wipes_data_and_revokes_login(isolated_accounts_db):
+    owner, token = _user_and_session("Delete owner")
+    other, _ = _user_and_session("Keep owner")
+    _profile(owner["id"], "delete-board")
+    _profile(other["id"], "keep-board")
+    db.save_fetch_job("delete-job", "delete-board", {"id": "delete-job"})
+    headers = {"Authorization": f"Bearer {token}"}
+    with TestClient(main.app) as client:
+        deleted = client.post("/api/account/delete", headers=headers)
+        me = client.get("/api/me", headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json() == {"ok": True}
+    assert me.status_code == 401
+    assert db.get_profile("delete-board") is None
+    assert db.get_profile("keep-board") is not None
+    assert db.get_fetch_job("delete-job") is None
+    with db.db_connection() as connection:
+        revoked = connection.execute(
+            "SELECT revoked_at FROM users WHERE id=?", (owner["id"],)
+        ).fetchone()["revoked_at"]
+    assert revoked is not None
+
+
 def test_testers_cannot_access_admin_routes(isolated_accounts_db):
     _user, token = _user_and_session("Tester")
     headers = {"Authorization": f"Bearer {token}"}

@@ -137,14 +137,14 @@ def claim(job_id: str, worker_id: str) -> dict[str, Any] | None:
                        WHERE id=? AND status='queued'""",
                     (worker_id, db.now_iso(), db.now_iso(), job_id),
                 )
-                row = (
-                    connection.execute(
-                        "SELECT * FROM jobs WHERE id=?",
-                        (job_id,),
-                    ).fetchone()
-                    if updated.rowcount > 0
-                    else None
-                )
+                # Some sqlite wrappers omit rowcount; re-read and trust status.
+                row = connection.execute(
+                    "SELECT * FROM jobs WHERE id=?",
+                    (job_id,),
+                ).fetchone()
+                if row is None or dict(row).get("status") != "running":
+                    row = None
+                del updated
     return _decode_job(row)
 
 
@@ -306,17 +306,26 @@ def _load_owner(owner_id: str | None) -> dict[str, Any] | None:
     return None if owner.get("revoked_at") is not None else owner
 
 
+WORKER_KINDS = ("outfits", "catalogue_fetch", "vinted_refill", "live_tag")
+
+
 def run_job(job: dict[str, Any]) -> None:
     from app import accounts
-    from app.phase2_api import generate_outfits
+    from app.phase2_api import (
+        _fetch_profile_items,
+        _refill_vinted,
+        _tag_pending_live,
+        generate_outfits,
+    )
     from app.schemas import OutfitRequest
 
     job_id = job["id"]
+    kind = job.get("kind")
     owner = _load_owner(job.get("owner_id"))
     if owner is None:
         fail(job_id, 401, "Sign in with your invite link")
         return
-    if job.get("kind") != "outfits":
+    if kind not in WORKER_KINDS:
         fail(job_id, 400, "Unsupported job kind")
         return
 
@@ -324,14 +333,55 @@ def run_job(job: dict[str, Any]) -> None:
     request_token = accounts._in_request.set(True)
     try:
         payload = job.get("payload") or {}
-        result = generate_outfits(OutfitRequest.model_validate(payload))
-        complete(job_id, result)
+        if kind == "outfits":
+            result = generate_outfits(OutfitRequest.model_validate(payload))
+            complete(job_id, result)
+            return
+        if kind == "catalogue_fetch":
+            _fetch_profile_items(
+                payload["fetch_job_id"],
+                job["profile_id"],
+                payload.get("queries") or [],
+                payload.get("gender") or "both",
+                payload.get("context") or "other",
+            )
+            complete(job_id, {"fetch_job_id": payload["fetch_job_id"]})
+            return
+        if kind == "vinted_refill":
+            _refill_vinted(
+                payload["fetch_job_id"],
+                job["profile_id"],
+                int(payload.get("page") or 1),
+            )
+            complete(job_id, {"fetch_job_id": payload["fetch_job_id"]})
+            return
+        if kind == "live_tag":
+            tagged, failed, errors, domain_counts = _tag_pending_live(
+                job["profile_id"],
+                source_urls=payload.get("source_urls"),
+            )
+            complete(
+                job_id,
+                {
+                    "tagged": tagged,
+                    "failed": failed,
+                    "errors": errors,
+                    "domain_counts": domain_counts,
+                },
+            )
+            return
+        fail(job_id, 400, "Unsupported job kind")
     except HTTPException as exc:
         fail(job_id, exc.status_code, exc.detail)
     except Exception:
-        logger.exception("Outfit job %s failed", job_id)
+        logger.exception("Job %s (%s) failed", job_id, kind)
         sentry_sdk.capture_exception()
-        fail(job_id, 500, "Outfit generation failed")
+        detail = (
+            "Outfit generation failed"
+            if kind == "outfits"
+            else f"{kind} job failed"
+        )
+        fail(job_id, 500, detail)
     finally:
         accounts._in_request.reset(request_token)
         accounts._user_context.reset(user_token)

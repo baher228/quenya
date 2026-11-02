@@ -99,7 +99,7 @@ def run_worker(concurrency: int) -> None:
                 next_requeue = time.monotonic() + 60
             while len(pending) < concurrency and not _stop.is_set():
                 try:
-                    job = jobs.claim_next(["outfits"], worker_id)
+                    job = jobs.claim_next(list(jobs.WORKER_KINDS), worker_id)
                 except Exception:
                     logger.exception("Unable to claim next job")
                     break

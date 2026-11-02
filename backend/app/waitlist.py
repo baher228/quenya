@@ -5,23 +5,18 @@ import re
 import smtplib
 import sys
 import uuid
-from collections import deque
-from threading import Lock
-from time import monotonic
 from typing import Literal, TextIO
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.requests import Request
 
-from app import accounts, db, mailer
+from app import accounts, db, mailer, rate_limit
 from app.accounts import AdminUser
 from app.config import QUENYA_APP_URL, QUENYA_TESTFLIGHT_URL
 
 RATE_LIMIT_REQUESTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
-_RATE_LIMITS: dict[str, deque[float]] = {}
-_RATE_LIMIT_LOCK = Lock()
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _INVITE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,}$")
 _COLUMNS = (
@@ -96,8 +91,7 @@ class InviteEmailRequest(BaseModel):
 
 
 def reset_rate_limit() -> None:
-    with _RATE_LIMIT_LOCK:
-        _RATE_LIMITS.clear()
+    rate_limit.reset_bucket("waitlist:")
 
 
 def _check_rate_limit(request: Request) -> None:
@@ -107,18 +101,16 @@ def _check_rate_limit(request: Request) -> None:
         if forwarded_for
         else request.client.host if request.client else "unknown"
     )
-    now = monotonic()
-    cutoff = now - RATE_LIMIT_WINDOW_SECONDS
-    with _RATE_LIMIT_LOCK:
-        requests = _RATE_LIMITS.setdefault(client_ip, deque())
-        while requests and requests[0] <= cutoff:
-            requests.popleft()
-        if len(requests) >= RATE_LIMIT_REQUESTS:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many signups from this address. Try again in a minute.",
-            )
-        requests.append(now)
+    limited = rate_limit.check_and_hit(
+        f"waitlist:{client_ip}",
+        limit=RATE_LIMIT_REQUESTS,
+        window_seconds=RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if limited:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many signups from this address. Try again in a minute.",
+        )
 
 
 @router.post("/api/waitlist")
