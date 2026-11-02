@@ -360,6 +360,8 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
         # Prefer the marketplace CDN URL; do not advertise re-hosted copies.
         result["image"] = image_url
         result["image_url"] = image_url
+        # Previews were derived from re-hosted bytes; omit for hotlinked rows.
+        result["image_preview"] = None
     else:
         local_image = (
             f"/img/{images.image_key(image_url)}.jpg" if image_url else None
@@ -372,11 +374,12 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
+    pieces_by_id = db.get_items_with_tags(list(outfit["piece_ids"]))
     pieces = order_outfit_pieces(
         [
-            item
+            pieces_by_id[item_id]
             for item_id in outfit["piece_ids"]
-            if (item := db.get_item_with_tags(item_id))
+            if item_id in pieces_by_id
         ]
     )
     return {
@@ -1566,7 +1569,8 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
     keep = _disliked_lookalike_filter(swiped_items)
-    existing = [db.get_item_with_tags(item_id) for item_id in outfit["piece_ids"]]
+    pieces_by_id = db.get_items_with_tags(list(outfit["piece_ids"]))
+    existing = [pieces_by_id.get(item_id) for item_id in outfit["piece_ids"]]
     replaced = next((item for item in existing if item and item["id"] == body.item_id), None)
     if not replaced:
         raise HTTPException(status_code=400, detail="Item is not in this outfit")
@@ -1987,10 +1991,12 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
         else:
             # Local/inline keeps tagging in-process so responses stay tagged.
             _tag_pending_live(active["id"], source_urls=urls)
+    item_ids = [row["id"] for row in items]
+    items_by_id = db.get_items_with_tags(item_ids)
     results = [
         item
-        for item_id in [row["id"] for row in items]
-        if (item := db.get_item_with_tags(item_id)) and not item.get("tag_error")
+        for item_id in item_ids
+        if (item := items_by_id.get(item_id)) and not item.get("tag_error")
     ]
     sized = _fitting_sizes(
         [item for item in results if item.get("tags")],

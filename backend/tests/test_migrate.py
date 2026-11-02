@@ -188,6 +188,18 @@ def test_cli_check_exit_codes(monkeypatch, capsys):
                 "0004_vinted_privacy",
             },
             "0004_vinted_privacy",
+            False,
+        ),
+        (
+            True,
+            {
+                "0001_baseline",
+                "0002_jobs",
+                "0003_rate_limits",
+                "0004_vinted_privacy",
+                "0005_cost_indexes",
+            },
+            "0005_cost_indexes",
             True,
         ),
     ],

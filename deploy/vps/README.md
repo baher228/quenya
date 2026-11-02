@@ -66,17 +66,24 @@ sudo install -m 644 deploy/vps/quenya-ingest-retail.service /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-retail.timer /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-lv.service /etc/systemd/system/
 sudo install -m 644 deploy/vps/quenya-ingest-lv.timer /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-vinted-retention.service /etc/systemd/system/
+sudo install -m 644 deploy/vps/quenya-vinted-retention.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.timer quenya-ingest-lv.timer
+sudo systemctl enable --now quenya-ingest-vinted.timer quenya-ingest-retail.timer \
+    quenya-ingest-lv.timer quenya-vinted-retention.timer
 ```
 
 Vinted runs every three hours with a 40-query sample and a ten-minute
-randomized delay. Retail runs daily at 04:00 UTC. Both jobs use `Nice=10` and
-the wrapper's 2560 MiB memory limit, equal memory-plus-swap limit (no extra
-swap), and 0.75 CPU Docker limit. Tagging uses concurrency 1 and embeddings use
-batches of 8. Each scheduled run embeds up to 2,000 newest items with missing
-vectors, ensuring fresh listings are covered while bounding backlog work. Run
-one job manually with:
+randomized delay. Retail runs daily at 04:00 UTC. Vinted retention runs daily
+around 05:30 UTC and deletes aged/sold rows (plus clears leftover raw_json /
+image_preview). Dry-run first with
+`docker run ... python -m app.vinted_retention --dry-run` before enabling the
+timer if you have not already verified the match count. Ingest jobs use
+`Nice=10` and the wrapper's 2560 MiB memory limit, equal memory-plus-swap
+limit (no extra swap), and 0.75 CPU Docker limit. Tagging uses concurrency 1
+and embeddings use batches of 8. Each scheduled run embeds up to 2,000 newest
+items with missing vectors, ensuring fresh listings are covered while bounding
+backlog work. Run one job manually with:
 
 ```sh
 sudo /usr/local/sbin/quenya-ingest vinted --per-query 20 --sample 2 --tag --embed --tag-concurrency 1 --embed-batch-size 8 --embed-limit 2000

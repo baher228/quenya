@@ -1,0 +1,18 @@
+[Unit]
+Description=Delete aged or unavailable Vinted catalogue rows
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/bin/docker run --rm \
+    --memory 512m \
+    --memory-swap 512m \
+    --cpus 0.25 \
+    --network container:quenya-quenya-api-1 \
+    --env-file /etc/quenya/quenya.env \
+    -w /app/backend \
+    -e PYTHONPATH=/app/backend \
+    quenya-quenya-api:latest \
+    python -m app.vinted_retention --clear-raw-json --clear-previews --limit 5000

@@ -220,6 +220,15 @@ def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(
         lambda item_id: items_by_id.get(item_id),
     )
     monkeypatch.setattr(
+        phase2_api.db,
+        "get_items_with_tags",
+        lambda item_ids: {
+            item_id: items_by_id[item_id]
+            for item_id in item_ids
+            if item_id in items_by_id
+        },
+    )
+    monkeypatch.setattr(
         phase2_api,
         "rank_items",
         lambda *_args, **_kwargs: [too_expensive, replacement],

@@ -44,6 +44,7 @@ def run_retention(
     limit: int = 5000,
     dry_run: bool = False,
     clear_raw_json: bool = False,
+    clear_previews: bool = False,
 ) -> dict[str, Any]:
     retention_days = days if days is not None else media_policy.vinted_retention_days()
     cutoff = _cutoff_iso(retention_days)
@@ -52,8 +53,11 @@ def run_retention(
     )
     local_removed = 0
     raw_cleared = 0
+    previews_cleared = 0
     if clear_raw_json and not dry_run:
         raw_cleared = db.clear_vinted_raw_json()
+    if clear_previews and not dry_run:
+        previews_cleared = db.clear_vinted_image_previews()
     if not dry_run:
         for item in candidates:
             if _delete_local_image(item):
@@ -70,6 +74,7 @@ def run_retention(
         "would_delete": len(candidates) if dry_run else deleted,
         "local_images_removed": local_removed,
         "raw_json_cleared": raw_cleared,
+        "image_previews_cleared": previews_cleared,
         "sample_ids": [item["id"] for item in candidates[:20]],
     }
 
@@ -95,6 +100,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also null/empty raw_json on remaining Vinted rows",
     )
+    parser.add_argument(
+        "--clear-previews",
+        action="store_true",
+        help="Also null image_preview data URLs on remaining Vinted rows",
+    )
     args = parser.parse_args(argv)
     if args.days is not None and args.days < 1:
         parser.error("--days must be >= 1")
@@ -105,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         dry_run=args.dry_run,
         clear_raw_json=args.clear_raw_json,
+        clear_previews=args.clear_previews,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

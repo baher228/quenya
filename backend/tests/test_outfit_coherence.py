@@ -256,6 +256,15 @@ def _run_swap(
         "get_item_with_tags",
         lambda item_id: items_by_id.get(item_id),
     )
+    monkeypatch.setattr(
+        phase2_api.db,
+        "get_items_with_tags",
+        lambda item_ids: {
+            item_id: items_by_id[item_id]
+            for item_id in item_ids
+            if item_id in items_by_id
+        },
+    )
 
     def update_outfit(_outfit_id, piece_ids, total_gbp):
         outfit["piece_ids"] = list(piece_ids)
@@ -420,8 +429,12 @@ def test_public_outfit_orders_legacy_stored_pieces(monkeypatch):
     items_by_id = {item["id"]: item for item in pieces}
     monkeypatch.setattr(
         phase2_api.db,
-        "get_item_with_tags",
-        lambda item_id: items_by_id.get(item_id),
+        "get_items_with_tags",
+        lambda item_ids: {
+            item_id: items_by_id[item_id]
+            for item_id in item_ids
+            if item_id in items_by_id
+        },
     )
 
     outfit = phase2_api._public_outfit(
