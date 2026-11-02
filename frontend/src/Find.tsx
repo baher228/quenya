@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, gbp } from "./api";
 import { ItemImage } from "./ItemImage";
 import { ErrorBox, Loading, Provenance } from "./ui";
-import type { Item } from "./types";
+import type { Brief, Item, Slot } from "./types";
 
 const EXAMPLE_QUERIES = [
   "brown suede loafers",
@@ -11,19 +11,51 @@ const EXAMPLE_QUERIES = [
   "wide-leg trousers",
 ];
 
-export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
+const SLOT_CHIPS: [Slot | "", string][] = [
+  ["", "Any piece"],
+  ["outerwear", "Outerwear"],
+  ["top", "Tops"],
+  ["knitwear", "Knitwear"],
+  ["bottom", "Trousers"],
+  ["shoes", "Shoes"],
+  ["bag", "Bags"],
+];
+
+export function FindScreen({
+  brief,
+  onOpenItem,
+}: {
+  brief?: Brief | null;
+  onOpenItem: (it: Item) => void;
+}) {
   const [q, setQ] = useState("");
+  const [slot, setSlot] = useState<Slot | "">(
+    brief?.looking_for === "pieces" && brief.pieces.length === 1 ? brief.pieces[0] : "",
+  );
   const [items, setItems] = useState<Item[] | null>(null);
   const [mode, setMode] = useState<"saved" | "live" | null>(null);
+  const [lastSearchLive, setLastSearchLive] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   const go = async (live: boolean, query = q) => {
     if (!query.trim()) return;
     const searchQuery = query.trim();
-    setQ(query);
-    setMode(live ? "live" : "saved"); setError(null); setItems(null);
-    try { setItems(live ? await api.searchLive(searchQuery) : await api.search(searchQuery)); }
-    catch (e) { setError(e); } finally { setMode(null); }
+    setQ(searchQuery);
+    setLastSearchLive(live);
+    setMode(live ? "live" : "saved");
+    setError(null);
+    setItems(null);
+    try {
+      setItems(
+        live
+          ? await api.searchLive(searchQuery)
+          : await api.search(searchQuery, { slot: slot || undefined, limit: 20 }),
+      );
+    } catch (e) {
+      setError(e);
+    } finally {
+      setMode(null);
+    }
   };
 
   return (
@@ -34,17 +66,48 @@ export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="e.g. brown suede loafers" aria-label="Search pieces" />
         <button className="btn primary" disabled={!q.trim() || !!mode}>Search</button>
       </form>
-      <p className="small muted">Ranked by your taste. Search Vinted live to fetch fresh listings, which get tagged as they arrive.</p>
+      <div className="chips find-ex" role="group" aria-label="Piece type">
+        {SLOT_CHIPS.map(([value, label]) => (
+          <button
+            key={label}
+            type="button"
+            className={"chip" + (slot === value ? " sel" : "")}
+            aria-pressed={slot === value}
+            onClick={() => setSlot(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {brief?.budget_gbp ? (
+        <p className="small muted">
+          Ranked by your taste
+          {brief.sizes?.shoes || brief.sizes?.tops || brief.sizes?.waist
+            ? ` · sizes ${[brief.sizes.tops && `tops ${brief.sizes.tops}`, brief.sizes.waist && `waist ${brief.sizes.waist}`, brief.sizes.shoes && `UK ${brief.sizes.shoes}`].filter(Boolean).join(", ")}`
+            : ""}
+          {` · up to £${brief.budget_gbp}`}. Live search pulls fresh Vinted and shop listings in the background.
+        </p>
+      ) : (
+        <p className="small muted">Ranked by your taste. Search live to fetch fresh listings.</p>
+      )}
       {items === null && !mode && (
         <div className="chips find-ex" role="group" aria-label="Example searches">
           {EXAMPLE_QUERIES.map(query => (
             <button key={query} type="button" className="chip" onClick={() => void go(false, query)}>{query}</button>
           ))}
+          <button
+            type="button"
+            className="chip"
+            disabled={!q.trim()}
+            onClick={() => void go(true)}
+          >
+            Search live
+          </button>
         </div>
       )}
-      {mode && <Loading>{mode === "live" ? "Fetching and tagging live listings" : "Searching"}</Loading>}
-      {!!error && <ErrorBox error={error} onRetry={() => go(mode === "live")} />}
-      {items && items.length === 0 && <p className="empty muted">Nothing in the pool matches. Try searching Vinted live.</p>}
+      {mode && <Loading>{mode === "live" ? "Fetching live listings" : "Searching"}</Loading>}
+      {!!error && <ErrorBox error={error} onRetry={() => go(lastSearchLive)} />}
+      {items && items.length === 0 && <p className="empty muted">Nothing in the pool matches. Try searching live.</p>}
       {items && (
         <div className="grid">
           {items.map(it => (
@@ -55,7 +118,11 @@ export function FindScreen({ onOpenItem }: { onOpenItem: (it: Item) => void }) {
           ))}
         </div>
       )}
-      {(items !== null || error !== null) && <button className="btn ghost wide" disabled={!q.trim() || !!mode} onClick={() => go(true)}>Search Vinted live for “{q}”</button>}
+      {(items !== null || error !== null) && (
+        <button className="btn ghost wide" disabled={!q.trim() || !!mode} onClick={() => go(true)}>
+          Search live for “{q}”
+        </button>
+      )}
     </section>
   );
 }

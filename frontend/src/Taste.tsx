@@ -7,8 +7,8 @@ const TASK_LABEL: Record<string, string> = {
   tagger: "Listing tagger", taste: "Taste updater", stylist: "Outfit stylist", reader: "Photo reader", router: "Board router", decoder: "Style decoder",
 };
 
-export function TasteScreen({ taste, board, refresh, onUpload, onReset, isAdmin = false }: {
-  taste: TasteState | null; board: Board | null; refresh: () => void; onUpload: (f: File) => Promise<void>; onReset: () => void; isAdmin?: boolean;
+export function TasteScreen({ taste, board, refresh, onUpload, onReset, onDeleteAccount, isAdmin = false }: {
+  taste: TasteState | null; board: Board | null; refresh: () => void; onUpload: (f: File) => Promise<void>; onReset: () => void; onDeleteAccount?: () => void; isAdmin?: boolean;
 }) {
   const [stats, setStats] = useState<TaskStats[] | null>(null);
   const [statsErr, setStatsErr] = useState<unknown>(null);
@@ -107,6 +107,9 @@ export function TasteScreen({ taste, board, refresh, onUpload, onReset, isAdmin 
 
       {isAdmin && <a className="admin-entry" href="/admin">Admin dashboard <span>→</span></a>}
       <button className="btn ghost wide danger" onClick={onReset}>Reset all boards</button>
+      {onDeleteAccount && (
+        <button className="btn ghost wide danger" onClick={onDeleteAccount}>Delete account</button>
+      )}
     </section>
   );
 }

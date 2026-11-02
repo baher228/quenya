@@ -72,17 +72,30 @@ struct DeckView: View {
                             .padding(.horizontal, 12)
                     } else if state.deck.isEmpty {
                         VStack(spacing: 14) {
-                            Text("Enough to go on.")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(QuenyaTheme.webText)
-                            Text("Your swipes are in. Build outfits from them, or keep calibrating.")
-                                .font(.system(size: 14))
-                                .foregroundStyle(QuenyaTheme.webMuted)
-                                .multilineTextAlignment(.center)
-                            PillButton(title: "Build outfits", primary: true, dark: true) {
-                                Task { await state.deckDone() }
+                            if (state.taste?.counts["swipes_since_update"] ?? 0) > 0 {
+                                Text("Enough to go on.")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(QuenyaTheme.webText)
+                                Text("Your swipes are in. Build outfits from them, or keep calibrating.")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(QuenyaTheme.webMuted)
+                                    .multilineTextAlignment(.center)
+                                PillButton(title: "Build outfits", primary: true, dark: true) {
+                                    Task { await state.deckDone() }
+                                }
+                                PillButton(title: "10 more cards", dark: true) { Task { await state.reloadDeck() } }
+                            } else {
+                                Text("Still fetching pieces.")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(QuenyaTheme.webText)
+                                Text("Nothing matched yet. Broaden the brief, or try again in a moment while we pull listings.")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(QuenyaTheme.webMuted)
+                                    .multilineTextAlignment(.center)
+                                PillButton(title: "Try again", primary: true, dark: true) {
+                                    Task { await state.reloadDeck() }
+                                }
                             }
-                            PillButton(title: "10 more cards", dark: true) { Task { await state.reloadDeck() } }
                         }
                         .padding(24)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
