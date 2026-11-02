@@ -109,6 +109,7 @@ def test_vinted_normalizer_uses_catalog_fixture():
     assert record["image_url"].startswith("https://images1.vinted.net/")
     assert record["condition_hint"] == "second-hand"
     assert record["gender_hint"] == "w"
+    assert record["raw_json"] is None
 
 
 def test_vinted_normalizer_extracts_brand_from_production_item_box_fixture():

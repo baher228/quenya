@@ -4,12 +4,14 @@ import os
 import re
 import time
 from dataclasses import asdict, is_dataclass
+from threading import Lock
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from vinted_scraper import VintedScraper
 
+from app import media_policy
 from app.sizes import (
     item_box_accessibility_label,
     item_box_first_line,
@@ -19,6 +21,8 @@ from app.sizes import (
 _BRAND_FROM_LABEL = re.compile(
     r"\bBrand:\s*(.*?)(?=,\s*(?:Condition|Size):|$)", re.IGNORECASE
 )
+_request_lock = Lock()
+_last_request_at = 0.0
 
 
 def _get(value: Any, *names: str) -> Any:
@@ -98,6 +102,17 @@ def brand_from_raw_json(raw_json: Any) -> str | None:
     return item_box_first_line(raw_json)
 
 
+def _throttle_vinted_request() -> None:
+    global _last_request_at
+    interval = media_policy.vinted_request_interval_s()
+    with _request_lock:
+        now = time.monotonic()
+        wait = interval - (now - _last_request_at)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_at = time.monotonic()
+
+
 def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
     url = _canonical_url(item)
     title = _get(item, "title")
@@ -114,6 +129,7 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
         return None
     if price_gbp < 0:
         return None
+    # Use the scraper payload only to derive safe listing fields — never persist it.
     raw = _raw_item(item)
     brand = _brand_value(item) or brand_from_raw_json(raw)
     item_id = _get(item, "id")
@@ -123,6 +139,9 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
     size = _get(item, "size_title") or _get(item, "size")
     if not size:
         size = listing_size_from_label(item_box_accessibility_label(raw))
+    description = _get(item, "description")
+    if description is not None:
+        description = str(description)[:2000] or None
     return {
         "id": f"vinted:{item_id}",
         "source": "vinted",
@@ -131,13 +150,14 @@ def normalize_item(item: Any, query: str, gender: str) -> dict[str, Any] | None:
         "brand": str(brand) if brand else None,
         "price_gbp": price_gbp,
         "size": size,
-        "description": _get(item, "description"),
+        "description": description,
         "image_url": image_url,
         "gender_hint": gender,
         "condition_hint": "second-hand",
         "availability": _get(item, "status"),
         "query": query,
-        "raw_json": raw,
+        # Omit marketplace raw payloads (seller ids/usernames/etc.).
+        "raw_json": None,
     }
 
 
@@ -146,11 +166,23 @@ def search_direct(
 ) -> list[dict[str, Any]]:
     scraper = VintedScraper("https://www.vinted.co.uk")
     params = {"search_text": query, "per_page": per_page, "page": page}
-    try:
-        items = scraper.search(params)
-    except Exception:
-        time.sleep(1)
-        items = scraper.search(params)
+    delays = (1.0, 2.0, 4.0)
+    last_error: Exception | None = None
+    items = None
+    for attempt, delay in enumerate(delays):
+        _throttle_vinted_request()
+        try:
+            items = scraper.search(params)
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == len(delays) - 1:
+                raise
+            time.sleep(delay)
+    if items is None:
+        if last_error is not None:
+            raise last_error
+        items = []
     return [
         normalized
         for item in items
@@ -164,11 +196,13 @@ def search(
     proxy_url = os.getenv("QUENYA_VINTED_PROXY_URL")
     if not proxy_url:
         return search_direct(query, gender, per_page, page)
+    _throttle_vinted_request()
     response = httpx.get(
         f"{proxy_url.rstrip('/')}/internal/vinted/search",
         params={"q": query, "gender": gender, "per_page": per_page, "page": page},
         headers={
-            "X-Quenya-Proxy-Key": os.getenv("QUENYA_VINTED_PROXY_KEY", "")
+            "X-Quenya-Proxy-Key": os.getenv("QUENYA_VINTED_PROXY_KEY", ""),
+            "User-Agent": media_policy.IDENTIFYING_IMAGE_UA,
         },
         timeout=60,
     )

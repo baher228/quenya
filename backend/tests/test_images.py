@@ -64,7 +64,7 @@ def test_asos_image_download_normalizes_url_and_retries_timeout(monkeypatch, tmp
         return response
 
     monkeypatch.setattr(images, "IMAGE_DIR", tmp_path)
-    monkeypatch.setattr(images.httpx, "get", fake_get)
+    monkeypatch.setattr(images, "_http_client", lambda: SimpleNamespace(get=fake_get))
 
     result = images.image_data_url(source_url)
 
@@ -72,7 +72,6 @@ def test_asos_image_download_normalizes_url_and_retries_timeout(monkeypatch, tmp
     assert len(calls) == 2
     assert all(call[0] == expected_url for call in calls)
     assert all(call[1]["headers"]["User-Agent"] == "curl/8.5.0" for call in calls)
-    assert all(call[1]["timeout"] == 15 for call in calls)
 
 
 def test_download_display_image_falls_back_to_original(monkeypatch):
@@ -101,7 +100,7 @@ def test_download_display_image_falls_back_to_original(monkeypatch):
             return Response(b"missing", status=404)
         return Response(_image_bytes((20, 30)))
 
-    monkeypatch.setattr(images.httpx, "get", fake_get)
+    monkeypatch.setattr(images, "_http_client", lambda: SimpleNamespace(get=fake_get))
     content = images.download_display_image(original, referer="https://shop.example/item")
 
     assert content == _image_bytes((20, 30))
@@ -143,6 +142,7 @@ def test_storage_image_uses_local_then_storage_then_origin(monkeypatch, tmp_path
 
     monkeypatch.setattr(images.httpx, "get", fake_get)
     monkeypatch.setattr(images.httpx, "post", fake_post)
+    monkeypatch.setattr(images, "_http_client", lambda: SimpleNamespace(get=fake_get))
 
     assert images.image_data_url(source_url).startswith("data:image/jpeg;base64,")
     assert calls == []

@@ -109,6 +109,7 @@ def test_proxy_endpoint_validates_query_parameters(client, params):
 def test_search_uses_configured_proxy(monkeypatch):
     monkeypatch.setenv("QUENYA_VINTED_PROXY_URL", "https://proxy.example/")
     monkeypatch.setenv("QUENYA_VINTED_PROXY_KEY", "secret")
+    monkeypatch.setenv("QUENYA_VINTED_REQUEST_INTERVAL_S", "0")
     items = [{"id": "vinted:123"}]
     calls = {}
 
@@ -119,12 +120,13 @@ def test_search_uses_configured_proxy(monkeypatch):
     monkeypatch.setattr(vinted.httpx, "get", fake_get)
 
     assert vinted.search("vintage coat", "w", per_page=7, page=4) == items
-    assert calls == {
-        "url": "https://proxy.example/internal/vinted/search",
-        "params": {"q": "vintage coat", "gender": "w", "per_page": 7, "page": 4},
-        "headers": {"X-Quenya-Proxy-Key": "secret"},
-        "timeout": 60,
+    assert calls["url"] == "https://proxy.example/internal/vinted/search"
+    assert calls["params"] == {
+        "q": "vintage coat", "gender": "w", "per_page": 7, "page": 4
     }
+    assert calls["headers"]["X-Quenya-Proxy-Key"] == "secret"
+    assert "QuenyaBot" in calls["headers"]["User-Agent"]
+    assert calls["timeout"] == 60
 
 
 def test_search_raises_for_non_successful_proxy_response(monkeypatch):
@@ -154,9 +156,10 @@ def test_search_uses_direct_scraper_without_proxy_url(monkeypatch):
     assert calls == [("coat", "u", 4, 3)]
 
 
-def test_search_direct_retries_once_after_a_transient_failure(monkeypatch):
+def test_search_direct_retries_with_backoff_after_a_transient_failure(monkeypatch):
     calls = []
     sleeps = []
+    monkeypatch.setenv("QUENYA_VINTED_REQUEST_INTERVAL_S", "0")
 
     class Scraper:
         def search(self, params):
@@ -174,12 +177,13 @@ def test_search_direct_retries_once_after_a_transient_failure(monkeypatch):
         {"search_text": "coat", "per_page": 20, "page": 2},
         {"search_text": "coat", "per_page": 20, "page": 2},
     ]
-    assert sleeps == [1]
+    assert sleeps == [1.0]
 
 
-def test_search_direct_raises_after_two_failures(monkeypatch):
+def test_search_direct_raises_after_exhausted_backoff(monkeypatch):
     calls = []
     sleeps = []
+    monkeypatch.setenv("QUENYA_VINTED_REQUEST_INTERVAL_S", "0")
 
     class Scraper:
         def search(self, params):
@@ -192,5 +196,5 @@ def test_search_direct_raises_after_two_failures(monkeypatch):
     with pytest.raises(RuntimeError, match="still failing"):
         vinted.search_direct("coat", "w", page=2)
 
-    assert len(calls) == 2
-    assert sleeps == [1]
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]

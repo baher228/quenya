@@ -125,9 +125,11 @@ def backfill(batch_size: int, limit: int = 100000) -> None:
                 if not source:
                     continue
                 try:
+                    from app.media_policy import IDENTIFYING_IMAGE_UA
+
                     response = httpx.get(
                         source,
-                        headers={"User-Agent": images.BROWSER_UA},
+                        headers={"User-Agent": IDENTIFYING_IMAGE_UA},
                         follow_redirects=True,
                         timeout=20,
                     )

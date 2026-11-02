@@ -22,6 +22,7 @@ from app.config import (
     QUENYA_R2_SECRET_ACCESS_KEY,
     SPORT_IMAGE_UA,
 )
+from app.media_policy import IDENTIFYING_IMAGE_UA
 
 IMAGE_DIR = BACKEND_ROOT / "data" / "img"
 UPLOAD_DIR = BACKEND_ROOT / "data" / "uploads"
@@ -133,17 +134,40 @@ def _image_headers(url: str, referer: str | None = None) -> dict[str, str]:
         host == domain or host.endswith(f".{domain}")
         for domain in SPORT_IMAGE_DOMAINS
     )
-    user_agent = (
-        ASOS_IMAGE_UA
-        if is_asos_image
-        else SPORT_IMAGE_UA
-        if is_sport_image
-        else BROWSER_UA
-    )
+    is_vinted_cdn = "vinted." in host or host.endswith(".vinted.net")
+    # Prefer an honest identifying UA; keep narrow exceptions for shops that
+    # block non-browser agents on their CDNs.
+    if is_asos_image:
+        user_agent = ASOS_IMAGE_UA
+    elif is_sport_image:
+        user_agent = SPORT_IMAGE_UA
+    elif is_vinted_cdn:
+        user_agent = IDENTIFYING_IMAGE_UA
+    else:
+        user_agent = IDENTIFYING_IMAGE_UA
     headers = {"User-Agent": user_agent}
     if referer:
         headers["Referer"] = referer
     return headers
+
+
+_shared_http_client: httpx.Client | None = None
+
+
+def _http_client() -> httpx.Client:
+    """Shared client so ingest/tagging reuse TCP connections to CDNs."""
+    global _shared_http_client
+    if _shared_http_client is None:
+        _shared_http_client = httpx.Client(
+            timeout=httpx.Timeout(12.0, connect=5.0),
+            follow_redirects=True,
+            limits=httpx.Limits(
+                max_connections=16,
+                max_keepalive_connections=8,
+                keepalive_expiry=30.0,
+            ),
+        )
+    return _shared_http_client
 
 
 def download_image_candidate(
@@ -157,12 +181,7 @@ def download_image_candidate(
     is_asos_image = (urlsplit(normalized_url).hostname or "").lower() == ASOS_IMAGE_HOST
     for attempt in range(2 if is_asos_image else 1):
         try:
-            response = httpx.get(
-                normalized_url,
-                headers=headers,
-                timeout=15,
-                follow_redirects=True,
-            )
+            response = _http_client().get(normalized_url, headers=headers)
             response.raise_for_status()
             content = response.content
             if len(content) < minimum_bytes:
@@ -340,6 +359,51 @@ def persist_display_image(url: str, content: bytes) -> str:
     return str(image_path(url))
 
 
+def delete_display_object(path: str) -> None:
+    """Best-effort delete of a previously uploaded display object."""
+    if r2_enabled():
+        try:
+            _r2_client().delete_object(Bucket=_r2_bucket(), Key=path)
+        except Exception as exc:
+            raise RuntimeError(
+                f"R2 delete failed ({type(exc).__name__})"
+            ) from None
+        return
+    if storage_enabled():
+        _base_url, secret = _storage_credentials()
+        response = httpx.delete(
+            storage_object_url(path),
+            headers=_storage_headers(secret),
+            timeout=15,
+        )
+        if response.status_code not in {200, 404}:
+            response.raise_for_status()
+
+
+def fetch_image_bytes(
+    url: str,
+    *,
+    persist: bool = False,
+    referer: str | None = None,
+) -> bytes:
+    """Download and re-encode a listing image.
+
+    When persist is False (default for Vinted / optional retail), bytes stay
+    in memory only — nothing is written to disk or object storage.
+    """
+    content = encode_display_jpeg(
+        download_display_image(url, referer=referer)
+    )
+    if persist:
+        destination = image_path(url)
+        _write_image(destination, content)
+        if display_storage_enabled():
+            upload_display_object(
+                f"{image_key(url)}.jpg", content, "image/jpeg"
+            )
+    return content
+
+
 def _storage_headers(secret: str, *, content_type: str | None = None) -> dict[str, str]:
     headers = {
         "Authorization": f"Bearer {secret}",
@@ -416,8 +480,18 @@ def _write_image(path: Path, content: bytes) -> None:
     temporary.replace(path)
 
 
-def image_data_url(url: str) -> str:
+def image_data_url(url: str, *, persist: bool = True) -> str:
+    """Return a data URL for tagging/LLM use.
+
+    persist=True keeps the legacy cache+upload behaviour for sources that are
+    allowed to re-host images. persist=False fetches into memory only.
+    """
     normalized_url = normalize_image_url(url)
+    if not persist:
+        content = fetch_image_bytes(normalized_url, persist=False)
+        encoded = base64.b64encode(content).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+
     destination = image_path(normalized_url)
     if not destination.exists():
         content = None
@@ -431,15 +505,10 @@ def image_data_url(url: str) -> str:
             if content is not None:
                 _write_image(destination, content)
         if content is None:
-            content = _fetch_image(normalized_url)
-            _write_image(destination, content)
-            if display_storage_enabled():
-                upload_display_object(
-                    f"{image_key(normalized_url)}.jpg", content, "image/jpeg"
-                )
+            content = fetch_image_bytes(normalized_url, persist=True)
     encoded = base64.b64encode(destination.read_bytes()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 
 
 def _fetch_image(normalized_url: str) -> bytes:
-    return encode_display_jpeg(download_display_image(normalized_url))
+    return fetch_image_bytes(normalized_url, persist=False)

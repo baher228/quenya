@@ -175,7 +175,7 @@ def test_file_import_tags_new_rows_and_rerun_is_noop(monkeypatch, tmp_path):
         calls.append((url, kwargs))
         return Response()
 
-    monkeypatch.setattr(supabase_import.httpx, "get", get)
+    monkeypatch.setattr(images, "_http_client", lambda: SimpleNamespace(get=get))
     tagged = _stub_tagger(monkeypatch)
 
     first = supabase_import.run_file_import([path])
@@ -184,8 +184,9 @@ def test_file_import_tags_new_rows_and_rerun_is_noop(monkeypatch, tmp_path):
         "tag_failed": 0, "failed": 0,
     }
     assert len(tagged) == 2
-    assert all(kwargs["timeout"] == 15 for _, kwargs in calls)
-    assert all("Mozilla" in kwargs["headers"]["User-Agent"] for _, kwargs in calls)
+    assert all(
+        "QuenyaBot" in kwargs["headers"]["User-Agent"] for _, kwargs in calls
+    )
     for row in rows:
         item = db.get_item(row["record"]["id"])
         assert item["gender_hint"] == row["gender"]
@@ -226,9 +227,11 @@ def test_file_import_skips_unavailable_and_stock_title_rows(monkeypatch, tmp_pat
             return None
 
     monkeypatch.setattr(
-        supabase_import.httpx,
-        "get",
-        lambda url, **_kwargs: (calls.append(url) or Response()),
+        images,
+        "_http_client",
+        lambda: SimpleNamespace(
+            get=lambda url, **_kwargs: (calls.append(url) or Response())
+        ),
     )
 
     result = supabase_import.run_file_import([path], per_shop=1, no_tag=True)
@@ -269,7 +272,11 @@ def test_file_import_existing_urls_do_not_count_toward_per_shop(
         def raise_for_status(self):
             return None
 
-    monkeypatch.setattr(supabase_import.httpx, "get", lambda *_a, **_k: Response())
+    monkeypatch.setattr(
+        images,
+        "_http_client",
+        lambda: SimpleNamespace(get=lambda *_a, **_k: Response()),
+    )
 
     first = supabase_import.run_file_import([path], per_shop=1, no_tag=True)
     assert first == {
@@ -306,8 +313,11 @@ def test_file_import_excludes_sources(monkeypatch, tmp_path):
 
     calls = []
     monkeypatch.setattr(
-        supabase_import.httpx, "get",
-        lambda url, **_kwargs: (calls.append(url) or Response()),
+        images,
+        "_http_client",
+        lambda: SimpleNamespace(
+            get=lambda url, **_kwargs: (calls.append(url) or Response())
+        ),
     )
     result = supabase_import.run_file_import(
         [path], exclude_sources=("thenorthface.com",), no_tag=True
@@ -327,9 +337,13 @@ def test_file_import_counts_failed_image_without_inserting(monkeypatch, tmp_path
     row = _file_row("failed")
     _write_rows(path, [row])
     monkeypatch.setattr(
-        supabase_import.httpx,
-        "get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(httpx.ConnectError("offline")),
+        images,
+        "_http_client",
+        lambda: SimpleNamespace(
+            get=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                httpx.ConnectError("offline")
+            )
+        ),
     )
     tagged = _stub_tagger(monkeypatch)
 
@@ -358,7 +372,9 @@ def test_file_import_rejects_small_or_invalid_images(monkeypatch, tmp_path, cont
             return content
 
     monkeypatch.setattr(
-        supabase_import.httpx, "get", lambda *_args, **_kwargs: Response()
+        images,
+        "_http_client",
+        lambda: SimpleNamespace(get=lambda *_args, **_kwargs: Response()),
     )
     result = supabase_import.run_file_import([path], no_tag=True)
     assert result == {
