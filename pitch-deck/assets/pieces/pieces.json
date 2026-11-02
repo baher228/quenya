@@ -1,0 +1,482 @@
+{
+ "o1-outerwear": {
+  "id": "vinted:10468136738",
+  "brand": "Connor",
+  "title": "Connor men oatmeal coat size M",
+  "price": 5.31,
+  "source": "vinted",
+  "size": [
+   450,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10468136738-connor-men-oatmeal-coat-size-m"
+ },
+ "o1-knitwear": {
+  "id": "www.sunspel.com:b2f3c5e0ec908e2d75",
+  "brand": "Sunspel",
+  "title": "Men's Extra-Fine Merino Knitted Polo Shirt in Slate Blue",
+  "price": 235.0,
+  "source": "sunspel.com",
+  "size": [
+   1015,
+   1400
+  ],
+  "url": "https://www.sunspel.com/products/mens-extra-fine-merino-knitted-polo-shirt-in-slate-blue-mpol8333-buua"
+ },
+ "o1-bottom": {
+  "id": "vinted:10421007107",
+  "brand": "Uniqlo",
+  "title": "Pleated Grey Wide Pants",
+  "price": 21.26,
+  "source": "vinted",
+  "size": [
+   603,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10421007107-pleated-grey-wide-pants"
+ },
+ "o1-shoes": {
+  "id": "vinted:9928369074",
+  "brand": "Crockett & Jones",
+  "title": "Crockett & Jones Sydney Loafer",
+  "price": 106.3,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/9928369074-crockett-jones-sydney-loafer"
+ },
+ "o1-accessory": {
+  "id": "privatewhitevc.com:d57473fb383fd26979",
+  "brand": "Private White V.C.",
+  "title": "The Commando Scarf - Ivory",
+  "price": 195.0,
+  "source": "privatewhitevc.com",
+  "size": [
+   1050,
+   1400
+  ],
+  "url": "https://privatewhitevc.com/products/the-commando-scarf-ivory"
+ },
+ "o2-knitwear": {
+  "id": "vinted:10622258988",
+  "brand": "Lochmere",
+  "title": "Lochmere 100% Cashmere jumper L Navy",
+  "price": 25.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10622258988-lochmere-100-cashmere-jumper-l-navy"
+ },
+ "o2-top": {
+  "id": "oliverspencer.co.uk:2637f432a9b3e162d0",
+  "brand": "Oliver Spencer",
+  "title": "Heavy T-Shirt Parton White",
+  "price": 85.0,
+  "source": "oliverspencer.co.uk",
+  "size": [
+   1050,
+   1400
+  ],
+  "url": "https://oliverspencer.co.uk/products/heavy-t-shirt-parton-white"
+ },
+ "o2-bottom": {
+  "id": "www.sunspel.com:24ef9238b0c03de524",
+  "brand": "Sunspel",
+  "title": "Men's Donegal Tweed Trouser in Anthracite Melange",
+  "price": 345.0,
+  "source": "sunspel.com",
+  "size": [
+   1016,
+   1400
+  ],
+  "url": "https://www.sunspel.com/products/mens-donegal-tweed-trouser-in-anthracite-melange-mtrs3143-gyfr"
+ },
+ "o2-shoes": {
+  "id": "vinted:10598768961",
+  "brand": "G.H. Bass & Co.",
+  "title": "G.H. Bass & Co. Weejuns Brown Suede Penny Loafers",
+  "price": 18.9,
+  "source": "vinted",
+  "size": [
+   800,
+   600
+  ],
+  "url": "https://www.vinted.co.uk/items/10598768961-gh-bass-co-weejuns-brown-suede-penny-loafers"
+ },
+ "o3-outerwear": {
+  "id": "vinted:10602854328",
+  "brand": "Mens Wool Cashmere Dark Blue Jacket",
+  "title": "Mens Wool Cashmere Dark Blue Jacket",
+  "price": 15.94,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10602854328-mens-wool-cashmere-dark-blue-jacket"
+ },
+ "o3-top": {
+  "id": "www.sunspel.com:f7f0c6cd68f677ca45",
+  "brand": "Sunspel",
+  "title": "Men's Relaxed Fit Heavyweight T-shirt in Swansdown",
+  "price": 120.0,
+  "source": "sunspel.com",
+  "size": [
+   1015,
+   1400
+  ],
+  "url": "https://www.sunspel.com/products/mens-relaxed-fit-heavyweight-tshirt-in-swansdown-mtsh0181-whii"
+ },
+ "o3-bottom": {
+  "id": "oliverspencer.co.uk:34f38dfecacc45a618",
+  "brand": "Oliver Spencer",
+  "title": "Pleated Shorts Coney Navy",
+  "price": 159.0,
+  "source": "oliverspencer.co.uk",
+  "size": [
+   1050,
+   1400
+  ],
+  "url": "https://oliverspencer.co.uk/products/pleated-shorts-coney-navy"
+ },
+ "o3-shoes": {
+  "id": "vinted:10515661435",
+  "brand": "front",
+  "title": "Mens brown suede loafer uk9",
+  "price": 17.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10515661435-mens-brown-suede-loafer-uk9"
+ },
+ "x-margarethowell-604c47": {
+  "id": "www.margarethowell.co.uk:907bcdd42964604c47",
+  "brand": "Margaret Howell",
+  "title": "MHL. ROLLED HEM BEANIE | BRITISH MERINO | DARK NAVY",
+  "price": 55.0,
+  "source": "margarethowell.co.uk",
+  "size": [
+   1084,
+   1400
+  ],
+  "url": "https://www.margarethowell.co.uk/products/mhl-rolled-hem-beanie-british-merino-dark-navy"
+ },
+ "x-drakes-b20272": {
+  "id": "www.drakes.com:c50cb7caba4fb20272",
+  "brand": "Drakes - UK/ROW",
+  "title": "C\u00e2bleami Brown Wool Pom Watch Cap",
+  "price": 80.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/cableami-brown-wool-pom-watch-cap"
+ },
+ "x-drakes-63714b": {
+  "id": "www.drakes.com:5c63bccfbf4a63714b",
+  "brand": "Drakes - UK/ROW",
+  "title": "Yellow, Purple and Green Multi Stripe Cotton Rugby Shirt",
+  "price": 225.0,
+  "source": "drakes.com",
+  "size": [
+   1088,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/yellow-purple-and-green-multi-stripe-cotton-rugby-shirt"
+ },
+ "x-drakes-c63368": {
+  "id": "www.drakes.com:1ad501403c25c63368",
+  "brand": "Drakes - UK/ROW",
+  "title": "Navy and Green Tartan Check Wool Scarf",
+  "price": 245.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/navy-and-green-tartan-check-wool-scarf"
+ },
+ "x-drakes-03fead": {
+  "id": "www.drakes.com:97dd0c0ec06603fead",
+  "brand": "Drakes - UK/ROW",
+  "title": "Navy Wool-Cotton Artist Chore Jacket",
+  "price": 695.0,
+  "source": "drakes.com",
+  "size": [
+   1118,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/navy-wool-cotton-artist-chore-jacket"
+ },
+ "x-drakes-37f68d": {
+  "id": "www.drakes.com:0491f6918a9537f68d",
+  "brand": "Drakes - UK/ROW",
+  "title": "Olive Cotton Fatigue Trouser",
+  "price": 295.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/olive-cotton-fatigue-trouser"
+ },
+ "x-drakes-d7cc06": {
+  "id": "www.drakes.com:8d36e11dd4a1d7cc06",
+  "brand": "Drakes - UK/ROW",
+  "title": "Orange and Green Multi Stripe Geelongora Purl Stitch Knit Cap",
+  "price": 75.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/orange-and-green-multi-stripe-geelongora-purl-stitch-knit-cap"
+ },
+ "x-drakes-3d707b": {
+  "id": "www.drakes.com:adc0fe6bb6f03d707b",
+  "brand": "Drakes - UK/ROW",
+  "title": "Navy 'Clock' Cotton Twill Baseball Cap",
+  "price": 75.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/navy-clock-cotton-twill-baseball-cap"
+ },
+ "x-drakes-4b952a": {
+  "id": "www.drakes.com:4166729f58604b952a",
+  "brand": "Drakes - UK/ROW",
+  "title": "C\u00e2bleami Ecru Birdseye Wool Pom Watch Cap",
+  "price": 65.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/cableami-ecru-birdseye-wool-pom-watch-cap"
+ },
+ "x-drakes-01a121": {
+  "id": "www.drakes.com:28355bd613fe01a121",
+  "brand": "Drakes - UK/ROW",
+  "title": "Orange Solid Wool Fringed Scarf",
+  "price": 245.0,
+  "source": "drakes.com",
+  "size": [
+   1119,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/orange-solid-wool-fringed-scarf"
+ },
+ "x-drakes-3a2c62": {
+  "id": "www.drakes.com:5fd4938f899a3a2c62",
+  "brand": "Drakes - UK/ROW",
+  "title": "Ecru Corduroy Two-Pocket Long Point Collar Work Shirt",
+  "price": 275.0,
+  "source": "drakes.com",
+  "size": [
+   1117,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/ecru-corduroy-two-pocket-long-point-collar-work-shirt"
+ },
+ "x-drakes-9ba933": {
+  "id": "www.drakes.com:d6ead9cad6c89ba933",
+  "brand": "Drakes - UK/ROW",
+  "title": "Grey Nailhead Linen-Wool Single Pleat Trouser",
+  "price": 595.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/grey-nailhead-linen-wool-single-pleat-trouser"
+ },
+ "x-drakes-d6cc20": {
+  "id": "www.drakes.com:f984b11fb21dd6cc20",
+  "brand": "Drakes - UK/ROW",
+  "title": "Indigo Dyed Cotton Long-Sleeve Hiking T-Shirt",
+  "price": 145.0,
+  "source": "drakes.com",
+  "size": [
+   1120,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/indigo-dyed-cotton-long-sleeve-hiking-t-shirt"
+ },
+ "x-drakes-8c10e0": {
+  "id": "www.drakes.com:4185413ea7dc8c10e0",
+  "brand": "Drakes - UK/ROW",
+  "title": "Orange Lambswool Triangle Neck Scarf",
+  "price": 75.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/orange-lambswool-triangle-neck-scarf"
+ },
+ "x-drakes-42cfe3": {
+  "id": "www.drakes.com:ed861e4dd28142cfe3",
+  "brand": "Drakes - UK/ROW",
+  "title": "Black Herringbone Cotton Fatigue Trouser",
+  "price": 295.0,
+  "source": "drakes.com",
+  "size": [
+   1118,
+   1400
+  ],
+  "url": "https://www.drakes.com/products/black-herringbone-cotton-fatigue-trouser"
+ },
+ "x-drakes-424857": {
+  "id": "www.drakes.com:a4ea96253746424857",
+  "brand": "Drakes - UK/ROW",
+  "title": "New Balance 'Elevated Essentials' Rose Taupe Made in UK 991v2 Trainers",
+  "price": 210.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/new-balance-elevated-essentials-rose-taupe-made-in-uk-991v2-trainers"
+ },
+ "x-drakes-93bec5": {
+  "id": "www.drakes.com:16123b491f4f93bec5",
+  "brand": "Drakes - UK/ROW",
+  "title": "Green Herringbone Shetland Wool Hand Rolled Tie",
+  "price": 175.0,
+  "source": "drakes.com",
+  "size": [
+   1200,
+   1344
+  ],
+  "url": "https://www.drakes.com/products/green-herringbone-shetland-wool-hand-rolled-tie"
+ },
+ "x-oliverspencer-78dee1": {
+  "id": "oliverspencer.co.uk:cb89da7621aa78dee1",
+  "brand": "Oliver Spencer",
+  "title": "Blenheim Crew Neck Jumper Rosen Burgundy",
+  "price": 249.0,
+  "source": "oliverspencer.co.uk",
+  "size": [
+   1050,
+   1400
+  ],
+  "url": "https://oliverspencer.co.uk/products/blenheim-crew-neck-jumper-rosen-burgundy"
+ },
+ "x-universalworks-c8ba27": {
+  "id": "universalworks.com:b1649626565ac8ba27",
+  "brand": "Universal Works",
+  "title": "Navy Soft Shetland Angus Crew",
+  "price": 150.0,
+  "source": "universalworks.com",
+  "size": [
+   1040,
+   1400
+  ],
+  "url": "https://www.universalworks.co.uk/products/navy-soft-shetland-angus-crew"
+ },
+ "x-vinted-723589": {
+  "id": "vinted:10632723589",
+  "brand": "Paraboot",
+  "title": "Paraboot Michael Burgundy Size 9",
+  "price": 190.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10632723589-paraboot-michael-burgundy-size-9"
+ },
+ "x-vinted-689003": {
+  "id": "vinted:10633689003",
+  "brand": "Paraboot",
+  "title": "Brown Paraboot Coraux / Marine loafer",
+  "price": 110.0,
+  "source": "vinted",
+  "size": [
+   603,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10633689003-brown-paraboot-coraux-marine-loafer"
+ },
+ "x-vinted-450530": {
+  "id": "vinted:10633450530",
+  "brand": "Paraboot",
+  "title": "Brown Paraboot Coraux / Raid loafers",
+  "price": 110.0,
+  "source": "vinted",
+  "size": [
+   800,
+   603
+  ],
+  "url": "https://www.vinted.co.uk/items/10633450530-brown-paraboot-coraux-raid-loafers"
+ },
+ "x-vinted-100308": {
+  "id": "vinted:9927100308",
+  "brand": "Paraboot",
+  "title": "Vintage Paraboot France Men's Leather Canvas Hiking Boots - Vibram - US 10.5 / E",
+  "price": 90.7,
+  "source": "vinted",
+  "size": [
+   621,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/9927100308-vintage-paraboot-france-mens-leather-canvas-hiking-boots-vibram-us-105-e"
+ },
+ "x-vinted-566417": {
+  "id": "vinted:10613566417",
+  "brand": "Paraboot",
+  "title": "Paraboot Michael Marche II Noir Black Lisse Leather in UK 10",
+  "price": 215.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10613566417-paraboot-michael-marche-ii-noir-black-lisse-leather-in-uk-10"
+ },
+ "x-vinted-483045": {
+  "id": "vinted:10619483045",
+  "brand": "Paraboot",
+  "title": "Paraboot chimey shoes",
+  "price": 245.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10619483045-paraboot-chimey-shoes"
+ },
+ "x-vinted-168783": {
+  "id": "vinted:10551168783",
+  "brand": "Paraboot",
+  "title": "Paraboot Avoriaz Boots Black Suede UK7 EU41",
+  "price": 330.0,
+  "source": "vinted",
+  "size": [
+   600,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10551168783-paraboot-avoriaz-boots-black-suede-uk7-eu41"
+ },
+ "x-vinted-784338": {
+  "id": "vinted:10619784338",
+  "brand": "Paraboot",
+  "title": "Paraboot Michael Leather Shoes in Black/Noir",
+  "price": 260.0,
+  "source": "vinted",
+  "size": [
+   640,
+   800
+  ],
+  "url": "https://www.vinted.co.uk/items/10619784338-paraboot-michael-leather-shoes-in-blacknoir"
+ }
+}
