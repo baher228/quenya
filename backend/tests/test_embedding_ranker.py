@@ -233,20 +233,77 @@ def test_item_mix_vectors_requeries_missing_ids_after_ttl(
 
 def test_no_brief_vector_history_only_and_items_without_vectors_fall_back_safely():
     catalogue = np.asarray([[1, 0], [0, 1], [-1, 0]], dtype=np.float32)
-    items = [_item("a"), _item("b")]
-    embeddings = {"a": {"mix": np.asarray([1, 0], dtype=np.float32)}}
+    items = [_item("candidate"), _item("b")]
+    embeddings = {
+        "history": {"mix": np.asarray([1, 0], dtype=np.float32)},
+        "candidate": {"mix": np.asarray([0, 1], dtype=np.float32)},
+    }
     ordered, scores, history = rank_candidates(
         items, "board", {}, None,
-        [{"item_id": "a", "liked": True}], embeddings, catalogue,
+        [{"item_id": "history", "liked": True}], embeddings, catalogue,
     )
     assert history is not None
     assert np.isfinite(scores["b"])
-    assert {item["id"] for item in ordered} == {"a", "b"}
+    assert {item["id"] for item in ordered} == {"candidate", "b"}
     no_vectors, _scores, history = rank_candidates(
         items, "board", {}, None, [], {}, catalogue
     )
-    assert [item["id"] for item in no_vectors] == ["a", "b"]
+    assert [item["id"] for item in no_vectors] == ["candidate", "b"]
     assert history is None
+
+
+def test_rank_candidates_filters_cosine_lookalikes_of_swiped_items(monkeypatch):
+    from app import embedding_ranker
+
+    monkeypatch.setattr(
+        embedding_ranker, "score_item", lambda _item, _taste: 0.0
+    )
+    items = [
+        _item("liked-lookalike"),
+        _item("passed-lookalike"),
+        _item("kept"),
+        _item("without-vector"),
+    ]
+
+    def toward_x(cosine, magnitude):
+        return magnitude * np.asarray(
+            [cosine, np.sqrt(1 - cosine**2)], dtype=np.float32
+        )
+
+    def toward_y(cosine, magnitude):
+        return magnitude * np.asarray(
+            [np.sqrt(1 - cosine**2), cosine], dtype=np.float32
+        )
+
+    embeddings = {
+        "liked": {"mix": np.asarray([4.0, 0.0], dtype=np.float32)},
+        "passed": {"mix": np.asarray([0.0, 5.0], dtype=np.float32)},
+        "liked-lookalike": {"mix": toward_x(0.97, 2.0)},
+        "passed-lookalike": {"mix": toward_y(0.92, 3.0)},
+        "kept": {"mix": toward_x(0.85, 4.0)},
+    }
+    swipes = [
+        {"item_id": "liked", "liked": True},
+        {"item_id": "passed", "liked": False},
+    ]
+
+    ordered, _scores, _history = rank_candidates(
+        items,
+        "board",
+        {},
+        None,
+        swipes,
+        embeddings,
+        np.zeros((0, 2), dtype=np.float32),
+        nearest_ids=[
+            "liked-lookalike",
+            "passed-lookalike",
+            "kept",
+            "without-vector",
+        ],
+    )
+
+    assert {item["id"] for item in ordered} == {"kept", "without-vector"}
 
 
 def test_seeded_bootstrap_is_repeatable_and_can_depart_from_greedy():
@@ -275,6 +332,76 @@ def test_seeded_bootstrap_is_repeatable_and_can_depart_from_greedy():
         embedding_ranker.score_item = monkeypatch_scores
     assert pick == repeat
     assert pick != greedy
+
+
+def test_choose_bootdiv_skips_selected_item_lookalikes_when_alternatives_exist(
+    monkeypatch,
+):
+    from app import embedding_ranker
+
+    monkeypatch.setattr(
+        embedding_ranker,
+        "score_item",
+        lambda item, _taste: {"lookalike": 10.0, "alternative": 0.0}[item["id"]],
+    )
+    selected = _item("selected")
+    lookalike = _item("lookalike")
+    alternative = _item("alternative")
+    embeddings = {
+        "selected": {"mix": np.asarray([1, 0], dtype=np.float32)},
+        "lookalike": {"mix": np.asarray([1, 0], dtype=np.float32)},
+        "alternative": {"mix": np.asarray([0, 1], dtype=np.float32)},
+    }
+
+    choice = choose_bootdiv(
+        [lookalike, alternative],
+        [selected],
+        [],
+        embeddings,
+        {"lookalike": 10.0, "alternative": 0.0},
+        None,
+        {},
+        np.zeros((0, 2), dtype=np.float32),
+        [],
+        np.random.default_rng(1),
+    )
+
+    assert choice["id"] == "alternative"
+
+
+def test_choose_bootdiv_keeps_current_choice_when_every_candidate_is_a_lookalike(
+    monkeypatch,
+):
+    from app import embedding_ranker
+
+    monkeypatch.setattr(
+        embedding_ranker,
+        "score_item",
+        lambda item, _taste: {"first": 10.0, "second": 0.0}[item["id"]],
+    )
+    selected = _item("selected")
+    first = _item("first")
+    second = _item("second")
+    embeddings = {
+        "selected": {"mix": np.asarray([1, 0], dtype=np.float32)},
+        "first": {"mix": np.asarray([1, 0], dtype=np.float32)},
+        "second": {"mix": np.asarray([1, 0], dtype=np.float32)},
+    }
+
+    choice = choose_bootdiv(
+        [first, second],
+        [selected],
+        [],
+        embeddings,
+        {"first": 10.0, "second": 0.0},
+        None,
+        {},
+        np.zeros((0, 2), dtype=np.float32),
+        [],
+        np.random.default_rng(1),
+    )
+
+    assert choice["id"] == "first"
 
 
 def test_brief_text_falls_back_to_string_and_list_values():
