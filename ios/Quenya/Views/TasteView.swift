@@ -3,6 +3,7 @@ import SwiftUI
 struct TasteView: View {
     @Environment(AppState.self) private var state
     @State private var loading = false
+    @State private var confirmingDelete = false
 
     private var profile: TasteProfile? { state.taste?.current?.profile }
 
@@ -125,6 +126,15 @@ struct TasteView: View {
                         }
                     }
                 }
+                Button(role: .destructive) {
+                    confirmingDelete = true
+                } label: {
+                    Text(state.busy.isBusy("auth.delete") ? "Deleting account…" : "Delete account")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(state.busy.isBusy("auth.delete"))
+                .accessibilityLabel(state.busy.isBusy("auth.delete") ? "Loading" : "Delete account")
             }
             .quenyaPage()
             .padding(18)
@@ -132,6 +142,16 @@ struct TasteView: View {
         .background(QuenyaTheme.cream)
         .refreshable { await refresh() }
         .task { if state.taste == nil { await refresh() } }
+        .confirmationDialog(
+            "Delete your Quenya account and all boards, swipes, outfits and taste data? This cannot be undone.",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete account", role: .destructive) {
+                Task { await state.deleteAccount() }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private func panel<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

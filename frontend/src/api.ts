@@ -172,12 +172,20 @@ export const api = {
   correctRoute: (routeId: string, board_id: string | null, label?: string) =>
     post<{ board: Board; route: Route; taste?: TasteVersion | null }>(`/api/route/${routeId}/correct`, { board_id, label }),
   core: () => req<Core>("/api/core"),
-  search: (q: string) =>
-    req<Item[] | { items: Item[] }>(`/api/search?q=${encodeURIComponent(q)}&limit=20`).then(r => (Array.isArray(r) ? r : r.items)),
+  search: (q: string, opts?: { slot?: string; limit?: number }) => {
+    const params = new URLSearchParams({ q, limit: String(opts?.limit ?? 20) });
+    if (opts?.slot) params.set("slot", opts.slot);
+    return req<Item[] | { items: Item[] }>(`/api/search?${params}`).then(r =>
+      Array.isArray(r) ? r : r.items,
+    );
+  },
   searchLive: (q: string) =>
-    post<Item[] | { items: Item[] }>("/api/search/live", { q }).then(r => (Array.isArray(r) ? r : r.items)),
+    post<Item[] | { items: Item[]; job_id?: string }>("/api/search/live", { q }).then(r =>
+      Array.isArray(r) ? r : r.items,
+    ),
   checkout: (outfit_id: string, board_id?: string) => post<Checkout>("/api/checkout", { outfit_id, board_id }),
   reset: () => post<unknown>("/api/reset"),
+  deleteAccount: () => post<{ ok: boolean }>("/api/account/delete"),
   stats: () => req<TaskStats[]>("/api/model/stats"),
   adminWaitlist: (status: string) =>
     req<AdminWaitlistEntry[]>(`/api/admin/waitlist?status=${encodeURIComponent(status)}`),

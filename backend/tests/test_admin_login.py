@@ -285,7 +285,10 @@ def test_set_password_rejects_short_password(isolated_admin_login_db):
 
 
 def test_set_password_migrates_existing_users_table(isolated_admin_login_db):
+    # Fixture rate-limit reset may have already created the current schema;
+    # rebuild an older users table so init_db must add password_hash.
     with db.db_connection() as connection:
+        connection.execute("DROP TABLE IF EXISTS users")
         connection.execute(
             """CREATE TABLE users (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL,
@@ -293,6 +296,7 @@ def test_set_password_migrates_existing_users_table(isolated_admin_login_db):
                 created_at TEXT NOT NULL, revoked_at TEXT
             )"""
         )
+    db._INITIALIZED_DATABASES.clear()
     db.init_db()
     with db.db_connection() as connection:
         columns = {

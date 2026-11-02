@@ -49,6 +49,8 @@ final class APIClient {
 
     func me() async throws -> User { try await get("/api/me") }
     func logout() async throws -> [String: Bool] { try await postEmpty("/api/auth/logout") }
+    func reset() async throws -> [String: Bool] { try await postEmpty("/api/reset") }
+    func deleteAccount() async throws -> [String: Bool] { try await postEmpty("/api/account/delete") }
 
     func createProfile(_ brief: Brief, newBoard: Bool = true) async throws -> ProfileResult {
         try await post("/api/profile", body: CreateProfileBody(brief: brief, newBoard: newBoard))

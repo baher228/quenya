@@ -6,17 +6,14 @@ import hashlib
 import hmac
 import secrets
 import uuid
-from collections import deque
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from threading import Lock
-from time import monotonic
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from app import db
+from app import db, rate_limit
 from app.config import QUENYA_APP_URL
 
 _user_context: ContextVar[dict[str, Any] | None] = ContextVar("user_context", default=None)
@@ -25,9 +22,6 @@ router = APIRouter()
 APP_ONLY_DETAIL = "Quenya is on iPhone only. Open your invite in the Quenya app."
 _LOGIN_RATE_WINDOW_S = 15 * 60
 _LOGIN_RATE_LIMIT = 5
-_login_rate_lock = Lock()
-_login_failures_by_ip: dict[str, deque[float]] = {}
-_login_failures_by_name: dict[str, deque[float]] = {}
 
 
 def is_browser(user_agent: str | None) -> bool:
@@ -99,47 +93,31 @@ def verify_password(stored: str | None, password: str) -> bool:
     return hmac.compare_digest(expected, actual)
 
 
-def _prune_failures(failures: dict[str, deque[float]], key: str, now: float) -> int:
-    attempts = failures.get(key)
-    if attempts is None:
-        return 0
-    while attempts and now - attempts[0] >= _LOGIN_RATE_WINDOW_S:
-        attempts.popleft()
-    if not attempts:
-        failures.pop(key, None)
-        return 0
-    return len(attempts)
-
-
 def _login_is_limited(ip: str, name: str) -> bool:
-    now = monotonic()
-    with _login_rate_lock:
-        return (
-            _prune_failures(_login_failures_by_ip, ip, now) >= _LOGIN_RATE_LIMIT
-            or _prune_failures(_login_failures_by_name, name, now) >= _LOGIN_RATE_LIMIT
-        )
+    return rate_limit.is_limited(
+        f"admin-login-ip:{ip}",
+        limit=_LOGIN_RATE_LIMIT,
+        window_seconds=_LOGIN_RATE_WINDOW_S,
+    ) or rate_limit.is_limited(
+        f"admin-login-name:{name}",
+        limit=_LOGIN_RATE_LIMIT,
+        window_seconds=_LOGIN_RATE_WINDOW_S,
+    )
 
 
 def _record_login_failure(ip: str, name: str) -> None:
-    now = monotonic()
-    with _login_rate_lock:
-        for failures, key in (
-            (_login_failures_by_ip, ip),
-            (_login_failures_by_name, name),
-        ):
-            _prune_failures(failures, key, now)
-            failures.setdefault(key, deque()).append(now)
+    rate_limit.hit(f"admin-login-ip:{ip}")
+    rate_limit.hit(f"admin-login-name:{name}")
 
 
 def _clear_name_failures(name: str) -> None:
-    with _login_rate_lock:
-        _login_failures_by_name.pop(name, None)
+    rate_limit.reset_bucket(f"admin-login-name:{name}")
 
 
 def reset_admin_login_rate_limit() -> None:
-    with _login_rate_lock:
-        _login_failures_by_ip.clear()
-        _login_failures_by_name.clear()
+    rate_limit.reset_bucket("admin-login-ip:")
+    rate_limit.reset_bucket("admin-login-name:")
+
 
 
 def _public(user: dict[str, Any]) -> dict[str, Any]:

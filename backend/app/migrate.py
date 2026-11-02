@@ -252,9 +252,23 @@ def _jobs(connection) -> None:
     )
 
 
+def _rate_limits(connection) -> None:
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS rate_limit_events (
+               bucket TEXT NOT NULL,
+               created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+           )"""
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rate_limit_bucket_created "
+        "ON rate_limit_events(bucket, created_at)"
+    )
+
+
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
     ("0002_jobs", _jobs),
+    ("0003_rate_limits", _rate_limits),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 

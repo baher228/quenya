@@ -89,10 +89,21 @@ export function DeckScreen({ profile, version, board, userId, boardId, swipesSin
     setItems(remaining);
     setCache(userId, boardId, "deck", remaining);
     setSeen(n => n + 1);
+    setError(null);
     const requestBoardId = boardId;
     api.swipe(top.id, liked, requestBoardId)
       .then(r => onSignal(r.update_due, requestBoardId, r.swipes_since_update))
-      .catch(setError);
+      .catch(err => {
+        decidedIds.current.delete(top.id);
+        setItems(current => {
+          if (current.some(item => item.id === top.id)) return current;
+          const restored = [top, ...current];
+          setCache(userId, boardId, "deck", restored);
+          return restored;
+        });
+        setSeen(n => Math.max(0, n - 1));
+        setError(err);
+      });
   }, [boardId, items, onSignal, userId]);
 
   useEffect(() => {
@@ -140,10 +151,21 @@ export function DeckScreen({ profile, version, board, userId, boardId, swipesSin
         {!loading && !!error && <ErrorBox error={error} onRetry={load} />}
         {!loading && !error && items.length === 0 && (
           <div className="deck-done">
-            <p className="h3">Enough to go on.</p>
-            <p className="muted">Your swipes are in. Build outfits from them, or keep calibrating.</p>
-            <button className="btn primary" onClick={() => onDone(boardId)}>Build outfits</button>
-            <button className="btn ghost" onClick={load}>10 more cards</button>
+            {seen > 0 || swipesSinceUpdate > 0 ? (
+              <>
+                <p className="h3">Enough to go on.</p>
+                <p className="muted">Your swipes are in. Build outfits from them, or keep calibrating.</p>
+                <button className="btn primary" onClick={() => onDone(boardId)}>Build outfits</button>
+                <button className="btn ghost" onClick={load}>10 more cards</button>
+              </>
+            ) : (
+              <>
+                <p className="h3">Still fetching pieces.</p>
+                <p className="muted">Nothing matched yet. Broaden the brief, or try again in a moment while we pull listings.</p>
+                <button className="btn primary" onClick={load}>Try again</button>
+                <button className="btn ghost" onClick={onChange}>Edit brief</button>
+              </>
+            )}
           </div>
         )}
         {!loading && items.slice(0, 3).reverse().map((it, i, arr) => (

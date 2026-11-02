@@ -142,6 +142,12 @@ CREATE TABLE IF NOT EXISTS deck_events (
 );
 CREATE INDEX IF NOT EXISTS idx_deck_events_profile_created
 ON deck_events(profile_id, created_at);
+CREATE TABLE IF NOT EXISTS rate_limit_events (
+    bucket TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_bucket_created
+ON rate_limit_events(bucket, created_at);
 CREATE TABLE IF NOT EXISTS waitlist (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -1026,6 +1032,46 @@ def live_catalogue(
 
 def deck_catalogue() -> list[dict[str, Any]]:
     return _DECK_CATALOGUE.get(_load_deck_catalogue)
+
+
+def search_catalogue(
+    needle: str,
+    *,
+    slot: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """SQL-backed title/brand search over the live tagged catalogue."""
+    init_db()
+    needle = needle.strip().lower()
+    if not needle:
+        return []
+    limit = max(1, min(int(limit), 500))
+    pattern = f"%{needle}%"
+    params: list[Any] = [pattern, pattern]
+    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
+    slot_clause = ""
+    if slot:
+        if postgres:
+            slot_clause = " AND tags_json::jsonb ->> 'slot' = ?"
+        else:
+            slot_clause = " AND json_extract(tags_json, '$.slot') = ?"
+        params.append(slot)
+    params.append(limit)
+    sql = (
+        f"SELECT {_LIVE_CATALOGUE_COLUMNS} FROM items "
+        f"WHERE {_LIVE_CATALOGUE_FILTER} "
+        "AND (LOWER(title) LIKE ? OR LOWER(COALESCE(brand, '')) LIKE ?)"
+        f"{slot_clause} "
+        "ORDER BY fetched_at DESC LIMIT ?"
+    )
+    with db_connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+    catalogue = []
+    for row in rows:
+        item = dict(row)
+        item["tags"] = json.loads(item["tags_json"])
+        catalogue.append(item)
+    return catalogue
 
 
 def items_for_embedding(limit: int = 100000) -> list[dict[str, Any]]:

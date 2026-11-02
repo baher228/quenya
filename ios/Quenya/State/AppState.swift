@@ -298,6 +298,18 @@ final class AppState {
         authPhase = .signedOut(nil)
     }
 
+    func deleteAccount() async {
+        guard !busy.isBusy("auth.delete") else { return }
+        await cache.flush()
+        await busy.run("auth.delete") {
+            _ = try await self.api.deleteAccount()
+        }
+        tokenStore.clear()
+        cache.clear()
+        resetPerUserState()
+        authPhase = .signedOut(nil)
+    }
+
     func changeBaseURL(_ value: String?) async {
         if let value, let url = AppConfig.validURL(value) {
             UserDefaults.standard.set(url.absoluteString, forKey: AppConfig.userDefaultsKey)
@@ -580,6 +592,13 @@ final class AppState {
             }
             if result.updateDue && !updating { await runUpdate(styleId: styleId) }
         } catch {
+            cache.update(styleId) { snapshot in
+                snapshot.sentSwipeIds.removeAll { $0 == item.id }
+                if !snapshot.deck.contains(where: { $0.id == item.id }) {
+                    snapshot.deck.insert(item, at: 0)
+                }
+                snapshot.swiped = max(0, snapshot.swiped - 1)
+            }
             showToast("Swipe not saved", lines: [error.localizedDescription])
         }
     }

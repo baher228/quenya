@@ -329,12 +329,30 @@ export default function App() {
   };
 
   const reset = async () => {
-    if (!window.confirm("Reset the demo? All boards, swipes, outfits and taste versions are deleted.")) return;
+    if (!window.confirm("Reset all boards? Swipes, outfits and taste versions are deleted. Your account stays signed in.")) return;
     clearCache();
     setOutfitsCacheReadyKey(null);
     await api.reset().catch(() => undefined);
     setBoards([]); setRouteNote(null); setBriefKey(k => k + 1);
     setOutfits([]); setOutfitLocks({}); setTaste({ current: null, history: [], counts: {} }); setBrief(DEFAULT_BRIEF); setBriefMode("new"); setTab("brief");
+  };
+
+  const deleteAccount = async () => {
+    if (!window.confirm("Delete your Quenya account and all boards, swipes, outfits and taste data? This cannot be undone.")) return;
+    clearCache();
+    setOutfitsCacheReadyKey(null);
+    try {
+      await api.deleteAccount();
+    } catch {
+      // Still clear the local session if the server already revoked access.
+    }
+    window.localStorage.removeItem("quenya.token");
+    setUser(null);
+    setBoards([]);
+    setOutfits([]);
+    setOutfitLocks({});
+    setTaste({ current: null, history: [], counts: {} });
+    setInviteOnly(true);
   };
 
   const hasProfile = !!taste?.current;
@@ -433,8 +451,23 @@ export default function App() {
                 onReplace={replace} onReject={(o, boardId) => setSheet({ kind: "reject", outfit: o, boardId })} onLike={like}
                 onCheckout={checkout} onOpenItem={item => setSheet({ kind: "item", item })} />
             : <NeedsBrief go={() => setTab("brief")} />)}
-          {tab === "find" && <FindScreen onOpenItem={item => setSheet({ kind: "item", item })} />}
-          {tab === "taste" && <TasteScreen taste={taste} board={activeBoard} refresh={refreshTaste} onReset={reset} onUpload={handleUpload} isAdmin={user.role === "admin"} />}
+          {tab === "find" && (
+            <FindScreen
+              brief={activeBoard?.brief ?? brief}
+              onOpenItem={item => setSheet({ kind: "item", item })}
+            />
+          )}
+          {tab === "taste" && (
+            <TasteScreen
+              taste={taste}
+              board={activeBoard}
+              refresh={refreshTaste}
+              onReset={reset}
+              onDeleteAccount={deleteAccount}
+              onUpload={handleUpload}
+              isAdmin={user.role === "admin"}
+            />
+          )}
         </main>
 
         {toast && (

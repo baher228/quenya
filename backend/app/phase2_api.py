@@ -216,6 +216,32 @@ def _route_response(
     }
 
 
+def _run_inline_job(job_id: str) -> None:
+    job = jobs.claim(job_id, f"inline-{uuid.uuid4().hex[:8]}")
+    if job is not None:
+        jobs.run_job(job)
+
+
+def _enqueue_durable_job(
+    kind: str,
+    profile_id: str,
+    payload: dict[str, Any],
+) -> str:
+    owner_id = _owner_id()
+    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
+    if runner not in {"inline", "worker"}:
+        raise ValueError("QUENYA_JOB_RUNNER must be inline or worker")
+    job_id = jobs.enqueue(kind, owner_id, profile_id, payload)
+    if runner == "inline":
+        Thread(
+            target=_run_inline_job,
+            args=(job_id,),
+            name=f"{kind}-{job_id[:8]}",
+            daemon=True,
+        ).start()
+    return job_id
+
+
 def _start_fetch(
     profile: dict[str, Any], queries: list[str], background_tasks: BackgroundTasks
 ) -> str:
@@ -231,14 +257,38 @@ def _start_fetch(
         "errors": [],
     }
     db.save_fetch_job(job_id, profile["id"], job)
-    background_tasks.add_task(
-        _fetch_profile_items,
-        job_id,
-        profile["id"],
-        queries,
-        profile["brief"]["gender"],
-        profile.get("context", "other"),
-    )
+    payload = {
+        "fetch_job_id": job_id,
+        "queries": queries,
+        "gender": profile["brief"]["gender"],
+        "context": profile.get("context", "other"),
+    }
+    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
+    if runner == "worker":
+        _enqueue_durable_job("catalogue_fetch", profile["id"], payload)
+    elif background_tasks is not None:
+        # Keep FastAPI BackgroundTasks for request-scoped tests and simple local runs.
+        background_tasks.add_task(
+            _fetch_profile_items,
+            job_id,
+            profile["id"],
+            queries,
+            profile["brief"]["gender"],
+            profile.get("context", "other"),
+        )
+    else:
+        Thread(
+            target=_fetch_profile_items,
+            args=(
+                job_id,
+                profile["id"],
+                queries,
+                profile["brief"]["gender"],
+                profile.get("context", "other"),
+            ),
+            name=f"catalogue-fetch-{job_id[:8]}",
+            daemon=True,
+        ).start()
     return job_id
 
 
@@ -336,15 +386,28 @@ def _public_outfit(outfit: dict[str, Any]) -> dict[str, Any]:
 
 def _tag_pending_live(
     profile_id: str,
+    source_urls: list[str] | None = None,
 ) -> tuple[int, int, list[str], dict[str, dict[str, int]]]:
     with db.db_connection() as connection:
-        pending = [
-            dict(row)
-            for row in connection.execute(
-                "SELECT * FROM items WHERE query=? AND tags_json IS NULL AND tag_error IS NULL",
-                (f"live:{profile_id}",),
-            ).fetchall()
-        ]
+        if source_urls:
+            placeholders = ",".join("?" for _ in source_urls)
+            pending = [
+                dict(row)
+                for row in connection.execute(
+                    f"SELECT * FROM items WHERE source_url IN ({placeholders}) "
+                    "AND tags_json IS NULL AND tag_error IS NULL",
+                    source_urls,
+                ).fetchall()
+            ]
+        else:
+            pending = [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT * FROM items WHERE query IN (?, ?) "
+                    "AND tags_json IS NULL AND tag_error IS NULL",
+                    (f"live:{profile_id}", f"live:search:{profile_id}"),
+                ).fetchall()
+            ]
     tagged = failed = 0
     errors = []
     domain_counts: dict[str, dict[str, int]] = {}
@@ -940,9 +1003,9 @@ def _schedule_vinted_refill(
         item.get("source") == "vinted" and item.get("id") not in swiped
         for item in live_items
     )
-    jobs = db.fetch_jobs(active["id"], kind="vinted_refill")
+    refill_jobs = db.fetch_jobs(active["id"], kind="vinted_refill")
     now = datetime.now(UTC)
-    ages = [(job, _fetch_job_age_seconds(job, now)) for job in jobs]
+    ages = [(job, _fetch_job_age_seconds(job, now)) for job in refill_jobs]
     recent_running = any(
         job.get("status") == "running" and age is not None and 0 <= age <= 300
         for job, age in ages
@@ -956,7 +1019,7 @@ def _schedule_vinted_refill(
         last_started_age is None or last_started_age <= 600
     ):
         return
-    page = 1 + len(jobs) % 5
+    page = 1 + len(refill_jobs) % 5
     job_id = uuid.uuid4().hex
     db.save_fetch_job(
         job_id,
@@ -973,7 +1036,22 @@ def _schedule_vinted_refill(
             "page": page,
         },
     )
-    background_tasks.add_task(_refill_vinted, job_id, active["id"], page)
+    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
+    if runner == "worker":
+        _enqueue_durable_job(
+            "vinted_refill",
+            active["id"],
+            {"fetch_job_id": job_id, "page": page},
+        )
+    elif background_tasks is not None:
+        background_tasks.add_task(_refill_vinted, job_id, active["id"], page)
+    else:
+        Thread(
+            target=_refill_vinted,
+            args=(job_id, active["id"], page),
+            name=f"vinted-refill-{job_id[:8]}",
+            daemon=True,
+        ).start()
 
 
 def _ensure_live_vinted_items(
@@ -1212,6 +1290,16 @@ def deck(
         }
         for index, item in enumerate(explored_deck, start=1)
     ])
+    from app.availability import refresh_items
+
+    # Re-check a few Vinted/retail URLs so sold listings fade out of later decks.
+    Thread(
+        target=refresh_items,
+        args=(explored_deck,),
+        kwargs={"limit": 3},
+        name="availability-refresh",
+        daemon=True,
+    ).start()
     return [
         {**_public_item(item), "explore": bool(item.get("explore", False))}
         for item in explored_deck
@@ -1393,33 +1481,10 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
     }
 
 
-def _run_inline_outfit_job(job_id: str) -> None:
-    job = jobs.claim(job_id, f"inline-{uuid.uuid4().hex[:8]}")
-    if job is not None:
-        jobs.run_job(job)
-
-
 def _enqueue_outfit_job(body: OutfitRequest) -> str:
     active = _board_profile(body.board_id)
-    owner_id = _owner_id()
-    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
-    if runner not in {"inline", "worker"}:
-        raise ValueError("QUENYA_JOB_RUNNER must be inline or worker")
     payload = body.model_dump() | {"board_id": active["id"]}
-    job_id = jobs.enqueue(
-        "outfits",
-        owner_id,
-        active["id"],
-        payload,
-    )
-    if runner == "inline":
-        Thread(
-            target=_run_inline_outfit_job,
-            args=(job_id,),
-            name=f"outfit-job-{job_id[:8]}",
-            daemon=True,
-        ).start()
-    return job_id
+    return _enqueue_durable_job("outfits", active["id"], payload)
 
 
 @router.post("/api/outfits/jobs", status_code=202)
@@ -1634,17 +1699,30 @@ def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dic
     active = _user_profile()
     current = _taste(active["id"])
     needle = q.strip().lower()
+    if not needle:
+        return []
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     ranked = []
+    # Prefer SQL title/brand prefilter when the catalogue is large; always fall
+    # back to the streaming aesthetic/category scan so ranking stays identical.
+    sql_matches = {
+        item["id"]: item
+        for item in db.search_catalogue(
+            needle, slot=slot, limit=max(1, min(limit, 100)) * 5
+        )
+    }
     with db.live_catalogue_batches() as batches:
         for batch in batches:
             matches = [
                 item for item in batch
-                if needle in " ".join(
-                    [item["title"], str(tags_for(item).get("category", ""))]
-                    + list(tags_for(item).get("aesthetics", []))
-                ).lower()
+                if (
+                    item["id"] in sql_matches
+                    or needle in " ".join(
+                        [item["title"], str(tags_for(item).get("category", ""))]
+                        + list(tags_for(item).get("aesthetics", []))
+                    ).lower()
+                )
                 and (slot is None or tags_for(item).get("slot") == slot)
             ]
             ranked = rank_items(
@@ -1886,53 +1964,38 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
     for item in items:
         item["query"] = f"live:search:{active['id']}"
     db.insert_items(items)
-    urls = list(dict.fromkeys(item["source_url"] for item in items))
+    urls = list(dict.fromkeys(item["source_url"] for item in items if item.get("source_url")))
+    tag_job_id = None
+    runner = os.getenv("QUENYA_JOB_RUNNER", "inline").strip().lower()
     if urls:
-        placeholders = ",".join("?" for _ in urls)
-        with db.db_connection() as connection:
-            pending = [
-                dict(row)
-                for row in connection.execute(
-                    f"SELECT * FROM items WHERE source_url IN ({placeholders}) "
-                    "AND tags_json IS NULL AND tag_error IS NULL",
-                    urls,
-                ).fetchall()
-            ]
-        failures: list[TaskError] = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {
-                executor.submit(tag_item_with_vectors, item): item for item in pending
-            }
-            for future, item in futures.items():
-                try:
-                    tags, meta, vectors = future.result()
-                    db.save_tags(
-                        item["id"], tags.model_dump(), meta.request_id,
-                        item["image_path"], vectors=vectors,
-                        image_preview=item.get("image_preview"),
-                    )
-                except TaskError as exc:
-                    failures.append(exc)
-                    db.save_tag_error(item["id"], str(exc))
-                except Exception as exc:
-                    db.save_tag_error(item["id"], str(exc))
-        if failures:
-            request_ids = [request_id for failure in failures for request_id in failure.request_ids]
-            raise HTTPException(
-                status_code=502,
-                detail={"error": "Live item tagging failed", "request_ids": request_ids},
+        if runner == "worker":
+            # Serverless-safe path: tag in the durable worker and return hits now.
+            tag_job_id = _enqueue_durable_job(
+                "live_tag",
+                active["id"],
+                {"source_urls": urls},
             )
+        else:
+            # Local/inline keeps tagging in-process so responses stay tagged.
+            _tag_pending_live(active["id"], source_urls=urls)
     results = [
-        db.get_item_with_tags(item_id)
-        for item in items
-        for item_id in [item["id"]]
+        item
+        for item_id in [row["id"] for row in items]
+        if (item := db.get_item_with_tags(item_id)) and not item.get("tag_error")
     ]
-    results = _fitting_sizes(
-        [item for item in results if item and item.get("tags")],
+    sized = _fitting_sizes(
+        [item for item in results if item.get("tags")],
         active["brief"],
     )
+    if runner == "worker":
+        # Include untagged hits so the UI is not empty while tagging catches up.
+        sized_ids = {item["id"] for item in sized}
+        for item in results:
+            if item["id"] not in sized_ids and not item.get("tags"):
+                sized.append(item)
     return {
-        "items": [_public_item(item) for item in results],
+        "items": [_public_item(item) for item in sized],
+        "job_id": tag_job_id,
         "retail": "fetched" if retail_items else "skipped",
         "route": _route_response(
             route_id,
@@ -1945,14 +2008,16 @@ def live_search(body: LiveSearchRequest) -> dict[str, Any]:
     }
 
 
-@router.post("/api/reset")
-def reset() -> dict[str, Any]:
-    owner_id = _owner_id()
+def _wipe_owner_data(owner_id: str | None) -> None:
     with db.db_connection() as connection:
         if owner_id is not None:
             profiles = "(SELECT id FROM profiles WHERE kind='user' AND owner_id=?)"
             connection.execute(
                 f"DELETE FROM fetch_jobs WHERE profile_id IN {profiles}", (owner_id,)
+            )
+            connection.execute(
+                "DELETE FROM jobs WHERE owner_id=?",
+                (owner_id,),
             )
             connection.execute(
                 "DELETE FROM routes WHERE profile_kind='user' AND owner_id=?", (owner_id,)
@@ -1978,8 +2043,9 @@ def reset() -> dict[str, Any]:
             connection.execute(
                 "DELETE FROM profiles WHERE kind='user' AND owner_id=?", (owner_id,)
             )
-            return {"ok": True}
+            return
         connection.execute("DELETE FROM fetch_jobs")
+        connection.execute("DELETE FROM jobs")
         connection.execute("DELETE FROM routes WHERE profile_kind='user'")
         connection.execute(
             "DELETE FROM uploads WHERE profile_id IS NULL OR profile_id IN "
@@ -2001,4 +2067,21 @@ def reset() -> dict[str, Any]:
                 "WHERE profile_id IN (SELECT id FROM profiles WHERE kind='user')"
             )
         connection.execute("DELETE FROM profiles WHERE kind='user'")
+
+
+@router.post("/api/reset")
+def reset() -> dict[str, Any]:
+    _wipe_owner_data(_owner_id())
+    return {"ok": True}
+
+
+@router.post("/api/account/delete")
+def delete_account() -> dict[str, Any]:
+    from app.accounts import revoke_user
+
+    owner_id = _owner_id()
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Sign in with your invite link")
+    _wipe_owner_data(owner_id)
+    revoke_user(owner_id)
     return {"ok": True}
