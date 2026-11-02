@@ -10,7 +10,8 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock, Thread
-from time import monotonic, time as wall_time
+from time import monotonic
+from time import time as wall_time
 from typing import Any
 
 from app.config import DB_PATH, QUENYA_CATALOGUE_TTL_S
