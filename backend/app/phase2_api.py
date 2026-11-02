@@ -343,6 +343,8 @@ def _deck_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
+    from app import media_policy
+
     result = dict(item)
     tags = result.get("tags")
     if not isinstance(tags, dict):
@@ -354,9 +356,16 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
     result.pop("raw_json", None)
     result["tags"] = tags
     image_url = result.get("image_url")
-    local_image = f"/img/{images.image_key(image_url)}.jpg" if image_url else None
-    result["image"] = local_image
-    result["image_url"] = local_image
+    if image_url and media_policy.hotlink_listing_images(result.get("source")):
+        # Prefer the marketplace CDN URL; do not advertise re-hosted copies.
+        result["image"] = image_url
+        result["image_url"] = image_url
+    else:
+        local_image = (
+            f"/img/{images.image_key(image_url)}.jpg" if image_url else None
+        )
+        result["image"] = local_image
+        result["image_url"] = local_image
     result["origin"] = "live" if str(result.get("query") or "").startswith("live:") else "snapshot"
     result["condition"] = result.get("condition_hint")
     return result
@@ -424,7 +433,7 @@ def _tag_pending_live(
                 tags, meta, vectors = future.result()
                 db.save_tags(
                     item["id"], tags.model_dump(), meta.request_id,
-                    item["image_path"], vectors=vectors,
+                    item.get("image_path"), vectors=vectors,
                     image_preview=item.get("image_preview"),
                 )
                 tagged += 1

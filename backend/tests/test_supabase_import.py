@@ -185,7 +185,9 @@ def test_file_import_tags_new_rows_and_rerun_is_noop(monkeypatch, tmp_path):
     }
     assert len(tagged) == 2
     assert all(kwargs["timeout"] == 15 for _, kwargs in calls)
-    assert all("Mozilla" in kwargs["headers"]["User-Agent"] for _, kwargs in calls)
+    assert all(
+        "QuenyaBot" in kwargs["headers"]["User-Agent"] for _, kwargs in calls
+    )
     for row in rows:
         item = db.get_item(row["record"]["id"])
         assert item["gender_hint"] == row["gender"]

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS items (
     availability TEXT,
     query TEXT,
     fetched_at TEXT NOT NULL,
-    raw_json TEXT NOT NULL,
+    raw_json TEXT,
     tags_json TEXT,
     tags_request_id TEXT,
     tagged_at TEXT,
@@ -265,10 +265,25 @@ def _rate_limits(connection) -> None:
     )
 
 
+def _vinted_privacy(connection) -> None:
+    """Stop retaining Vinted raw marketplace payloads and allow NULL raw_json."""
+    connection.execute(
+        "ALTER TABLE items ALTER COLUMN raw_json DROP NOT NULL"
+    )
+    connection.execute(
+        "UPDATE items SET raw_json=NULL WHERE source='vinted'"
+    )
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS idx_items_source_fetched
+           ON items(source, fetched_at)"""
+    )
+
+
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
     ("0002_jobs", _jobs),
     ("0003_rate_limits", _rate_limits),
+    ("0004_vinted_privacy", _vinted_privacy),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 

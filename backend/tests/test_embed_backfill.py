@@ -133,7 +133,9 @@ def test_backfill_fills_missing_item_vectors_and_resumes(monkeypatch, tmp_path):
     embed.backfill(batch_size=1)
     vectors = db.item_embedding_map()["item"]
     assert calls == {"text": 1, "image": 1}
-    assert download["headers"] == {"User-Agent": embed.images.BROWSER_UA}
+    from app.media_policy import IDENTIFYING_IMAGE_UA
+
+    assert download["headers"] == {"User-Agent": IDENTIFYING_IMAGE_UA}
     assert download["follow_redirects"] is True
     np.testing.assert_array_equal(vectors["img"], [0, 1, 0, 0])
     np.testing.assert_array_equal(vectors["txt"], [1, 0, 0, 0])

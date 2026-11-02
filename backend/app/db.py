@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS items (
     availability TEXT,
     query TEXT,
     fetched_at TEXT NOT NULL,
-    raw_json TEXT NOT NULL,
+    raw_json TEXT,
     tags_json TEXT,
     tags_request_id TEXT,
     tagged_at TEXT,
@@ -652,8 +652,23 @@ def insert_items(items: list[dict[str, Any]]) -> int:
             row.setdefault("query", None)
             row.setdefault("gender_hint", None)
             row.setdefault("condition_hint", None)
-            row["raw_json"] = json.dumps(row.get("raw_json", row), ensure_ascii=False)
-            cursor = connection.execute(sql, row)
+            raw_payload = row.get("raw_json", row)
+            if raw_payload is None:
+                # Intentionally omitted (e.g. Vinted) — do not keep seller payloads.
+                row["raw_json"] = None
+            elif isinstance(raw_payload, str):
+                row["raw_json"] = raw_payload
+            else:
+                row["raw_json"] = json.dumps(raw_payload, ensure_ascii=False)
+            try:
+                cursor = connection.execute(sql, row)
+            except Exception as exc:
+                # Older SQLite schemas still mark raw_json NOT NULL.
+                if row["raw_json"] is None and "NOT NULL" in str(exc).upper():
+                    row["raw_json"] = "{}"
+                    cursor = connection.execute(sql, row)
+                else:
+                    raise
             inserted += cursor.rowcount
             if cursor.rowcount:
                 inserted_items.append(row)
@@ -788,6 +803,77 @@ def get_item(item_id: str) -> dict[str, Any] | None:
     with db_connection() as connection:
         row = connection.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     return dict(row) if row else None
+
+
+def delete_items(item_ids: list[str]) -> int:
+    """Hard-delete catalogue rows and their embeddings. Returns deleted count."""
+    if not item_ids:
+        return 0
+    init_db()
+    deleted = 0
+    with db_connection() as connection:
+        for start in range(0, len(item_ids), 200):
+            batch = item_ids[start : start + 200]
+            placeholders = ",".join("?" for _ in batch)
+            connection.execute(
+                f"DELETE FROM item_embeddings WHERE item_id IN ({placeholders})",
+                batch,
+            )
+            cursor = connection.execute(
+                f"DELETE FROM items WHERE id IN ({placeholders})",
+                batch,
+            )
+            deleted += cursor.rowcount
+    invalidate_live_catalogue()
+    return deleted
+
+
+def vinted_items_for_retention(
+    *,
+    older_than_iso: str,
+    limit: int = 5000,
+) -> list[dict[str, Any]]:
+    """Vinted rows past retention age and/or marked sold/unavailable."""
+    init_db()
+    query = """
+        SELECT id, source, image_url, image_path, image_preview, fetched_at,
+               availability
+        FROM items
+        WHERE source=?
+          AND (
+            fetched_at IS NULL OR fetched_at < ?
+            OR availability LIKE '%SoldOut%'
+            OR availability LIKE '%OutOfStock%'
+            OR availability LIKE '%Discontinued%'
+          )
+        ORDER BY fetched_at
+        LIMIT ?
+    """
+    with db_connection() as connection:
+        rows = connection.execute(
+            query, ("vinted", older_than_iso, limit)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def clear_vinted_raw_json() -> int:
+    """Null (or empty) stored Vinted raw payloads. Returns rows touched."""
+    init_db()
+    with db_connection() as connection:
+        try:
+            cursor = connection.execute(
+                "UPDATE items SET raw_json=NULL WHERE source=? AND raw_json IS NOT NULL",
+                ("vinted",),
+            )
+        except Exception as exc:
+            if "NOT NULL" not in str(exc).upper():
+                raise
+            cursor = connection.execute(
+                "UPDATE items SET raw_json=? WHERE source=? AND raw_json IS NOT NULL "
+                "AND raw_json != ?",
+                ("{}", "vinted", "{}"),
+            )
+        return cursor.rowcount
 
 
 def total_counts() -> tuple[int, int]:

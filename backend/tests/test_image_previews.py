@@ -68,6 +68,7 @@ def test_tagging_ingest_persists_preview_without_redownloading(
     monkeypatch, tmp_path
 ):
     monkeypatch.delenv("QUENYA_DATABASE_URL", raising=False)
+    monkeypatch.setenv("QUENYA_PERSIST_RETAIL_IMAGES", "1")
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "ingest.sqlite")
     monkeypatch.setattr(images, "IMAGE_DIR", tmp_path / "images")
     monkeypatch.setattr(images, "display_storage_enabled", lambda: False)

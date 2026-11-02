@@ -24,6 +24,12 @@ QUENYA_LLM_BASE_URL = os.getenv(
 )
 QUENYA_LLM_DAILY_CAP = os.getenv("QUENYA_LLM_DAILY_CAP", "300")
 QUENYA_TAGGER = os.getenv("QUENYA_TAGGER", "local")
+# Never re-host Vinted photos. Other sources default off (hotlink) unless set.
+QUENYA_PERSIST_RETAIL_IMAGES = os.getenv("QUENYA_PERSIST_RETAIL_IMAGES", "0")
+# External LLM tagger must not receive Vinted photos unless explicitly enabled.
+QUENYA_LLM_TAG_VINTED_IMAGES = os.getenv("QUENYA_LLM_TAG_VINTED_IMAGES", "0")
+QUENYA_VINTED_RETENTION_DAYS = os.getenv("QUENYA_VINTED_RETENTION_DAYS", "14")
+QUENYA_VINTED_REQUEST_INTERVAL_S = os.getenv("QUENYA_VINTED_REQUEST_INTERVAL_S", "1.0")
 QUENYA_CORS_ORIGINS = os.getenv(
     "QUENYA_CORS_ORIGINS", "http://localhost:5173"
 )

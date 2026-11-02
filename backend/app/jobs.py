@@ -306,7 +306,13 @@ def _load_owner(owner_id: str | None) -> dict[str, Any] | None:
     return None if owner.get("revoked_at") is not None else owner
 
 
-WORKER_KINDS = ("outfits", "catalogue_fetch", "vinted_refill", "live_tag")
+WORKER_KINDS = (
+    "outfits",
+    "catalogue_fetch",
+    "vinted_refill",
+    "live_tag",
+    "vinted_retention",
+)
 
 
 def run_job(job: dict[str, Any]) -> None:
@@ -318,6 +324,7 @@ def run_job(job: dict[str, Any]) -> None:
         generate_outfits,
     )
     from app.schemas import OutfitRequest
+    from app.vinted_retention import run_retention
 
     job_id = job["id"]
     kind = job.get("kind")
@@ -369,6 +376,15 @@ def run_job(job: dict[str, Any]) -> None:
                     "domain_counts": domain_counts,
                 },
             )
+            return
+        if kind == "vinted_retention":
+            result = run_retention(
+                days=payload.get("days"),
+                limit=int(payload.get("limit") or 5000),
+                dry_run=bool(payload.get("dry_run")),
+                clear_raw_json=bool(payload.get("clear_raw_json")),
+            )
+            complete(job_id, result)
             return
         fail(job_id, 400, "Unsupported job kind")
     except HTTPException as exc:
