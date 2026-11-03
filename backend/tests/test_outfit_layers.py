@@ -427,6 +427,52 @@ def test_build_pool_pieces_mode_fills_unselected_bottoms_and_shoes():
     assert {item["id"] for item in pool} >= {"trousers", "boots"}
 
 
+def test_build_pool_limits_shorts_in_bottom_quota(monkeypatch):
+    ranked = [
+        _piece(f"shorts-{index}", "bottom", "cargo shorts")
+        for index in range(10)
+    ]
+    ranked.extend(
+        _piece(f"trousers-{index}", "bottom", "wide trousers")
+        for index in range(10)
+    )
+    monkeypatch.setattr(outfits, "rank_items", lambda *_args, **_kwargs: ranked)
+
+    pool = build_pool(ranked, {}, {}, [], [])
+
+    shorts = [
+        item for item in pool
+        if item["tags"]["slot"] == "bottom" and warmth(item) == "warm"
+    ]
+    trousers = [
+        item for item in pool
+        if item["tags"]["slot"] == "bottom" and warmth(item) != "warm"
+    ]
+    assert 0 < len(shorts) <= 2
+    assert len(trousers) == 8 - len(shorts)
+
+
+def test_build_pool_keeps_all_shorts_when_brief_asks(monkeypatch):
+    ranked = [
+        _piece(f"shorts-{index}", "bottom", "cargo shorts")
+        for index in range(10)
+    ]
+    ranked.extend(
+        _piece(f"trousers-{index}", "bottom", "wide trousers")
+        for index in range(10)
+    )
+    monkeypatch.setattr(outfits, "rank_items", lambda *_args, **_kwargs: ranked)
+
+    pool = build_pool(
+        ranked, {"text": "baggy skate shorts"}, {}, [], []
+    )
+
+    assert sum(
+        item["tags"]["slot"] == "bottom" and warmth(item) == "warm"
+        for item in pool
+    ) >= 3
+
+
 def test_build_pool_pieces_mode_keeps_original_ranking_first_within_slot():
     brief = {
         "looking_for": "pieces",

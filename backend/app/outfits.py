@@ -48,6 +48,10 @@ _BASE_LAYER = re.compile(
 )
 _VEST_WORD = re.compile(r"\bvests?\b", re.I)
 _WARM_SHORTS = re.compile(r"\bshorts?\b", re.I)
+_SHORTS_BRIEF = re.compile(r"\bshorts?\b", re.I)
+# How many shorts may enter the stylist pool; the rest of the bottom quota is
+# filled with non-shorts. Skipped when the brief asks for shorts.
+_SHORTS_POOL_LIMIT = 2
 _WARM_TOP = re.compile(
     r"\b(?:tanks?(?:\s+tops?)?|vests?\s+tops?|camisoles?|camis?|strappy)\b",
     re.I,
@@ -278,7 +282,25 @@ def build_pool(
             continue
         if slot == "dress" and brief.get("gender") == "menswear":
             continue
-        for item in by_slot.get(slot, [])[:quota]:
+        slot_items = by_slot.get(slot, [])
+        if slot == "bottom" and not _SHORTS_BRIEF.search(
+            str(brief.get("text") or "")
+        ):
+            selected: list[dict[str, Any]] = []
+            skipped_shorts: list[dict[str, Any]] = []
+            shorts_seen = 0
+            for item in slot_items:
+                if warmth(item) == "warm":
+                    if shorts_seen < _SHORTS_POOL_LIMIT:
+                        shorts_seen += 1
+                        selected.append(item)
+                    else:
+                        skipped_shorts.append(item)
+                else:
+                    selected.append(item)
+            selected.extend(skipped_shorts)
+            slot_items = selected
+        for item in slot_items[:quota]:
             pool[item["id"]] = item
     for role, quota in _LAYER_ROLE_QUOTAS.items():
         role_items = by_role.get(role, [])
