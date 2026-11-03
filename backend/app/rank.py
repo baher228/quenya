@@ -16,6 +16,24 @@ from app.config import (
 from app.gender_rules import text_gender
 from app.images import ASOS_IMAGE_HOST, normalize_image_url
 
+_SHORTS_WORD = re.compile(r"\bshorts?\b", re.I)
+
+
+def _deck_is_shorts(item: dict[str, Any]) -> bool:
+    from app.outfits import warmth
+
+    return tags_for(item).get("slot") == "bottom" and warmth(item) == "warm"
+
+
+def _shorts_cap(count: int, brief: dict[str, Any] | None) -> int:
+    """Soft cap so shorts stay a small share of the deck; the cap is skipped
+    when the brief itself asks for shorts."""
+    if not count:
+        return 0
+    if _SHORTS_WORD.search(str((brief or {}).get("text") or "")):
+        return count
+    return max(1, count // 10)
+
 DISLIKE_LOOKALIKE_COS = 0.90
 LIKE_LOOKALIKE_COS = 0.95
 COMMON_IMAGE_PRODUCT_THRESHOLD = 5
@@ -519,6 +537,7 @@ def make_deck(
     seen_aesthetics: set[str] = set()
     next_slot = 0
     non_shoe_goal = max(0, count - available_shoes)
+    shorts_limit = _shorts_cap(count, brief)
     while len(deck) < non_shoe_goal and remaining:
         candidates = [
             item for item in remaining
@@ -587,11 +606,19 @@ def make_deck(
                 if not is_accessory_slot(tags_for(item).get("slot"))
             ]
             slots = [slot for slot in slots if not is_accessory_slot(slot)]
+        if sum(_deck_is_shorts(item) for item in deck) >= shorts_limit:
+            remaining = [item for item in remaining if not _deck_is_shorts(item)]
         seen_aesthetics.update(
             str(value).lower() for value in tags_for(chosen).get("aesthetics", [])
         )
     if len(deck) < non_shoe_goal:
         while remaining and len(deck) < non_shoe_goal:
+            if sum(_deck_is_shorts(item) for item in deck) >= shorts_limit and any(
+                not _deck_is_shorts(item) for item in remaining
+            ):
+                remaining = [
+                    item for item in remaining if not _deck_is_shorts(item)
+                ]
             chosen = selector(remaining, deck) if selector else remaining[0]
             remaining.remove(chosen)
             deck.append(chosen)
@@ -657,6 +684,15 @@ def add_exploration(
             if not is_accessory_slot(tags_for(item).get("slot"))
             or remaining_accessories < accessory_limit
         ]
+        shorts_in_deck = sum(_deck_is_shorts(item) for item in deck) + sum(
+            _deck_is_shorts(item) for item in explore_items
+        )
+        if shorts_in_deck >= _shorts_cap(count, brief):
+            non_shorts = [
+                item for item in choice_pool if not _deck_is_shorts(item)
+            ]
+            if non_shorts:
+                choice_pool = non_shorts
         if not choice_pool:
             break
         weights = [

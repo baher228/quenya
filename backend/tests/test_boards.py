@@ -1123,6 +1123,54 @@ def test_default_accessory_cap_applies_with_and_without_selector():
     )
 
 
+def test_deck_caps_shorts_share():
+    ranked = [
+        *(_item(f"shorts-{index}", "bottom") for index in range(30)),
+        *(_item(f"trousers-{index}", "bottom") for index in range(30)),
+    ]
+    for index in range(30):
+        ranked[index]["tags"]["category"] = "shorts"
+    brief = _brief(looking_for="pieces", pieces=["bottom"])
+
+    deck = make_deck(ranked, 20, brief)
+
+    assert len(deck) == 20
+    shorts_count = sum(
+        item["tags"]["category"] == "shorts" for item in deck
+    )
+    assert 0 < shorts_count <= 2
+
+
+def test_deck_shorts_cap_dropped_when_brief_asks_for_shorts():
+    ranked = [
+        *(_item(f"shorts-{index}", "bottom") for index in range(30)),
+        *(_item(f"trousers-{index}", "bottom") for index in range(30)),
+    ]
+    for index in range(30):
+        ranked[index]["tags"]["category"] = "shorts"
+    brief = _brief(
+        text="baggy skate shorts for summer",
+        looking_for="pieces",
+        pieces=["bottom"],
+    )
+
+    deck = make_deck(ranked, 20, brief)
+
+    assert len(deck) == 20
+    assert all(item["tags"]["category"] == "shorts" for item in deck)
+
+
+def test_deck_shorts_only_pool_still_fills():
+    ranked = [_item(f"shorts-{index}", "bottom") for index in range(15)]
+    for item in ranked:
+        item["tags"]["category"] = "shorts"
+    brief = _brief(looking_for="pieces", pieces=["bottom"])
+
+    deck = make_deck(ranked, 10, brief)
+
+    assert len(deck) == 10
+
+
 def test_exploration_does_not_exceed_default_accessory_cap():
     ranked = [_item(f"clothing-{index}", "top") for index in range(20)]
     ranked.extend(
