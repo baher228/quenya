@@ -1249,6 +1249,18 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
     assert result["outfit"]["verdict"] == "like"
     assert profile_ids == ["board-b", "board-b"]
 
+    def no_signals(_profile):
+        raise ValueError("No unconsumed taste signals")
+
+    monkeypatch.setattr(phase2_api, "update_taste", no_signals)
+
+    repeat = phase2_api.verdict(
+        "outfit-b", VerdictRequest(verdict="like", board_id="board-b")
+    )
+
+    assert repeat["outfit"]["verdict"] == "like"
+    assert repeat["taste"] is None
+
     for handler in (
         lambda: phase2_api.swap(
             "outfit-b", SwapRequest(item_id="replacement", board_id="board-b")
