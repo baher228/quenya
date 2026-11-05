@@ -1680,6 +1680,8 @@ def verdict(outfit_id: str, body: VerdictRequest) -> dict[str, Any]:
         )
     try:
         version, profile, meta, _ = update_taste(active)
+    except ValueError:
+        return {"outfit": _public_outfit(db.get_outfit(outfit_id)), "taste": None}
     except TaskError as exc:
         raise _http_task_error(exc) from exc
     return {
