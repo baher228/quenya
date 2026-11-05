@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 from fastapi import HTTPException
@@ -10,6 +11,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app import rate_limit
+
+logger = logging.getLogger(__name__)
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -44,11 +47,16 @@ def enforce_user_rate_limit(owner_id: str | None, action: str, *, limit: int) ->
     if not owner_id or limit < 1:
         return
     bucket = f"api:{action}:{owner_id}"
-    if rate_limit.check_and_hit(
-        bucket,
-        limit=limit,
-        window_seconds=api_rate_window_s(),
-    ):
+    try:
+        limited = rate_limit.check_and_hit(
+            bucket,
+            limit=limit,
+            window_seconds=api_rate_window_s(),
+        )
+    except Exception:
+        logger.warning("rate limit check failed for %s; allowing", bucket, exc_info=True)
+        return
+    if limited:
         raise HTTPException(
             status_code=429,
             detail="Too many requests, try again later",

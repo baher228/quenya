@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import random
 from typing import Any
 
 from app import db
+
+logger = logging.getLogger(__name__)
+
+PRUNE_PROBABILITY = 0.05
 
 
 def _ensure_table(connection: Any) -> None:
@@ -49,13 +55,10 @@ def _cutoff_iso(window_seconds: float, now_iso: str) -> str:
 
 
 def _count(connection: Any, bucket: str, cutoff: str) -> int:
-    connection.execute(
-        "DELETE FROM rate_limit_events WHERE bucket=? AND created_at < ?",
-        (bucket, cutoff),
-    )
     row = connection.execute(
-        "SELECT COUNT(*) AS count FROM rate_limit_events WHERE bucket=?",
-        (bucket,),
+        "SELECT COUNT(*) AS count FROM rate_limit_events "
+        "WHERE bucket=? AND created_at >= ?",
+        (bucket, cutoff),
     ).fetchone()
     return int(row["count"] if row and "count" in row.keys() else row[0])
 
@@ -78,12 +81,26 @@ def is_limited(
         )
 
 
+def prune(bucket: str, *, window_seconds: float, now_iso: str | None = None) -> None:
+    """Delete a bucket's expired events. Best effort: concurrent prunes may conflict."""
+    timestamp = now_iso or db.now_iso()
+    try:
+        with db.db_connection() as connection:
+            connection.execute(
+                "DELETE FROM rate_limit_events WHERE bucket=? AND created_at < ?",
+                (bucket, _cutoff_iso(window_seconds, timestamp)),
+            )
+    except Exception:
+        logger.warning("rate limit prune failed for %s", bucket, exc_info=True)
+
+
 def hit(
     bucket: str,
     *,
     now_iso: str | None = None,
+    window_seconds: float | None = None,
 ) -> None:
-    """Record one event in the bucket."""
+    """Record one event in the bucket and occasionally prune expired events."""
     db.init_db()
     timestamp = now_iso or db.now_iso()
     with db.db_connection() as connection:
@@ -92,6 +109,8 @@ def hit(
             "INSERT INTO rate_limit_events (bucket, created_at) VALUES (?, ?)",
             (bucket, timestamp),
         )
+    if window_seconds is not None and random.random() < PRUNE_PROBABILITY:
+        prune(bucket, window_seconds=window_seconds, now_iso=timestamp)
 
 
 def check_and_hit(
@@ -107,5 +126,5 @@ def check_and_hit(
         bucket, limit=limit, window_seconds=window_seconds, now_iso=timestamp
     ):
         return True
-    hit(bucket, now_iso=timestamp)
+    hit(bucket, now_iso=timestamp, window_seconds=window_seconds)
     return False
