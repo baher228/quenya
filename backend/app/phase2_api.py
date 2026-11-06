@@ -1372,6 +1372,7 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
     profile = current["profile"]
     swiped_items = db.profile_swipe_items(active["id"])
     disliked_ids = {item["id"] for item, liked in swiped_items if not liked}
+    liked_ids = {item["id"] for item, liked in swiped_items if liked} - disliked_ids
     keep = _disliked_lookalike_filter(swiped_items)
     locked_ids = set(body.locked_ids)
     core = _core()
@@ -1392,6 +1393,7 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
             eligible_batches(), active["brief"], profile, body.locked_ids,
             list(dict.fromkeys([*body.exclude_ids, *disliked_ids])),
             core_profile=core_profile,
+            liked_ids=liked_ids,
         )
     if not pool:
         raise HTTPException(status_code=409, detail="No eligible tagged items")
@@ -1408,6 +1410,7 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
         history=db.swipe_history(active["id"]),
         include_shoes=active["brief"].get("include_shoes", True),
         style_notes=style_notes(active["brief"]),
+        liked_ids=liked_ids,
     )
     request_ids: list[str | None] = []
     try:

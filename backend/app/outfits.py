@@ -212,6 +212,17 @@ def order_outfit_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(pieces, key=order)
 
 
+def _liked_first(
+    items: list[dict[str, Any]], liked_ids: set[str] | None, quota: int
+) -> list[dict[str, Any]]:
+    """Reserve up to a third of a slot's quota for pieces the shopper swiped right."""
+    if not liked_ids:
+        return items
+    liked = [item for item in items if item["id"] in liked_ids][: max(1, quota // 3)]
+    chosen = {item["id"] for item in liked}
+    return [*liked, *(item for item in items if item["id"] not in chosen)]
+
+
 def build_pool_batches(
     batches: Iterable[list[dict[str, Any]]],
     brief: dict[str, Any],
@@ -220,13 +231,14 @@ def build_pool_batches(
     exclude_ids: list[str],
     *,
     core_profile: dict[str, Any] | None = None,
+    liked_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     pool = []
     for batch in batches:
         # Each quota retains its best items; discarded candidates cannot win later.
         pool = build_pool(
             [*pool, *batch], brief, profile, locked_ids, exclude_ids,
-            core_profile=core_profile,
+            core_profile=core_profile, liked_ids=liked_ids,
         )
     return pool
 
@@ -239,6 +251,7 @@ def build_pool(
     exclude_ids: list[str],
     *,
     core_profile: dict[str, Any] | None = None,
+    liked_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     ranked = [
         item
@@ -300,6 +313,7 @@ def build_pool(
                     selected.append(item)
             selected.extend(skipped_shorts)
             slot_items = selected
+        slot_items = _liked_first(slot_items, liked_ids, quota)
         for item in slot_items[:quota]:
             pool[item["id"]] = item
     for role, quota in _LAYER_ROLE_QUOTAS.items():
@@ -317,6 +331,7 @@ def build_pool(
                 if item["id"] not in selected_ids
             )
             role_items = selected
+        role_items = _liked_first(role_items, liked_ids, quota)
         for item in role_items[:quota]:
             pool[item["id"]] = item
     for item_id in locked_ids:
@@ -336,7 +351,9 @@ def stylist_user_content(
     history: dict[str, Any] | None = None,
     include_shoes: bool = True,
     style_notes: list[str] | None = None,
+    liked_ids: set[str] | None = None,
 ) -> str:
+    liked_ids = liked_ids or set()
     lines = [
         f"{item['id']} | {tags_for(item).get('slot')} | "
         f"{layer_role(item) or '-'} | {warmth(item) or '-'} | "
@@ -345,6 +362,7 @@ def stylist_user_content(
         f"{', '.join(tags_for(item).get('aesthetics', []))} | "
         f"niche {float(tags_for(item).get('niche', 0)):.1f} | "
         f"{tags_for(item).get('fit')} | {item['source']}"
+        + (" | liked" if item["id"] in liked_ids else "")
         for item in pool
     ]
     request = (
