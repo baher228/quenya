@@ -530,7 +530,7 @@ def test_stylist_pool_lines_include_layer_roles_and_system_rules():
 
     assert "tee | top | base | - | £30 | graphic t-shirt" in content
     assert "bag | bag | - | - | £30 | tote bag" in content
-    assert PROMPT_VERSION == "2026-10-26.3"
+    assert PROMPT_VERSION == "2026-11-05.1"
     assert "one bottom plus exactly one base layer" in STYLIST_SYSTEM
     assert (
         "- Each outfit has one bottom plus exactly one base layer worn against "
@@ -742,3 +742,32 @@ def test_swap_rejects_shell_replacement_that_makes_two_shells(monkeypatch):
 
     assert exc.value.status_code == 409
     assert exc.value.detail == "No eligible same-slot replacement"
+
+
+def test_build_pool_reserves_a_third_of_each_slot_for_liked_pieces(monkeypatch):
+    bottoms = [_piece(f"b{i}", "bottom", "trousers") for i in range(12)]
+    monkeypatch.setattr(outfits, "rank_items", lambda items, *a, **k: list(items))
+
+    plain = build_pool(bottoms, {}, {}, [], [])
+    liked = build_pool(bottoms, {}, {}, [], [], liked_ids={"b9", "b10", "b11"})
+
+    plain_ids = {item["id"] for item in plain}
+    liked_pool = {item["id"] for item in liked}
+    assert plain_ids == {f"b{i}" for i in range(8)}
+    assert {"b9", "b10"} <= liked_pool
+    assert "b11" not in liked_pool
+    assert len(liked_pool) == 8
+
+
+def test_stylist_pool_marks_liked_pieces_and_prompt_has_colour_rules():
+    tee = _piece("tee", "top", "graphic t-shirt")
+    jeans = _piece("jeans", "bottom", "jeans")
+    content = stylist_user_content({}, 1, [], [tee, jeans], liked_ids={"tee"})
+
+    lines = content.splitlines()
+    assert any(line.startswith("tee |") and line.endswith("| liked") for line in lines)
+    assert not any(
+        line.startswith("jeans |") and line.endswith("| liked") for line in lines
+    )
+    assert "Liked pieces are strong picks" in STYLIST_SYSTEM
+    assert "60/30/10" in STYLIST_SYSTEM
