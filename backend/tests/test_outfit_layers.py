@@ -530,7 +530,7 @@ def test_stylist_pool_lines_include_layer_roles_and_system_rules():
 
     assert "tee | top | base | - | £30 | graphic t-shirt" in content
     assert "bag | bag | - | - | £30 | tote bag" in content
-    assert PROMPT_VERSION == "2026-11-05.1"
+    assert PROMPT_VERSION == "2026-11-06.1"
     assert "one bottom plus exactly one base layer" in STYLIST_SYSTEM
     assert (
         "- Each outfit has one bottom plus exactly one base layer worn against "
@@ -771,3 +771,15 @@ def test_stylist_pool_marks_liked_pieces_and_prompt_has_colour_rules():
     )
     assert "Liked pieces are strong picks" in STYLIST_SYSTEM
     assert "60/30/10" in STYLIST_SYSTEM
+
+
+def test_stylist_pool_shows_second_hand_size_against_shopper():
+    tee = {**_piece("tee", "top", "t-shirt"), "source": "vinted",
+           "condition_hint": "second-hand", "size": "XL"}
+    jeans = _piece("jeans", "bottom", "jeans")
+    content = stylist_user_content({}, 1, [], [tee, jeans], sizes={"tops": "M"})
+
+    lines = content.splitlines()
+    assert any(line.startswith("tee |") and "| size XL, 2 sizes up" in line for line in lines)
+    assert not any(line.startswith("jeans |") and "| size" in line for line in lines)
+    assert "one or two sizes up" in STYLIST_SYSTEM

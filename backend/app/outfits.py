@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from app.rank import rank_items, tags_for
+from app.sizes import size_note
 
 _LAYER_SLOTS = {"top", "knitwear", "outerwear"}
 _LAYER_ROLE_QUOTAS = {"base": 10, "mid": 8, "outer": 6}
@@ -352,8 +353,14 @@ def stylist_user_content(
     include_shoes: bool = True,
     style_notes: list[str] | None = None,
     liked_ids: set[str] | None = None,
+    sizes: dict[str, Any] | None = None,
 ) -> str:
     liked_ids = liked_ids or set()
+
+    def size_part(item: dict[str, Any]) -> str:
+        note = size_note(item, sizes or {})
+        return f" | size {note}" if note else ""
+
     lines = [
         f"{item['id']} | {tags_for(item).get('slot')} | "
         f"{layer_role(item) or '-'} | {warmth(item) or '-'} | "
@@ -362,6 +369,7 @@ def stylist_user_content(
         f"{', '.join(tags_for(item).get('aesthetics', []))} | "
         f"niche {float(tags_for(item).get('niche', 0)):.1f} | "
         f"{tags_for(item).get('fit')} | {item['source']}"
+        + size_part(item)
         + (" | liked" if item["id"] in liked_ids else "")
         for item in pool
     ]

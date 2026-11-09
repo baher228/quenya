@@ -1411,6 +1411,7 @@ def generate_outfits(body: OutfitRequest) -> dict[str, Any]:
         include_shoes=active["brief"].get("include_shoes", True),
         style_notes=style_notes(active["brief"]),
         liked_ids=liked_ids,
+        sizes=active["brief"].get("sizes"),
     )
     request_ids: list[str | None] = []
     try:

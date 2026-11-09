@@ -86,6 +86,7 @@ def run_persona(persona: dict[str, Any], *, router: bool = False) -> dict[str, A
             pool,
             include_shoes=brief.get("include_shoes", True),
             style_notes=style_notes(brief),
+            sizes=brief.get("sizes"),
         )
         result, meta = call_task("stylist", STYLIST_SYSTEM, STYLIST_MODEL, content, StylistOutput)
         valid, errors = validate_outfits(
