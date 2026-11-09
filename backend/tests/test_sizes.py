@@ -2,7 +2,7 @@ import pytest
 
 from app import db
 from app.backfill_sizes import backfill
-from app.sizes import fits_brief, listing_size_from_label
+from app.sizes import fits_brief, listing_size_from_label, size_note
 from app.sources.vinted import normalize_item
 
 
@@ -38,13 +38,15 @@ def test_listing_size_from_accessibility_label():
         ("M", True),
         ("L", True),
         ("XL", True),
+        ("XXL", True),
+        ("XXXL", False),
         ("M / UK 12-14", True),
         ("S", False),
         ("XS", False),
         ("UK 8-10", False),
     ],
 )
-def test_tops_match_within_one_letter_step(listing_size, expected):
+def test_tops_allow_one_down_and_two_up(listing_size, expected):
     assert fits_brief(_item("top", listing_size), {"tops": "L"}) is expected
 
 
@@ -57,10 +59,13 @@ def test_tops_match_within_one_letter_step(listing_size, expected):
         ("32x30", True),
         ("waist 32", True),
         ("32", True),
+        ("W31", True),
+        ("W34", True),
+        ("W30", False),
         ("W36", False),
     ],
 )
-def test_waist_sizes_match_within_one_inch(listing_size, expected):
+def test_waist_allows_one_inch_down_and_two_up(listing_size, expected):
     assert fits_brief(_item("bottom", listing_size), {"waist": "32"}) is expected
 
 
@@ -163,3 +168,35 @@ def test_backfill_sizes_dry_run_uses_fixture_database(monkeypatch, tmp_path):
             "SELECT size FROM items WHERE id='vinted:1'"
         ).fetchone()
     assert row["size"] is None
+
+
+@pytest.mark.parametrize(
+    ("slot", "listing_size"),
+    [
+        ("top", "3 years / 98-103 cm"),
+        ("shoes", "9 child | EU 27"),
+        ("dress", "6 baby | EU 23"),
+        ("shoes", "2 junior | EU 34"),
+    ],
+)
+def test_childrens_sizes_never_fit(slot, listing_size):
+    assert not fits_brief(_item(slot, listing_size), {"tops": "M", "shoes": "9"})
+    assert not fits_brief(_item(slot, listing_size), {})
+
+
+@pytest.mark.parametrize(
+    ("listing_size", "expected"),
+    [("40 inches", True), ("44 inches", True), ("34 inches", False), ("36 in | 90 cm", True)],
+)
+def test_chest_inches_map_to_letter_sizes(listing_size, expected):
+    assert fits_brief(_item("top", listing_size), {"tops": "M"}) is expected
+
+
+def test_size_note_describes_fit_for_the_stylist():
+    sizes = {"tops": "M", "waist": "32", "shoes": "9"}
+    assert size_note(_item("top", "M"), sizes) == "M, true to size"
+    assert size_note(_item("top", "XL"), sizes) == "XL, 2 sizes up"
+    assert size_note(_item("top", "S"), sizes) == "S, 1 size down"
+    assert size_note(_item("bottom", "W34"), sizes) == "W34, 2 in up"
+    assert size_note(_item("shoes", "9"), sizes) is None
+    assert size_note(_item("top", "XL", source="arket.com", condition="new"), sizes) is None
