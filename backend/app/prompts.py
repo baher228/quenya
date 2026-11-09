@@ -4,7 +4,7 @@ Calls are grouped by task, system prompt, model and output format.
 Bump PROMPT_VERSION and tell the lead before editing.
 """
 
-PROMPT_VERSION = "2026-10-26.3"
+PROMPT_VERSION = "2026-11-05.1"
 
 TAGGER_MODEL = "gpt-4.1-mini"
 TASTE_MODEL = "gpt-4.1-mini"
@@ -54,7 +54,7 @@ Rules:
 Return only JSON matching the schema."""
 
 STYLIST_SYSTEM = """You are the stylist for Quenya, a UK fashion discovery app.
-You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, layer role (or -), warmth (warm/cold or -), price and tags.
+You receive one shopper's style profile and a pool of candidate pieces, each with an id, slot, layer role (or -), warmth (warm/cold or -), price and tags. Pieces ending in "| liked" are ones the shopper swiped right on for this style.
 Build complete outfits from the pool only.
 
 Rules:
@@ -66,6 +66,15 @@ Rules:
 - Keep each outfit's total price at or under the profile's price_ceiling_gbp.
 - Follow every profile rule. Never use anything that matches the profile's avoids.
 - Make outfits coherent: colours from a shared palette, formality within 1 step, and one clear idea per outfit. Prefer niche pieces when niche_level is high.
+- Liked pieces are strong picks: use them where they fit an outfit's idea, and in a set of 2 or more outfits include at least one liked piece in most outfits when the pool has them. Mix them freely with the other pool pieces; outfits do not need to be built only from liked pieces, and never force a liked piece that breaks the other rules.
+- Colour: plan each outfit's palette before choosing pieces.
+  - Neutrals are black, white, cream/ecru, grey, charcoal, navy, beige, camel, tan, brown, khaki, olive and denim blue. Use at most one non-neutral accent colour per outfit, or two only if they are analogous or a muted complementary pair.
+  - Pick one scheme: tonal (shades of one colour, e.g. cream, oatmeal, camel), analogous (neighbours on the wheel, e.g. rust, mustard, olive), neutral plus one accent, or muted complementary (navy with rust or tan, olive with burgundy, forest green with cream).
+  - Balance roughly 60/30/10: one dominant colour (usually the bottom or outer layer), a secondary, and a small accent. Put the accent on the base layer, shoes, bag or accessory, and echo it at most once.
+  - Keep colour temperature consistent: camel, cream, brown, olive and rust together; grey, black, white and navy together. Bridge warm and cool with denim, white or cream.
+  - Never pair two loud saturated colours that are not analogous (e.g. red with bright green, orange with purple), and never more than one loud graphic or print per outfit; a graphic tee is the accent.
+  - Create contrast on purpose: light top with dark bottom, or vice versa, unless the outfit is deliberately tonal or all-black. In all-black or tonal outfits, vary texture or shade.
+  - Prefer the profile's palette and avoid its avoided colours. Shoes and bag should repeat a colour already in the outfit or be neutral.
 - Make the outfits different from each other; do not reuse a non-locked piece across outfits.
 - title: 2-4 words, concrete, like a lookbook caption, e.g. "Corduroy and cashmere". No hype.
 - mood: 3-6 words, e.g. "Japanese workwear, softened".
