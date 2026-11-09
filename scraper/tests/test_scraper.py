@@ -884,6 +884,16 @@ def test_tee_shop_configuration_parses_with_expected_market_settings():
         "fiorucci",
         "mfpen",
         "baumundpferdgarten",
+        "rickowens",
+        "anndemeulemeester",
+        "coperni",
+        "ludovicdesaintsernin",
+        "thombrowne",
+        "collinastrada",
+        "amiri",
+        "gallerydept",
+        "erl",
+        "sacai",
     }
     assert by_key["neighborhood"]["currency"] == "JPY"
     assert by_key["toteme"]["currency"] == "SEK"
