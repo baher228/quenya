@@ -3434,3 +3434,302 @@ gender_rule = "default"
 default_gender = "w"
 max_requests = 150
 note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "kikokostadinov"
+brand = "Kiko Kostadinov"
+host = "kikokostadinov.com"
+domain = "kikokostadinov.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "jwanderson"
+brand = "JW Anderson"
+host = "jwanderson.com"
+domain = "jwanderson.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "craiggreen"
+brand = "Craig Green"
+host = "craig-green.com"
+domain = "craig-green.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "rejinapyo"
+brand = "Rejina Pyo"
+host = "rejinapyo.com"
+domain = "rejinapyo.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "chopovalowena"
+brand = "Chopova Lowena"
+host = "chopovalowena.com"
+domain = "chopovalowena.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "dipetsa"
+brand = "Di Petsa"
+host = "dipetsa.com"
+domain = "dipetsa.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "sixteenarlington"
+brand = "16Arlington"
+host = "16arlington.co.uk"
+domain = "16arlington.co.uk"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: meta.json currency GBP, ships to GB."
+
+[[shop]]
+key = "rickowens"
+brand = "Rick Owens"
+host = "rickowens.eu"
+domain = "rickowens.eu"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency EUR, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "anndemeulemeester"
+brand = "Ann Demeulemeester"
+host = "anndemeulemeester.com"
+domain = "anndemeulemeester.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency EUR, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "coperni"
+brand = "Coperni"
+host = "coperni.com"
+domain = "coperni.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency EUR, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "ludovicdesaintsernin"
+brand = "Ludovic de Saint Sernin"
+host = "ludovicdesaintsernin.com"
+domain = "ludovicdesaintsernin.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency EUR, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "thombrowne"
+brand = "Thom Browne"
+host = "thombrowne.com"
+domain = "thombrowne.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency USD, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "collinastrada"
+brand = "Collina Strada"
+host = "collinastrada.com"
+domain = "collinastrada.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency USD, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "amiri"
+brand = "AMIRI"
+host = "amiri.com"
+domain = "amiri.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency USD, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "gallerydept"
+brand = "Gallery Dept."
+host = "gallerydept.com"
+domain = "gallerydept.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency USD, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "erl"
+brand = "ERL"
+host = "erl.store"
+domain = "erl.store"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency USD, ships to GB; GB-localised product prices."
+
+[[shop]]
+key = "sacai"
+brand = "sacai"
+host = "sacai.jp"
+domain = "sacai.jp"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "JPY"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: meta.json currency JPY, ships to GB; GB-localised product prices."
