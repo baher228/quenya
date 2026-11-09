@@ -3152,3 +3152,285 @@ status = "pending"
 gender_rule = "default"
 max_requests = 150
 note = "UK product endpoint verified with GBP pricing."
+
+[[shop]]
+key = "toteme"
+brand = "Totême"
+host = "toteme.com"
+domain = "toteme.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+currency = "SEK"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "khaite"
+brand = "Khaite"
+host = "khaite.com"
+domain = "khaite.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "premium"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "bode"
+brand = "Bode"
+host = "bode.com"
+domain = "bode.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "fearofgod"
+brand = "Fear of God"
+host = "fearofgod.com"
+domain = "fearofgod.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "charlesjeffrey"
+brand = "Charles Jeffrey Loverboy"
+host = "charlesjeffreyloverboy.com"
+domain = "charlesjeffreyloverboy.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "USD"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "ceciliebahnsen"
+brand = "Cecilie Bahnsen"
+host = "ceciliebahnsen.com"
+domain = "ceciliebahnsen.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "marineserre"
+brand = "Marine Serre"
+host = "marineserre.com"
+domain = "marineserre.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "fiorucci"
+brand = "Fiorucci"
+host = "fiorucci.com"
+domain = "fiorucci.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "mfpen"
+brand = "MFPEN"
+host = "mfpen.com"
+domain = "mfpen.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "baumundpferdgarten"
+brand = "Baum und Pferdgarten"
+host = "baumundpferdgarten.com"
+domain = "baumundpferdgarten.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["apparel", "tees"]
+currency = "EUR"
+price_country = "GB"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 400
+note = "Probe 2026-11-09: GB-localised product page returned a GBP price."
+
+[[shop]]
+key = "simonerocha"
+brand = "Simone Rocha"
+host = "simonerocha.com"
+domain = "simonerocha.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "saulnash"
+brand = "Saul Nash"
+host = "saulnash.com"
+domain = "saulnash.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "labrum"
+brand = "Labrum London"
+host = "labrumlondon.com"
+domain = "labrumlondon.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "ahluwalia"
+brand = "Ahluwalia"
+host = "ahluwalia.world"
+domain = "ahluwalia.world"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "designer"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "m"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "jadedlondon"
+brand = "Jaded London"
+host = "jadedldn.com"
+domain = "jadedldn.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "streetwear"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
+
+[[shop]]
+key = "ohpolly"
+brand = "Oh Polly"
+host = "ohpolly.com"
+domain = "ohpolly.com"
+adapter = "shopify"
+enabled = true
+where = "any"
+group = "women"
+category_sets = ["apparel", "tees"]
+currency = "GBP"
+status = "pending"
+gender_rule = "default"
+default_gender = "w"
+max_requests = 150
+note = "Probe 2026-11-09: Shopify feed returned clothing; meta.json currency GBP."
