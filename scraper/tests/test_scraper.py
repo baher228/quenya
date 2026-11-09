@@ -874,8 +874,19 @@ def test_tee_shop_configuration_parses_with_expected_market_settings():
         "pleasures",
         "neighborhood",
         "hockey",
+        "toteme",
+        "khaite",
+        "bode",
+        "fearofgod",
+        "charlesjeffrey",
+        "ceciliebahnsen",
+        "marineserre",
+        "fiorucci",
+        "mfpen",
+        "baumundpferdgarten",
     }
     assert by_key["neighborhood"]["currency"] == "JPY"
+    assert by_key["toteme"]["currency"] == "SEK"
 
 
 def test_shopify_gender_clothing_and_variant_availability():
