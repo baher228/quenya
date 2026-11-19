@@ -437,7 +437,7 @@ def test_stylist_repair_retries_once_with_original_and_invalid_reply(
     )
     monkeypatch.setattr(
         phase2_api.db, "live_catalogue_batches",
-        lambda: nullcontext([[items[0], items[1], replacement_shoes]])
+        lambda **_: nullcontext([[items[0], items[1], replacement_shoes]])
     )
     monkeypatch.setattr(phase2_api.db, "save_outfit", lambda *_args, **_kwargs: "outfit-1")
     calls = []
@@ -1173,7 +1173,7 @@ def test_swap_and_verdict_use_board_id_to_match_outfit(monkeypatch):
         lambda _kind: {"id": "board-a", "brief": _brief()},
     )
     monkeypatch.setattr(db, "get_outfit", lambda _outfit_id: outfit)
-    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext([[old, replacement]]))
+    monkeypatch.setattr(db, "live_catalogue_batches", lambda **_: nullcontext([[old, replacement]]))
     monkeypatch.setattr(db, "profile_swipe_items", lambda _profile_id: [])
     monkeypatch.setattr(
         db,

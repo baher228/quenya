@@ -304,6 +304,36 @@ def _preferred_brands(connection) -> None:
     )
 
 
+def _catalogue_filters(connection) -> None:
+    connection.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions")
+    connection.execute(
+        """CREATE OR REPLACE FUNCTION catalogue_search_text(
+               item_title text, item_brand text, tags jsonb
+           ) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+               SELECT LOWER(
+                   item_title || ' ' || COALESCE(tags ->> 'category', '') || ' '
+                   || COALESCE((
+                       SELECT string_agg(value, ' ' ORDER BY position)
+                       FROM jsonb_array_elements_text(
+                           CASE WHEN jsonb_typeof(tags -> 'aesthetics') = 'array'
+                                THEN tags -> 'aesthetics' ELSE '[]'::jsonb END
+                       ) WITH ORDINALITY AS a(value, position)
+                   ), '') || ' ' || COALESCE(item_brand, '')
+               )
+           $$"""
+    )
+    connection.execute(
+        f"""CREATE INDEX IF NOT EXISTS idx_items_live_search
+            ON items USING gin ({db._POSTGRES_SEARCH_TEXT} gin_trgm_ops)
+            WHERE {db._LIVE_CATALOGUE_FILTER}"""
+    )
+    connection.execute(
+        f"""CREATE INDEX IF NOT EXISTS idx_items_live_slot_price
+            ON items ({db._POSTGRES_ITEM_SLOT}, price_gbp)
+            WHERE {db._LIVE_CATALOGUE_FILTER}"""
+    )
+
+
 MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0001_baseline", _baseline),
     ("0002_jobs", _jobs),
@@ -311,6 +341,7 @@ MIGRATIONS: list[tuple[str, Callable[[Any], None]]] = [
     ("0004_vinted_privacy", _vinted_privacy),
     ("0005_cost_indexes", _cost_indexes),
     ("0006_preferred_brands", _preferred_brands),
+    ("0007_catalogue_filters", _catalogue_filters),
 ]
 LATEST_VERSION = MIGRATIONS[-1][0]
 
