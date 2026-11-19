@@ -5,6 +5,8 @@ import UIKit
 final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
     private let cache = NSCache<NSString, UIImage>()
+    private let lock = NSLock()
+    private var inFlight: [String: Task<UIImage?, Never>] = [:]
 
     init() {
         cache.totalCostLimit = 80 * 1024 * 1024
@@ -38,33 +40,44 @@ final class ImageCache: @unchecked Sendable {
 
     func load(_ url: URL, pixelBucket: Int = 800) async -> UIImage? {
         if let cached = image(for: url, pixelBucket: pixelBucket) { return cached }
+        let key = cacheKey(url, pixelBucket: pixelBucket)
+        let task = lock.withLock {
+            if let cached = cache.object(forKey: key) { return Task<UIImage?, Never> { cached } }
+            if let existing = inFlight[key as String] { return existing }
+            let task = Task.detached(priority: .userInitiated) {
+                let image = await self.download(url, pixelBucket: pixelBucket)
+                self.lock.withLock {
+                    if let image {
+                        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+                        self.cache.setObject(image, forKey: key, cost: cost)
+                    }
+                    self.inFlight[key as String] = nil
+                }
+                return image
+            }
+            inFlight[key as String] = task
+            return task
+        }
+        return await task.value
+    }
+
+    private func download(_ url: URL, pixelBucket: Int) async -> UIImage? {
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let image = await Task.detached(priority: .userInitiated) {
-                Self.downsample(data, maxPixelSize: pixelBucket)
-            }.value
-            guard let image else { return nil }
-            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-            cache.setObject(image, forKey: cacheKey(url, pixelBucket: pixelBucket), cost: cost)
-            return image
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return nil
+            }
+            return Self.downsample(data, maxPixelSize: pixelBucket)
         } catch {
             return nil
         }
     }
 
-    func prefetch(_ paths: [String?]) {
-        let urls = paths.compactMap { path -> URL? in
-            guard let path else { return nil }
-            if let url = URL(string: path), let scheme = url.scheme, ["http", "https"].contains(scheme) {
-                return url
-            }
-            return URL(string: path, relativeTo: AppConfig.baseURL)?.absoluteURL
-        }
-        Task {
-            await withTaskGroup(of: Void.self) { group in
-                for url in urls {
-                    group.addTask { _ = await self.load(url, pixelBucket: 800) }
-                }
+    func prefetch(_ paths: [String], pixelBucket: Int) async {
+        let urls = paths.compactMap { URL(string: $0, relativeTo: AppConfig.baseURL)?.absoluteURL }
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls {
+                group.addTaskUnlessCancelled { _ = await self.load(url, pixelBucket: pixelBucket) }
             }
         }
     }

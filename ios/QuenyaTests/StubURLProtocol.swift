@@ -39,6 +39,10 @@ final class StubURLProtocol: URLProtocol {
         return pending[path]?.count ?? 0
     }
 
+    static func firstPendingRequest(path: String) -> URLRequest? {
+        lock.withLock { pending[path]?.first?.request }
+    }
+
     static func completeNext(path: String, status: Int, json: String) {
         lock.lock()
         let protocolInstance = pending[path]?.isEmpty == false ? pending[path]?.removeFirst() : nil

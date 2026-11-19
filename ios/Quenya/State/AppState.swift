@@ -66,6 +66,9 @@ final class AppState {
     private var tasteRefreshID = UUID()
     private var outfitBuildID = UUID()
     private var deckLoadID = UUID()
+    @ObservationIgnored private var deckRequest: (styleId: String, userId: String, task: Task<Void, Never>)?
+    private static let deckPageSize = 20
+    private static let deckRefillThreshold = 10
     private var outfitGenerations: [String: UUID] = [:]
     private var outfitTasks: [String: [UUID: Task<Void, Error>]] = [:]
     private var outfitTaskBusyKeys: [String: [UUID: String]] = [:]
@@ -217,15 +220,11 @@ final class AppState {
             authPhase = .signedIn
             let boardsRefreshed = await refreshBoards()
             guard !Task.isCancelled, launchID == requestID else { return }
+            if let styleId = activeBoard?.id { startDeckFetch(for: styleId) }
             let tasteRefreshed = await refreshTaste()
             guard !Task.isCancelled, launchID == requestID else { return }
             syncBriefWithActiveBoard()
-            if boardsRefreshed && tasteRefreshed {
-                saveSessionSnapshot()
-                if let styleId = activeBoard?.id, !cache.snapshot(for: styleId).deck.isEmpty {
-                    await refreshDeckQuietly(maxAge: nil)
-                }
-            }
+            if boardsRefreshed && tasteRefreshed { saveSessionSnapshot() }
         } catch is CancellationError {
             return
         } catch let error as APIError where error.status == 401 {
@@ -432,6 +431,7 @@ final class AppState {
                     throw APIError(status: 0, message: "Select a style before updating.", requestIds: [])
                 }
                 result = try await self.api.updateBrief(boardId: board.id, brief: brief)
+                self.cancelDeckFetch()
                 self.cache.invalidate(board.id)
                 self.announce(result.taste)
             } else {
@@ -449,6 +449,7 @@ final class AppState {
                 Task { await self.pollFetch(jobId) }
             }
             if tasteRefreshed && boardsRefreshed { self.saveSessionSnapshot() }
+            if let styleId = self.activeBoard?.id { self.startDeckFetch(for: styleId) }
             self.deckKey += 1
             self.picking = false
             self.selectedTab = .swipe
@@ -485,48 +486,60 @@ final class AppState {
 
     func ensureDeck() async {
         guard let styleId = activeBoard?.id else { return }
-        if !cache.snapshot(for: styleId).deck.isEmpty {
-            deckLoading = false
-            deckError = nil
-            return
+        let waitingForFirstCard = cache.snapshot(for: styleId).deck.isEmpty
+        let fetch = startDeckFetch(for: styleId)
+        if waitingForFirstCard {
+            await fetch?.value
         }
-        guard !deckLoading else { return }
-        await fetchDeck(for: styleId, replacing: true)
     }
 
     func reloadDeck() async {
         guard let styleId = activeBoard?.id else { return }
-        await fetchDeck(for: styleId, replacing: true)
+        await startDeckFetch(for: styleId, force: true)?.value
     }
 
-    private func fetchDeck(for styleId: String, replacing: Bool) async {
-        guard let userId = cache.userId else { return }
+    @discardableResult
+    private func startDeckFetch(for styleId: String, force: Bool = false) -> Task<Void, Never>? {
+        guard let userId = cache.userId, activeBoard?.id == styleId else { return nil }
+        if let deckRequest {
+            if deckRequest.styleId == styleId && deckRequest.userId == userId { return deckRequest.task }
+            cancelDeckFetch()
+        }
+        let snapshot = cache.snapshot(for: styleId)
+        guard force || snapshot.deck.count <= Self.deckRefillThreshold else { return nil }
+        let excluded = snapshot.deck.map(\.id) + Array(snapshot.sentSwipeIds.suffix(24))
         let requestID = UUID()
         deckLoadID = requestID
         deckLoading = true
         deckError = nil
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.fetchDeck(for: styleId, userId: userId, requestID: requestID, excluded: excluded)
+        }
+        deckRequest = (styleId, userId, task)
+        return task
+    }
+
+    private func fetchDeck(for styleId: String, userId: String, requestID: UUID, excluded: [String]) async {
         defer {
-            if deckLoadID == requestID { deckLoading = false }
+            if deckLoadID == requestID {
+                deckRequest = nil
+                deckLoading = false
+            }
         }
 
         do {
-            let result = try await api.deck(n: 10, boardId: styleId)
+            guard !Task.isCancelled, cache.userId == userId else { return }
+            let result = try await api.deck(n: Self.deckPageSize, boardId: styleId, excludeIds: excluded)
             guard !Task.isCancelled,
                   deckLoadID == requestID,
                   cache.userId == userId,
                   activeBoard?.id == styleId else { return }
-            let sentSwipeIds = Set(cache.snapshot(for: styleId).sentSwipeIds)
             cache.update(styleId) { snapshot in
-                let fetched = result.filter { !sentSwipeIds.contains($0.id) }
-                if replacing {
-                    snapshot.deck = fetched
-                } else {
-                    let existing = Set(snapshot.deck.map(\.id))
-                    snapshot.deck.append(contentsOf: fetched.filter { !existing.contains($0.id) })
-                }
+                var seen = Set(snapshot.deck.map(\.id)).union(snapshot.sentSwipeIds)
+                snapshot.deck.append(contentsOf: result.filter { seen.insert($0.id).inserted })
                 snapshot.deckFetchedAt = Date()
             }
-            ImageCache.shared.prefetch(cache.snapshot(for: styleId).deck.map(\.imagePath))
         } catch is CancellationError {
             return
         }
@@ -542,56 +555,47 @@ final class AppState {
     }
 
     func refreshDeckQuietly(maxAge: TimeInterval?) async {
-        guard let styleId = activeBoard?.id, let userId = cache.userId else { return }
-        let beforeFetch = cache.snapshot(for: styleId)
+        guard let styleId = activeBoard?.id else { return }
         if let maxAge,
-           let fetchedAt = beforeFetch.deckFetchedAt,
+           let fetchedAt = cache.snapshot(for: styleId).deckFetchedAt,
            Date().timeIntervalSince(fetchedAt) < maxAge {
             return
         }
-        if deckLoading && beforeFetch.deck.isEmpty { return }
+        await startDeckFetch(for: styleId)?.value
+    }
 
-        do {
-            let result = try await api.deck(n: 10, boardId: styleId)
-            guard !Task.isCancelled,
-                  cache.userId == userId,
-                  activeBoard?.id == styleId else { return }
-            var added: [Item] = []
-            cache.update(styleId) { snapshot in
-                let excluded = Set(snapshot.deck.map(\.id)).union(snapshot.sentSwipeIds)
-                added = result.filter { !excluded.contains($0.id) }
-                snapshot.deck.append(contentsOf: added)
-                snapshot.deckFetchedAt = Date()
-            }
-            ImageCache.shared.prefetch(added.map(\.imagePath))
-        } catch is CancellationError {
-            return
-        } catch {
-            if activeBoard?.id == styleId,
-               cache.userId == userId,
-               cache.snapshot(for: styleId).deck.isEmpty {
-                deckError = error.localizedDescription
-            }
-        }
+    func commitSwipe(_ item: Item, liked: Bool) {
+        guard let styleId = activeBoard?.id, let userId = cache.userId,
+              cache.snapshot(for: styleId).deck.contains(where: { $0.id == item.id }) else { return }
+        recordSwipe(item, styleId: styleId)
+        startDeckFetch(for: styleId)
+        Task { await self.saveSwipe(item, liked: liked, styleId: styleId, userId: userId) }
     }
 
     func swipe(_ item: Item, liked: Bool) async {
-        guard let styleId = activeBoard?.id else { return }
+        guard let styleId = activeBoard?.id, let userId = cache.userId else { return }
         if !cache.snapshot(for: styleId).sentSwipeIds.contains(item.id) {
             recordSwipe(item, styleId: styleId)
         }
+        await saveSwipe(item, liked: liked, styleId: styleId, userId: userId)
+    }
+
+    private func saveSwipe(_ item: Item, liked: Bool, styleId: String, userId: String) async {
+        guard cache.userId == userId else { return }
         do {
             let result = try await api.swipe(
                 itemId: item.id,
                 liked: liked,
                 boardId: styleId
             )
+            guard cache.userId == userId else { return }
             if activeBoard?.id == styleId, var updatedTaste = taste {
                 updatedTaste.counts["swipes_since_update"] = result.swipesSinceUpdate
                 taste = updatedTaste
             }
             if result.updateDue && !updating { await runUpdate(styleId: styleId) }
         } catch {
+            guard cache.userId == userId else { return }
             cache.update(styleId) { snapshot in
                 snapshot.sentSwipeIds.removeAll { $0 == item.id }
                 if !snapshot.deck.contains(where: { $0.id == item.id }) {
@@ -840,7 +844,7 @@ final class AppState {
     }
 
     func boardChanged() {
-        deckLoadID = UUID()
+        cancelDeckFetch()
         outfitBuildID = UUID()
         for (styleId, tasks) in outfitTasks {
             for (generation, task) in tasks {
@@ -858,6 +862,7 @@ final class AppState {
         outfitError = nil
         outfitLoading = false
         deckKey += 1
+        if let styleId = activeBoard?.id { startDeckFetch(for: styleId) }
         Task {
             async let tasteTask = refreshTaste()
             async let boardsTask = refreshBoards()
@@ -908,6 +913,7 @@ final class AppState {
     }
 
     private func resetPerUserState() {
+        cancelDeckFetch()
         user = nil
         boards = []
         taste = nil
@@ -923,7 +929,6 @@ final class AppState {
         fetchNote = nil
         toast = nil
         presentedSheet = nil
-        deckLoadID = UUID()
         outfitBuildID = UUID()
         deckKey += 1
     }
@@ -938,5 +943,12 @@ final class AppState {
                 self.authPhase = .signedOut(nil)
             }
         }
+    }
+
+    private func cancelDeckFetch() {
+        deckLoadID = UUID()
+        deckRequest?.task.cancel()
+        deckRequest = nil
+        deckLoading = false
     }
 }

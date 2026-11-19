@@ -1251,6 +1251,11 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
         for item in result
         if item["explore"]
     )
+    queued_ids = [item["id"] for item in result]
+    next_page = phase2_api.deck(10, exclude_ids=queued_ids)
+    assert len(next_page) == 10
+    assert set(queued_ids).isdisjoint(item["id"] for item in next_page)
+    assert db.profile_swipes("board") == []
 
 
 def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
