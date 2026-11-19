@@ -300,6 +300,28 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.busy.isBusy("outfits.build"))
     }
 
+    func testDeckBuildStartsWhileTasteUpdateIsPending() async {
+        let (state, session) = makeState()
+        defer { session.invalidateAndCancel() }
+        let board = makeBoard("board-a", active: true)
+        state.cache.activate(userId: "deck-build-\(UUID().uuidString)")
+        state.boards = [board]
+        let tastePath = "/api/taste/update"
+        let jobsPath = "/api/outfits/jobs"
+        StubURLProtocol.setResponse(json: "{}")
+        StubURLProtocol.holdRequests(path: tastePath)
+        StubURLProtocol.holdRequests(path: jobsPath)
+
+        let build = Task { await state.deckDone() }
+        await waitForPending(path: tastePath, count: 1)
+        await waitForPending(path: jobsPath, count: 1)
+        XCTAssertEqual(state.selectedTab, .outfits)
+        XCTAssertTrue(state.outfitLoading)
+        StubURLProtocol.completeNext(path: tastePath, status: 409, json: "{}")
+        StubURLProtocol.completeNext(path: jobsPath, status: 409, json: "{}")
+        await build.value
+    }
+
     func testRebuildRequestKeepsCapturedBoardAfterSwitch() async throws {
         let (state, session) = makeState()
         defer { session.invalidateAndCancel() }

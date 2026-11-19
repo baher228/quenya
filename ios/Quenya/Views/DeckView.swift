@@ -70,7 +70,7 @@ struct DeckView: View {
                 ZStack {
                     if state.deck.isEmpty && state.deckLoading {
                         LoadingLabel(title: "Picking pieces for you", dark: true)
-                    } else if let error = state.deckError {
+                    } else if state.deck.isEmpty, let error = state.deckError {
                         ErrorPanel(message: error) { Task { await state.reloadDeck() } }
                             .padding(.horizontal, 12)
                     } else if state.deck.isEmpty {

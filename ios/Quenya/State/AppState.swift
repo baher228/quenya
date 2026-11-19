@@ -624,10 +624,10 @@ final class AppState {
     }
 
     func deckDone() async {
-        let styleId = activeBoard?.id
-        await runUpdate(styleId: styleId)
-        guard activeBoard?.id == styleId else { return }
+        guard let styleId = activeBoard?.id else { return }
+        async let tasteUpdate: Void = runUpdate(styleId: styleId)
         await buildOutfits()
+        await tasteUpdate
     }
 
     func dismissTasteUpdateError() { tasteUpdateError = nil }
@@ -635,17 +635,19 @@ final class AppState {
     func runUpdate(styleId: String? = nil) async {
         guard !updating, !busy.isBusy("taste.update") else { return }
         let requestStyleId = styleId ?? activeBoard?.id
+        let requestUserId = cache.userId
         updating = true
         tasteUpdateError = nil
         let completed = await busy.run("taste.update") {
             do {
                 let result = try await self.api.updateTaste(boardId: requestStyleId)
+                guard self.cache.userId == requestUserId, self.activeBoard?.id == requestStyleId else { return }
                 self.announce(result, styleId: requestStyleId)
             }
             catch let error as APIError where error.status == 409 { }
             catch { throw error }
         }
-        if !completed {
+        if !completed, cache.userId == requestUserId, activeBoard?.id == requestStyleId {
             tasteUpdateError = "Couldn't update your taste just now. Your swipes are saved, so try again in a minute."
         }
         updating = false
