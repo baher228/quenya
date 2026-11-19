@@ -318,6 +318,10 @@ def score_item(item: dict[str, Any], profile: dict[str, Any]) -> float:
     )
 
 
+def item_price_ceiling(brief: dict[str, Any], profile: dict[str, Any]) -> float:
+    return float(profile.get("price_ceiling_gbp") or brief.get("budget_gbp") or 0) * 0.6
+
+
 def eligible(
     item: dict[str, Any],
     brief: dict[str, Any],
@@ -354,8 +358,7 @@ def eligible(
     if condition != "both" and tags.get("condition") != condition:
         return False
     price = item.get("price_gbp")
-    ceiling = float(profile.get("price_ceiling_gbp") or brief.get("budget_gbp") or 0)
-    if price is None or float(price) > ceiling * 0.6:
+    if price is None or float(price) > item_price_ceiling(brief, profile):
         return False
     if brief.get("looking_for") == "pieces":
         requested = set(brief.get("pieces") or [])

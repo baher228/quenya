@@ -989,20 +989,52 @@ def _load_live_catalogue() -> list[dict[str, Any]]:
     return _live_catalogue_items()
 
 
+_POSTGRES_ITEM_SLOT = "(tags_json::jsonb ->> 'slot')"
+_POSTGRES_SEARCH_TEXT = "catalogue_search_text(title, brand, tags_json::jsonb)"
+
+
 @contextmanager
-def live_catalogue_batches(batch_size: int = 2000):
+def live_catalogue_batches(
+    batch_size: int = 2000,
+    *,
+    slot: str | None = None,
+    max_price_gbp: float | None = None,
+    search: str | None = None,
+):
     """Stream one catalogue snapshot, closing the transaction before model work."""
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     init_db()
     sql = f"SELECT {_LIVE_CATALOGUE_COLUMNS} FROM items WHERE {_LIVE_CATALOGUE_FILTER}"
+    params: list[Any] = []
     with db_connection() as connection:
-        if isinstance(connection, _PostgresConnection):
+        postgres = isinstance(connection, _PostgresConnection)
+        if slot is not None:
+            slot_expr = _POSTGRES_ITEM_SLOT if postgres else "json_extract(tags_json, '$.slot')"
+            sql += f" AND {slot_expr} = ?"
+            params.append(slot)
+        if max_price_gbp is not None:
+            sql += " AND price_gbp <= ?"
+            params.append(max_price_gbp)
+        if search is not None:
+            pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+            search_text = _POSTGRES_SEARCH_TEXT if postgres else """LOWER(
+                title || ' ' || COALESCE(json_extract(tags_json, '$.category'), '')
+                || ' ' || COALESCE((
+                    SELECT group_concat(value, ' ')
+                    FROM json_each(items.tags_json, '$.aesthetics')
+                ), '') || ' ' || COALESCE(brand, ''))"""
+            sql += f" AND {search_text} LIKE ? ESCAPE '!'"
+            params.append(pattern)
+        if postgres:
             cursor = connection.server_cursor()
         else:
             cursor = connection.cursor()
         try:
-            cursor.execute(sql)
+            if postgres:
+                cursor.execute(connection._translate(sql, params), params or None)
+            else:
+                cursor.execute(sql, params)
 
             def batches():
                 while rows := cursor.fetchmany(batch_size):
@@ -1162,46 +1194,6 @@ def live_catalogue(
 
 def deck_catalogue() -> list[dict[str, Any]]:
     return _DECK_CATALOGUE.get(_load_deck_catalogue)
-
-
-def search_catalogue(
-    needle: str,
-    *,
-    slot: str | None = None,
-    limit: int = 100,
-) -> list[dict[str, Any]]:
-    """SQL-backed title/brand search over the live tagged catalogue."""
-    init_db()
-    needle = needle.strip().lower()
-    if not needle:
-        return []
-    limit = max(1, min(int(limit), 500))
-    pattern = f"%{needle}%"
-    params: list[Any] = [pattern, pattern]
-    postgres = bool(os.getenv("QUENYA_DATABASE_URL"))
-    slot_clause = ""
-    if slot:
-        if postgres:
-            slot_clause = " AND tags_json::jsonb ->> 'slot' = ?"
-        else:
-            slot_clause = " AND json_extract(tags_json, '$.slot') = ?"
-        params.append(slot)
-    params.append(limit)
-    sql = (
-        f"SELECT {_LIVE_CATALOGUE_COLUMNS} FROM items "
-        f"WHERE {_LIVE_CATALOGUE_FILTER} "
-        "AND (LOWER(title) LIKE ? OR LOWER(COALESCE(brand, '')) LIKE ?)"
-        f"{slot_clause} "
-        "ORDER BY fetched_at DESC LIMIT ?"
-    )
-    with db_connection() as connection:
-        rows = connection.execute(sql, params).fetchall()
-    catalogue = []
-    for row in rows:
-        item = dict(row)
-        item["tags"] = json.loads(item["tags_json"])
-        catalogue.append(item)
-    return catalogue
 
 
 def catalogue_brands(*, query: str | None = None, limit: int = 40) -> list[str]:

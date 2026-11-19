@@ -48,6 +48,7 @@ from app.rank import (
     add_exploration,
     drop_lookalikes,
     image_key,
+    item_price_ceiling,
     make_deck,
     product_key,
     rank_items,
@@ -1589,6 +1590,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     if not replaced:
         raise HTTPException(status_code=400, detail="Item is not in this outfit")
     slot = tags_for(replaced).get("slot")
+    role = layer_role(replaced)
     current = _taste(active["id"])
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
@@ -1603,7 +1605,7 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     def valid_candidate(item):
         if (
             tags_for(item).get("slot") != slot
-            or layer_role(item) != layer_role(replaced)
+            or layer_role(item) != role
             or not is_outfit_eligible(item)
             or item["id"] in outfit["piece_ids"]
         ):
@@ -1627,7 +1629,8 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
     candidates = []
     # At most this many excluded pieces can precede the next usable candidate.
     retain = len(set(body.exclude_ids)) + 1
-    with db.live_catalogue_batches() as batches:
+    price_cap = item_price_ceiling(active["brief"], current)
+    with db.live_catalogue_batches(slot=slot, max_price_gbp=price_cap) as batches:
         for batch in batches:
             items = _fitting_sizes([item for item in batch if keep(item)], active["brief"])
             ranked = rank_items(
@@ -1638,11 +1641,11 @@ def swap(outfit_id: str, body: SwapRequest) -> dict[str, Any]:
             for item in ranked:
                 if not valid_candidate(item):
                     continue
-                subtype = base_layer_subtype(item) if layer_role(replaced) == "base" else "all"
+                subtype = base_layer_subtype(item) if role == "base" else "all"
                 if counts.get(subtype, 0) < retain:
                     candidates.append(item)
                     counts[subtype] = counts.get(subtype, 0) + 1
-    if layer_role(replaced) == "base":
+    if role == "base":
         candidates = _interleave_base_candidates(candidates)
     replacement = next(
         (item for item in candidates if item["id"] not in excluded_ids),
@@ -1749,30 +1752,12 @@ def keyword_search(q: str, slot: str | None = None, limit: int = 20) -> list[dic
     core = _core()
     core_profile = as_profile(core) if SHARED_CORE_ENABLED else None
     ranked = []
-    # Prefer SQL title/brand prefilter when the catalogue is large; always fall
-    # back to the streaming aesthetic/category scan so ranking stays identical.
-    sql_matches = {
-        item["id"]: item
-        for item in db.search_catalogue(
-            needle, slot=slot, limit=max(1, min(limit, 100)) * 5
-        )
-    }
-    with db.live_catalogue_batches() as batches:
+    count = max(1, min(limit, 100))
+    with db.live_catalogue_batches(slot=slot, search=needle) as batches:
         for batch in batches:
-            matches = [
-                item for item in batch
-                if (
-                    item["id"] in sql_matches
-                    or needle in " ".join(
-                        [item["title"], str(tags_for(item).get("category", ""))]
-                        + list(tags_for(item).get("aesthetics", []))
-                    ).lower()
-                )
-                and (slot is None or tags_for(item).get("slot") == slot)
-            ]
             ranked = rank_items(
-                [*ranked, *matches], active["brief"], current, core_profile=core_profile,
-            )[:max(1, min(limit, 100))]
+                [*ranked, *batch], active["brief"], current, core_profile=core_profile,
+            )[:count]
     return [_public_item(item) for item in ranked]
 
 
