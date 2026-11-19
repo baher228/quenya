@@ -11,7 +11,7 @@ from time import monotonic, sleep
 from typing import Annotated, Any
 
 import numpy as np
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image, ImageOps
 
@@ -1152,6 +1152,7 @@ def deck(
     n: int = 10,
     background_tasks: BackgroundTasks = None,
     board_id: str | None = None,
+    exclude_ids: Annotated[list[str] | None, Query(max_length=64)] = None,
 ) -> list[dict[str, Any]]:
     if n < 1 or n > 50:
         raise HTTPException(status_code=422, detail="n must be between 1 and 50")
@@ -1176,6 +1177,7 @@ def deck(
     _schedule_vinted_refill(
         active, share, profile_live_items, swiped, background_tasks
     )
+    excluded = swiped.union(exclude_ids or ())
     configured_arm = os.getenv("QUENYA_RANKER", "ab").lower()
     arm = (
         configured_arm
@@ -1190,7 +1192,7 @@ def deck(
         candidates,
         active["brief"],
         taste,
-        exclude_ids=swiped,
+        exclude_ids=excluded,
         core_profile=as_profile(core) if SHARED_CORE_ENABLED else None,
         swipe_count=swipe_count,
     )
@@ -1294,7 +1296,7 @@ def deck(
     )
     if share > 0:
         explored_deck = _ensure_live_vinted_items(
-            explored_deck, ranked, profile_live_items, swiped
+            explored_deck, ranked, profile_live_items, excluded
         )
     now = db.now_iso()
     db.record_deck_events([

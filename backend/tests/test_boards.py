@@ -4,9 +4,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
-from app import db, phase2_api, routing, taste
+from app import accounts, db, phase2_api, routing, taste
 from app.config import CONTEXT_SOURCES
 from app.core import as_profile, shared_core
 from app.outfits import build_pool, stylist_user_content, validate_outfits
@@ -1251,6 +1252,19 @@ def test_deck_endpoint_marks_exploration_and_keeps_budget_and_unique_ids(
         for item in result
         if item["explore"]
     )
+    queued_ids = [item["id"] for item in result]
+    app = FastAPI()
+    app.include_router(phase2_api.router)
+    _, invite = accounts.create_user("Deck tester")
+    headers = {"Authorization": f"Bearer {accounts.redeem_invite(invite)}"}
+    with TestClient(app, headers=headers) as client:
+        page = client.get("/api/deck", params=[("exclude_ids", item_id) for item_id in queued_ids])
+        assert page.status_code == 200
+        next_page = page.json()
+        assert client.get("/api/deck", params={"exclude_ids": ["item"] * 65}).status_code == 422
+    assert len(next_page) == 10
+    assert set(queued_ids).isdisjoint(item["id"] for item in next_page)
+    assert db.profile_swipes("board") == []
 
 
 def test_embed_deck_uses_targeted_vectors_without_full_embedding_load(
