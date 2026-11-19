@@ -66,6 +66,37 @@ final class StyleCacheTests: XCTestCase {
         await cache.flush()
     }
 
+    func testFailedSwipeRestoresCardAfterRefillFails() async {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+        let card = item("last-card")
+        cache.update("b1") { $0.deck = [card] }
+        let (state, session) = makeState(cache: cache)
+        defer { session.invalidateAndCancel() }
+        state.user = user()
+        state.boards = [board(id: "b1", active: true)]
+        let swipePath = "/api/swipe"
+        let deckPath = "/api/deck"
+        StubURLProtocol.setResponse(json: "{}")
+        StubURLProtocol.holdRequests(path: swipePath)
+        StubURLProtocol.holdRequests(path: deckPath)
+
+        state.commitSwipe(card, liked: true)
+        XCTAssertTrue(state.deck.isEmpty)
+        await waitUntil { StubURLProtocol.pendingCount(path: deckPath) == 1 }
+        StubURLProtocol.completeNext(path: deckPath, status: 503, json: "{}")
+        await waitUntil { state.deckError != nil }
+        await waitUntil { StubURLProtocol.pendingCount(path: swipePath) == 1 }
+        StubURLProtocol.completeNext(path: swipePath, status: 503, json: "{}")
+        await waitUntil { !state.deck.isEmpty }
+        XCTAssertEqual(state.deck.map(\.id), [card.id])
+        XCTAssertEqual(state.swipedCount, 0)
+        XCTAssertTrue(cache.snapshot(for: "b1").sentSwipeIds.isEmpty)
+        await cache.flush()
+    }
+
     private func waitUntil(_ condition: () -> Bool) async {
         for _ in 0..<200 {
             if condition() { return }

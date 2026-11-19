@@ -104,7 +104,7 @@ final class AppStateTests: XCTestCase {
             await state.swipe(Item(id: "item-1", title: "Jacket"), liked: true)
         }
         await waitForPending(path: "/api/swipe", count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        XCTAssertEqual(try boardIdInPendingRequest(path: "/api/swipe"), boardA.id)
 
         state.boards = [
             makeBoard(boardA.id, active: false),
@@ -132,7 +132,7 @@ final class AppStateTests: XCTestCase {
 
         let updateTask = Task { await state.runUpdate() }
         await waitForPending(path: "/api/taste/update", count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        XCTAssertEqual(try boardIdInPendingRequest(path: "/api/taste/update"), boardA.id)
 
         state.boards = [
             makeBoard(boardA.id, active: false),
@@ -221,7 +221,7 @@ final class AppStateTests: XCTestCase {
 
         let swapTask = Task { await state.swapOutfit(original, item: item, styleId: boardA.id) }
         await waitForPending(path: path, count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        XCTAssertEqual(try boardIdInPendingRequest(path: path), boardA.id)
         _ = await state.activateFromStrip(boardB)
         StubURLProtocol.completeNext(path: path, status: 200, json: try json(swapped))
         let swapSucceeded = await swapTask.value
@@ -242,27 +242,28 @@ final class AppStateTests: XCTestCase {
         state.cache.activate(userId: "test-\(UUID().uuidString)")
         state.cache.update(board.id) { $0.outfits = [first, second] }
         state.boards = [board]
+        let jobs = "/api/outfits/jobs"
+        let oldJob = "\(jobs)/old"
+        let newJob = "\(jobs)/new"
         StubURLProtocol.setResponse(json: "{}")
-        StubURLProtocol.holdRequests(path: "/api/outfits")
+        StubURLProtocol.holdRequests(path: jobs)
+        StubURLProtocol.holdRequests(path: oldJob)
+        StubURLProtocol.holdRequests(path: newJob)
 
         let firstTask = Task { await state.rebuildOutfit(first, styleId: board.id) }
-        await waitForPending(path: "/api/outfits", count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), board.id)
+        await waitForPending(path: jobs, count: 1)
+        XCTAssertEqual(try boardIdInPendingRequest(path: jobs), board.id)
         let secondTask = Task { await state.rebuildOutfit(second, styleId: board.id) }
-        await waitForPending(path: "/api/outfits", count: 2)
-        XCTAssertEqual(try boardIdInLastRequest(), board.id)
-        StubURLProtocol.completeLast(
-            path: "/api/outfits",
-            status: 200,
-            json: try json(OutfitsResponse(outfits: [newest]))
-        )
+        await waitForPending(path: jobs, count: 2)
+        XCTAssertEqual(try boardIdInPendingRequest(path: jobs), board.id)
+        StubURLProtocol.completeLast(path: jobs, status: 202, json: #"{"job_id":"new"}"#)
+        StubURLProtocol.completeNext(path: jobs, status: 202, json: #"{"job_id":"old"}"#)
+        await waitForPending(path: newJob, count: 1)
+        await waitForPending(path: oldJob, count: 1)
+        try completeOutfitJob(path: newJob, outfit: newest)
         let secondSucceeded = await secondTask.value
         XCTAssertTrue(secondSucceeded)
-        StubURLProtocol.completeNext(
-            path: "/api/outfits",
-            status: 200,
-            json: try json(OutfitsResponse(outfits: [stale]))
-        )
+        try completeOutfitJob(path: oldJob, outfit: stale)
         let firstSucceeded = await firstTask.value
         XCTAssertTrue(firstSucceeded)
 
@@ -273,6 +274,7 @@ final class AppStateTests: XCTestCase {
 
     func testBuildFinishingAfterBoardSwitchDoesNotPopulateNewBoard() async throws {
         let (state, session) = makeState()
+        defer { session.invalidateAndCancel() }
         let boardA = makeBoard("board-a", active: true)
         let boardB = makeBoard("board-b", active: true)
         let generated = makeOutfit(id: "generated", title: "Generated for A")
@@ -280,18 +282,19 @@ final class AppStateTests: XCTestCase {
         state.cache.update(boardA.id) { $0.outfits = [] }
         state.cache.update(boardB.id) { $0.outfits = [] }
         state.boards = [boardA, boardB]
+        let jobs = "/api/outfits/jobs"
+        let job = "\(jobs)/build"
         StubURLProtocol.setResponse(json: "{}")
-        StubURLProtocol.holdRequests(path: "/api/outfits")
+        StubURLProtocol.holdRequests(path: jobs)
+        StubURLProtocol.holdRequests(path: job)
 
         let buildTask = Task { await state.buildOutfits() }
-        await waitForPending(path: "/api/outfits", count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        await waitForPending(path: jobs, count: 1)
+        XCTAssertEqual(try boardIdInPendingRequest(path: jobs), boardA.id)
+        StubURLProtocol.completeNext(path: jobs, status: 202, json: #"{"job_id":"build"}"#)
+        await waitForPending(path: job, count: 1)
         _ = await state.activateFromStrip(boardB)
-        StubURLProtocol.completeNext(
-            path: "/api/outfits",
-            status: 200,
-            json: try json(OutfitsResponse(outfits: [generated]))
-        )
+        try completeOutfitJob(path: job, outfit: generated)
         await buildTask.value
 
         XCTAssertEqual(state.activeBoard?.id, boardB.id)
@@ -332,16 +335,18 @@ final class AppStateTests: XCTestCase {
         state.cache.update(boardA.id) { $0.outfits = [outfit] }
         state.cache.update(boardB.id) { $0.outfits = [] }
         state.boards = [boardA, boardB]
+        let jobs = "/api/outfits/jobs"
         StubURLProtocol.setResponse(json: "{}")
-        StubURLProtocol.holdRequests(path: "/api/outfits")
+        StubURLProtocol.holdRequests(path: jobs)
 
         let rebuildTask = Task {
             await state.rebuildOutfit(outfit, styleId: boardA.id)
         }
-        await waitForPending(path: "/api/outfits", count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        await waitForPending(path: jobs, count: 1)
+        XCTAssertEqual(try boardIdInPendingRequest(path: jobs), boardA.id)
 
         _ = await state.activateFromStrip(boardB)
+        StubURLProtocol.completeNext(path: jobs, status: 409, json: "{}")
         await rebuildTask.value
 
         XCTAssertEqual(state.activeBoard?.id, boardB.id)
@@ -366,7 +371,7 @@ final class AppStateTests: XCTestCase {
             await state.verdict(outfit, like: true, styleId: boardA.id)
         }
         await waitForPending(path: path, count: 1)
-        XCTAssertEqual(try boardIdInLastRequest(), boardA.id)
+        XCTAssertEqual(try boardIdInPendingRequest(path: path), boardA.id)
 
         _ = await state.activateFromStrip(boardB)
         let responseOutfit = makeOutfit(id: outfit.id, title: "Loved")
@@ -416,15 +421,20 @@ final class AppStateTests: XCTestCase {
     }
 
     private func waitForPending(path: String, count: Int) async {
-        for _ in 0..<200 {
+        for _ in 0..<400 {
             if StubURLProtocol.pendingCount(path: path) >= count { return }
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTFail("Timed out waiting for \(count) \(path) requests")
     }
 
-    private func boardIdInLastRequest() throws -> String? {
-        let body = try XCTUnwrap(StubURLProtocol.lastBody)
+    private func completeOutfitJob(path: String, outfit: Outfit) throws {
+        let result = try json(OutfitsResponse(outfits: [outfit]))
+        StubURLProtocol.completeNext(path: path, status: 200, json: #"{"status":"done","result":\#(result)}"#)
+    }
+
+    private func boardIdInPendingRequest(path: String) throws -> String? {
+        let body = try XCTUnwrap(StubURLProtocol.lastPendingBody(path: path))
         let payload = try XCTUnwrap(
             JSONSerialization.jsonObject(with: body) as? [String: Any]
         )
