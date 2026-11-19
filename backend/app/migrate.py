@@ -306,6 +306,11 @@ def _preferred_brands(connection) -> None:
 
 def _catalogue_filters(connection) -> None:
     connection.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions")
+    trgm_schema = connection.execute(
+        """SELECT quote_ident(nspname) AS schema_name
+           FROM pg_extension JOIN pg_namespace ON extnamespace = pg_namespace.oid
+           WHERE extname = 'pg_trgm'"""
+    ).fetchone()["schema_name"]
     connection.execute(
         """CREATE OR REPLACE FUNCTION catalogue_search_text(
                item_title text, item_brand text, tags jsonb
@@ -324,7 +329,7 @@ def _catalogue_filters(connection) -> None:
     )
     connection.execute(
         f"""CREATE INDEX IF NOT EXISTS idx_items_live_search
-            ON items USING gin ({db._POSTGRES_SEARCH_TEXT} gin_trgm_ops)
+            ON items USING gin ({db._POSTGRES_SEARCH_TEXT} {trgm_schema}.gin_trgm_ops)
             WHERE {db._LIVE_CATALOGUE_FILTER}"""
     )
     connection.execute(
