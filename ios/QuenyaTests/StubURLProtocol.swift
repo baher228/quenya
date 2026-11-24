@@ -15,6 +15,7 @@ final class StubURLProtocol: URLProtocol {
     private(set) static var lastRequest: URLRequest?
     private(set) static var lastBody: Data?
     private var stopped = false
+    private var capturedBody: Data?
 
     static func setResponse(status: Int = 200, json: String, headers: [String: String] = ["Content-Type": "application/json"]) {
         lock.lock()
@@ -37,6 +38,14 @@ final class StubURLProtocol: URLProtocol {
         lock.lock()
         defer { lock.unlock() }
         return pending[path]?.count ?? 0
+    }
+
+    static func firstPendingRequest(path: String) -> URLRequest? {
+        lock.withLock { pending[path]?.first?.request }
+    }
+
+    static func lastPendingBody(path: String) -> Data? {
+        lock.withLock { pending[path]?.last?.capturedBody }
     }
 
     static func completeNext(path: String, status: Int, json: String) {
@@ -99,6 +108,7 @@ final class StubURLProtocol: URLProtocol {
 
     override func startLoading() {
         let body = Self.readBody(from: request)
+        capturedBody = body
         Self.record(request, body: body)
         if let error = Self.failure() {
             client?.urlProtocol(self, didFailWithError: error)

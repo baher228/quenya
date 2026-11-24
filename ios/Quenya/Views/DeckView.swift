@@ -3,6 +3,7 @@ import UIKit
 
 struct DeckView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.displayScale) private var displayScale
     @State private var selectedItem: Item?
     @State private var swipeCommand: SwipeCommand?
     @State private var learnedExpanded = false
@@ -64,10 +65,12 @@ struct DeckView: View {
             }
 
             GeometryReader { geometry in
+                let bucket = ImageCache.pixelBucket(for: geometry.size, scale: displayScale)
+                let ahead = state.deck.dropFirst(3).prefix(3).compactMap(\.imagePath)
                 ZStack {
                     if state.deck.isEmpty && state.deckLoading {
                         LoadingLabel(title: "Picking pieces for you", dark: true)
-                    } else if let error = state.deckError {
+                    } else if state.deck.isEmpty, let error = state.deckError {
                         ErrorPanel(message: error) { Task { await state.reloadDeck() } }
                             .padding(.horizontal, 12)
                     } else if state.deck.isEmpty {
@@ -83,7 +86,7 @@ struct DeckView: View {
                                 PillButton(title: "Build outfits", primary: true, dark: true) {
                                     Task { await state.deckDone() }
                                 }
-                                PillButton(title: "10 more cards", dark: true) { Task { await state.reloadDeck() } }
+                                PillButton(title: "More cards", dark: true) { Task { await state.reloadDeck() } }
                             } else {
                                 Text("Still fetching pieces.")
                                     .font(.system(size: 20, weight: .semibold))
@@ -116,12 +119,20 @@ struct DeckView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task(id: PrefetchKey(paths: ahead, bucket: bucket)) {
+                    await ImageCache.shared.prefetch(ahead, pixelBucket: bucket)
+                }
             }
             .frame(minHeight: 300)
 
-            if !state.deck.isEmpty && !state.deckLoading {
+            if !state.deck.isEmpty {
                 HStack {
                     Text("← Pass")
+                    Spacer()
+                    if state.swipedCount > 0 {
+                        Button("Build outfits") { Task { await state.deckDone() } }
+                            .foregroundStyle(QuenyaTheme.sage)
+                    }
                     Spacer()
                     Text("Keep →")
                 }
@@ -199,10 +210,14 @@ struct DeckView: View {
     private func commit(_ item: Item, liked: Bool) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-            state.recordSwipe(item)
-            Task { await state.swipe(item, liked: liked) }
+            state.commitSwipe(item, liked: liked)
         }
     }
+}
+
+private struct PrefetchKey: Equatable {
+    let paths: [String]
+    let bucket: Int
 }
 
 private struct TasteDots: View {

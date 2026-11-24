@@ -25,8 +25,10 @@ struct OutfitsView: View {
                 if state.outfitLoading {
                     LoadingLabel(title: "Styling outfits from your pool", dark: true)
                     SlowHint()
-                    OutfitSkeletonCard()
-                    OutfitSkeletonCard()
+                    if state.outfits.isEmpty {
+                        OutfitSkeletonCard()
+                        OutfitSkeletonCard()
+                    }
                     PillButton(
                         title: state.outfits.isEmpty ? "Build outfits" : "New set from taste v\(state.currentVersion.map(String.init) ?? "–")",
                         primary: state.outfits.isEmpty,

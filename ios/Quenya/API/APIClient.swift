@@ -69,9 +69,13 @@ final class APIClient {
         try await postEmpty("/api/boards/\(escaped(id))/activate")
     }
 
-    func deck(n: Int = 10, boardId: String? = nil) async throws -> [Item] {
-        let boardQuery = boardId.map { "&board_id=\(escaped($0))" } ?? ""
-        let data = try await request(path: "/api/deck?n=\(n)\(boardQuery)", method: "GET")
+    func deck(n: Int = 10, boardId: String? = nil, excludeIds: [String] = []) async throws -> [Item] {
+        var query = URLComponents()
+        query.path = "/api/deck"
+        query.queryItems = [URLQueryItem(name: "n", value: String(n))]
+        if let boardId { query.queryItems?.append(URLQueryItem(name: "board_id", value: boardId)) }
+        query.queryItems?.append(contentsOf: excludeIds.prefix(64).map { URLQueryItem(name: "exclude_ids", value: $0) })
+        let data = try await request(path: query.string ?? "/api/deck", method: "GET")
         if let items = try? decoder.decode([Item].self, from: data) { return items }
         return try decoder.decode(ItemList.self, from: data).items
     }

@@ -135,6 +135,7 @@ final class StyleCache {
     }
 
     func activate(userId: String) {
+        guard self.userId != userId else { return }
         let storedUserIds = [self.userId, loadSession()?.userId].compactMap { $0 }
         if storedUserIds.contains(where: { $0 != userId }) {
             clear()

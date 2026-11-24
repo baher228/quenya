@@ -9,7 +9,7 @@ final class StyleCacheTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = StyleCache(directory: directory)
         cache.activate(userId: "u1")
-        cache.update("b1") { $0.deck = [item("one"), item("two")] }
+        cache.update("b1") { $0.deck = (1...20).map { item("item-\($0)") } }
 
         let (state, session) = makeState(cache: cache)
         defer { session.invalidateAndCancel() }
@@ -20,7 +20,89 @@ final class StyleCacheTests: XCTestCase {
         await state.ensureDeck()
 
         XCTAssertNil(StubURLProtocol.lastRequest)
-        XCTAssertEqual(state.deck.count, 2)
+        XCTAssertEqual(state.deck.count, 20)
+    }
+
+    func testThirtySwipesKeepBufferedDeckAndCoalesceRefills() async throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+        let cards = (1...60).map { item("item-\($0)") }
+        cache.update("b1") { $0.deck = Array(cards.prefix(20)) }
+        let (state, session) = makeState(cache: cache)
+        defer { session.invalidateAndCancel() }
+        state.user = user()
+        state.boards = [board(id: "b1", active: true)]
+        StubURLProtocol.setResponse(json: #"{"swipes_since_update":1,"update_due":false}"#)
+        let path = "/api/deck"
+        StubURLProtocol.holdRequests(path: path)
+
+        for swipe in 1...30 {
+            let visible = try XCTUnwrap(state.deck.first)
+            XCTAssertEqual(visible.id, "item-\(swipe)")
+            state.commitSwipe(visible, liked: true)
+            XCTAssertNotEqual(state.deck.first?.id, visible.id)
+            if [12, 30].contains(swipe) {
+                await waitUntil { StubURLProtocol.pendingCount(path: path) > 0 }
+                await state.ensureDeck()
+                XCTAssertEqual(StubURLProtocol.pendingCount(path: path), 1)
+                let request = try XCTUnwrap(StubURLProtocol.firstPendingRequest(path: path))
+                let url = try XCTUnwrap(request.url)
+                let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)).queryItems ?? []
+                XCTAssertEqual(query.first(where: { $0.name == "board_id" })?.value, "b1")
+                let excluded = Set(query.filter { $0.name == "exclude_ids" }.compactMap(\.value))
+                XCTAssertTrue(excluded.contains(swipe == 12 ? "item-10" : "item-30"))
+                XCTAssertTrue(excluded.contains(swipe == 12 ? "item-20" : "item-40"))
+                let page = swipe == 12 ? Array(cards[19..<40]) : Array(cards[39..<60])
+                StubURLProtocol.completeNext(path: path, status: 200, json: try itemsJSON(page))
+                await waitUntil { !state.deckLoading }
+            }
+        }
+
+        XCTAssertEqual(state.deck.first?.id, "item-31")
+        XCTAssertEqual(state.deck.last?.id, "item-60")
+        XCTAssertEqual(state.swipedCount, 30)
+        await cache.flush()
+    }
+
+    func testFailedSwipeRestoresCardAfterRefillFails() async {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = StyleCache(directory: directory)
+        cache.activate(userId: "u1")
+        let card = item("last-card")
+        cache.update("b1") { $0.deck = [card] }
+        let (state, session) = makeState(cache: cache)
+        defer { session.invalidateAndCancel() }
+        state.user = user()
+        state.boards = [board(id: "b1", active: true)]
+        let swipePath = "/api/swipe"
+        let deckPath = "/api/deck"
+        StubURLProtocol.setResponse(json: "{}")
+        StubURLProtocol.holdRequests(path: swipePath)
+        StubURLProtocol.holdRequests(path: deckPath)
+
+        state.commitSwipe(card, liked: true)
+        XCTAssertTrue(state.deck.isEmpty)
+        await waitUntil { StubURLProtocol.pendingCount(path: deckPath) == 1 }
+        StubURLProtocol.completeNext(path: deckPath, status: 503, json: "{}")
+        await waitUntil { state.deckError != nil }
+        await waitUntil { StubURLProtocol.pendingCount(path: swipePath) == 1 }
+        StubURLProtocol.completeNext(path: swipePath, status: 503, json: "{}")
+        await waitUntil { !state.deck.isEmpty }
+        XCTAssertEqual(state.deck.map(\.id), [card.id])
+        XCTAssertEqual(state.swipedCount, 0)
+        XCTAssertTrue(cache.snapshot(for: "b1").sentSwipeIds.isEmpty)
+        await cache.flush()
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<200 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for deck refill")
     }
 
     func testSnapshotRoundTripsAcrossCacheInstances() async {
