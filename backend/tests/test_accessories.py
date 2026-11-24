@@ -210,7 +210,7 @@ def test_swap_endpoint_replaces_accessory_with_same_slot_under_price_ceiling(
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
     monkeypatch.setattr(phase2_api.db, "get_outfit", lambda _outfit_id: outfit)
     monkeypatch.setattr(phase2_api.db, "live_catalogue_batches",
-                        lambda: nullcontext([[too_expensive, replacement]]))
+                        lambda **_: nullcontext([[too_expensive, replacement]]))
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
     )

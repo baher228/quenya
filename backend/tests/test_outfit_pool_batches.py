@@ -89,7 +89,7 @@ def test_stream_uses_fetchmany_and_closes_on_early_exit(monkeypatch):
     events = []
 
     class Cursor:
-        def execute(self, _sql):
+        def execute(self, _sql, _params):
             pass
 
         def fetchmany(self, size):
@@ -122,7 +122,7 @@ def test_stream_closes_after_decode_error(monkeypatch):
     events = []
 
     class Cursor:
-        def execute(self, _sql):
+        def execute(self, _sql, _params):
             pass
 
         def fetchmany(self, _size):
@@ -193,6 +193,43 @@ def test_stream_snapshot_matches_full_records_without_warming_cache(monkeypatch,
 def test_stream_rejects_non_positive_batch_size():
     with pytest.raises(ValueError), db.live_catalogue_batches(0):
         pass
+
+
+def test_catalogue_batch_filters_before_decoding(tmp_path, monkeypatch):
+    if not os.getenv("QUENYA_TEST_PG_URL"):
+        monkeypatch.delenv("QUENYA_DATABASE_URL", raising=False)
+        monkeypatch.setattr(db, "DB_PATH", tmp_path / "catalogue.sqlite")
+    db.init_db()
+    with db.db_connection() as connection:
+        for item_id, title, brand, category, aesthetics, slot, price, availability in [
+            ("title", "Utility Parka", "Acme", "Jacket", [], "outerwear", 20, None),
+            ("brand", "Anorak", "Utility Co.", "Jacket", [], "outerwear", 30, None),
+            ("category", "Anorak", "Acme", "Utility jacket", [], "outerwear", 25, None),
+            ("aesthetic", "Anorak", "Acme", "Jacket", ["Modern Utility"], "outerwear", 20, None),
+            ("sold", "Utility Parka", "Acme", "Jacket", [], "outerwear", 20, "SoldOut"),
+            ("other_slot", "Utility trousers", "Acme", "Trousers", [], "bottom", 20, None),
+            ("too_much", "Utility Parka", "Acme", "Jacket", [], "outerwear", 31, None),
+            ("no_price", "Utility Parka", "Acme", "Jacket", [], "outerwear", None, None),
+            ("literal", "100%_ Wool", "Acme", "Jacket", [], "outerwear", 20, None),
+            ("accent", "Écru shell", "Acme", "Jacket", [], "outerwear", 20, None),
+        ]:
+            connection.execute(
+                "INSERT INTO items(id,source,source_url,title,brand,image_url,fetched_at,"
+                "price_gbp,availability,tags_json) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (item_id, "shop", f"https://shop.test/{item_id}", title, brand,
+                 "https://images.test/a.jpg", "2026-01-01", price, availability,
+                 json.dumps({"slot": slot, "category": category, "aesthetics": aesthetics})),
+            )
+    with db.live_catalogue_batches(
+        2, slot="outerwear", max_price_gbp=30, search="utility"
+    ) as batches:
+        assert {item["id"] for batch in batches for item in batch} == {
+            "title", "brand", "category", "aesthetic",
+        }
+    with db.live_catalogue_batches(search="%_") as batches:
+        assert [item["id"] for batch in batches for item in batch] == ["literal"]
+    with db.live_catalogue_batches(search="écru") as batches:
+        assert [item["id"] for batch in batches for item in batch] == ["accent"]
 
 
 def test_generation_closes_catalogue_before_model_work(monkeypatch):
@@ -289,9 +326,14 @@ def test_streamed_swap_matches_full_rank_and_subtype_interleave(monkeypatch, siz
         },
     )
     monkeypatch.setattr(db, "profile_swipe_items", lambda _id: [])
-    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext(
-        items[offset:offset + size] for offset in range(0, len(items), size)
-    ))
+    def filtered_batches(*, slot, max_price_gbp):
+        filtered = [item for item in items if tags_for(item)["slot"] == slot
+                    and item["price_gbp"] is not None and item["price_gbp"] <= max_price_gbp]
+        return nullcontext(
+            filtered[offset:offset + size] for offset in range(0, len(filtered), size)
+        )
+
+    monkeypatch.setattr(db, "live_catalogue_batches", filtered_batches)
     monkeypatch.setattr(db, "update_outfit_pieces", lambda _id, ids, total: outfit.update(
         piece_ids=ids, total_gbp=total
     ))
@@ -314,8 +356,11 @@ def test_streamed_search_matches_full_results(monkeypatch, size, limit, slot):
     monkeypatch.setattr(phase2_api, "_core", lambda: {})
     monkeypatch.setattr(phase2_api, "SHARED_CORE_ENABLED", False)
     monkeypatch.setattr(phase2_api, "_public_item", lambda result: result)
-    monkeypatch.setattr(db, "live_catalogue_batches", lambda: nullcontext(
-        items[offset:offset + size] for offset in range(0, len(items), size)
-    ))
+    def filtered_batches(*, slot, search):
+        assert search == "shirt"
+        assert slot is None or slot == "top"
+        return nullcontext(matches[offset:offset + size] for offset in range(0, len(matches), size))
+
+    monkeypatch.setattr(db, "live_catalogue_batches", filtered_batches)
     assert phase2_api.keyword_search(" SHIRT ", slot, limit) == expected
     assert db._LIVE_CATALOGUE.items is None

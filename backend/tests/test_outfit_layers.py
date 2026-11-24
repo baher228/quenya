@@ -596,7 +596,7 @@ def test_swap_keeps_the_replaced_layer_role(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[wrong_role, same_role]])
+        phase2_api.db, "live_catalogue_batches", lambda **_: nullcontext([[wrong_role, same_role]])
     )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
@@ -660,7 +660,9 @@ def test_swap_rejects_coat_and_outerwear_slot_overshirt(monkeypatch):
             if item_id in items_by_id
         },
     )
-    monkeypatch.setattr(phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[overshirt]]))
+    monkeypatch.setattr(
+        phase2_api.db, "live_catalogue_batches", lambda **_: nullcontext([[overshirt]])
+    )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
     )
@@ -723,7 +725,7 @@ def test_swap_rejects_shell_replacement_that_makes_two_shells(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        phase2_api.db, "live_catalogue_batches", lambda: nullcontext([[replacement]])
+        phase2_api.db, "live_catalogue_batches", lambda **_: nullcontext([[replacement]])
     )
     monkeypatch.setattr(
         phase2_api.db, "profile_swipe_items", lambda _profile_id: []
