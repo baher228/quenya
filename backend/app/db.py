@@ -1018,7 +1018,11 @@ def live_catalogue_batches(
             params.append(max_price_gbp)
         if search is not None:
             pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
-            search_text = _POSTGRES_SEARCH_TEXT if postgres else """LOWER(
+            if not postgres:
+                connection.create_function(
+                    "unicode_lower", 1, lambda text: text and text.lower(), deterministic=True
+                )
+            search_text = _POSTGRES_SEARCH_TEXT if postgres else """unicode_lower(
                 title || ' ' || COALESCE(json_extract(tags_json, '$.category'), '')
                 || ' ' || COALESCE((
                     SELECT group_concat(value, ' ')
