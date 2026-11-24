@@ -1,3 +1,4 @@
+.env
 .venv/
 backend/data/
 node_modules/
@@ -7,4 +8,3 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 frontend/dist/
-config.bat
