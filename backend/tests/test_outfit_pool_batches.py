@@ -211,6 +211,7 @@ def test_catalogue_batch_filters_before_decoding(tmp_path, monkeypatch):
             ("too_much", "Utility Parka", "Acme", "Jacket", [], "outerwear", 31, None),
             ("no_price", "Utility Parka", "Acme", "Jacket", [], "outerwear", None, None),
             ("literal", "100%_ Wool", "Acme", "Jacket", [], "outerwear", 20, None),
+            ("accent", "Écru shell", "Acme", "Jacket", [], "outerwear", 20, None),
         ]:
             connection.execute(
                 "INSERT INTO items(id,source,source_url,title,brand,image_url,fetched_at,"
@@ -227,6 +228,8 @@ def test_catalogue_batch_filters_before_decoding(tmp_path, monkeypatch):
         }
     with db.live_catalogue_batches(search="%_") as batches:
         assert [item["id"] for batch in batches for item in batch] == ["literal"]
+    with db.live_catalogue_batches(search="écru") as batches:
+        assert [item["id"] for batch in batches for item in batch] == ["accent"]
 
 
 def test_generation_closes_catalogue_before_model_work(monkeypatch):
