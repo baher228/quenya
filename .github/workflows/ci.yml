@@ -34,7 +34,7 @@ jobs:
       QUENYA_R2_ACCESS_KEY_ID: ""
       QUENYA_R2_SECRET_ACCESS_KEY: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -92,7 +92,7 @@ jobs:
       QUENYA_R2_ACCESS_KEY_ID: ""
       QUENYA_R2_SECRET_ACCESS_KEY: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -116,7 +116,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build VPS image
         run: docker build -f deploy/vps/Dockerfile .
 
@@ -128,7 +128,7 @@ jobs:
           - frontend
           - marketing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
